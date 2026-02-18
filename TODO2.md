@@ -98,6 +98,302 @@ fi
 
 ---
 
+## TDD Workflow
+
+**Steps:**
+
+1. Create `tests/test_dependencies.sh` and `tests/test_progress.sh` with the content below.
+2. Run `bats tests/test_dependencies.sh tests/test_progress.sh` — all tests should **fail** (red).
+3. Implement `lib/dependencies.sh` and `lib/progress.sh` per the Implementation sections below.
+4. Run the tests again — all tests should **pass** (green).
+
+### tests/test_dependencies.sh
+
+```bash
+#!/usr/bin/env bash
+# bats file_tags=dependencies
+
+# Tests for lib/dependencies.sh POSIX-compatible implementation
+
+setup() {
+  . "${BATS_TEST_DIRNAME}/../lib/dependencies.sh"
+  # 3-phase chain: 1 (no deps), 2 (dep: 1), 3 (deps: 1 2)
+  PHASE_COUNT=3
+  PHASE_STATUS_1="pending"
+  PHASE_STATUS_2="pending"
+  PHASE_STATUS_3="pending"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2="1"
+  PHASE_DEPENDENCIES_3="1 2"
+}
+
+# --- is_phase_runnable() ---
+
+@test "is_phase_runnable: pending phase with no deps is runnable" {
+  run is_phase_runnable 1
+  [ "$status" -eq 0 ]
+}
+
+@test "is_phase_runnable: failed phase with no deps is runnable" {
+  PHASE_STATUS_1="failed"
+  run is_phase_runnable 1
+  [ "$status" -eq 0 ]
+}
+
+@test "is_phase_runnable: completed phase is not runnable" {
+  PHASE_STATUS_1="completed"
+  run is_phase_runnable 1
+  [ "$status" -eq 1 ]
+}
+
+@test "is_phase_runnable: in_progress phase is not runnable" {
+  PHASE_STATUS_1="in_progress"
+  run is_phase_runnable 1
+  [ "$status" -eq 1 ]
+}
+
+@test "is_phase_runnable: phase with incomplete dep is not runnable" {
+  run is_phase_runnable 2
+  [ "$status" -eq 1 ]
+}
+
+@test "is_phase_runnable: phase with all deps completed is runnable" {
+  PHASE_STATUS_1="completed"
+  run is_phase_runnable 2
+  [ "$status" -eq 0 ]
+}
+
+# --- find_next_phase() ---
+
+@test "find_next_phase: returns first runnable phase number" {
+  run find_next_phase
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "find_next_phase: skips completed phases" {
+  PHASE_STATUS_1="completed"
+  run find_next_phase
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+}
+
+@test "find_next_phase: returns exit code 1 when no runnable phase exists" {
+  PHASE_STATUS_1="in_progress"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_3="completed"
+  run find_next_phase
+  [ "$status" -eq 1 ]
+}
+
+# --- detect_dependency_cycles() ---
+
+@test "detect_dependency_cycles: acyclic graph returns 0" {
+  run detect_dependency_cycles
+  [ "$status" -eq 0 ]
+}
+
+@test "detect_dependency_cycles: cycle returns 1 with error message" {
+  PHASE_COUNT=2
+  PHASE_DEPENDENCIES_1="2"
+  PHASE_DEPENDENCIES_2="1"
+  run detect_dependency_cycles
+  [ "$status" -eq 1 ]
+  [ -n "$output" ]
+}
+
+# --- get_blocked_phases() ---
+
+@test "get_blocked_phases: returns phases that depend on the given phase" {
+  run get_blocked_phases 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2"* ]]
+  [[ "$output" == *"3"* ]]
+}
+
+@test "get_blocked_phases: returns empty string when no dependents" {
+  run get_blocked_phases 3
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ]
+}
+```
+
+### tests/test_progress.sh
+
+```bash
+#!/usr/bin/env bash
+# bats file_tags=progress
+
+# Tests for lib/progress.sh POSIX-compatible implementation
+
+setup() {
+  export TEST_DIR="$(mktemp -d)"
+  . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  PHASE_COUNT=3
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2=""
+  PHASE_DEPENDENCIES_3=""
+}
+
+teardown() {
+  rm -rf "$TEST_DIR"
+}
+
+# --- init_progress() ---
+
+@test "init_progress: sets all phases to pending" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "pending" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
+}
+
+@test "init_progress: sets all attempt counts to 0" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_ATTEMPTS_1" = "0" ]
+  [ "$PHASE_ATTEMPTS_2" = "0" ]
+  [ "$PHASE_ATTEMPTS_3" = "0" ]
+}
+
+@test "init_progress: reads existing file when present" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  init_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+}
+
+# --- read_progress() ---
+
+@test "read_progress: restores phase status" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ❌ Phase 2: Phase Two
+Status: failed
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "failed" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
+}
+
+@test "read_progress: restores start and end times" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Started: 2026-02-18 10:00:00
+Completed: 2026-02-18 10:05:00
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_START_TIME_1" = "2026-02-18 10:00:00" ]
+  [ "$PHASE_END_TIME_1" = "2026-02-18 10:05:00" ]
+}
+
+@test "read_progress: restores attempt count" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Phase One
+Status: failed
+Attempts: 3
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_ATTEMPTS_1" = "3" ]
+}
+
+@test "read_progress: returns 0 when file does not exist" {
+  run read_progress "$TEST_DIR/nonexistent.md"
+  [ "$status" -eq 0 ]
+}
+
+# --- write_progress() ---
+
+@test "write_progress: creates the progress file" {
+  PHASE_STATUS_1="pending"   PHASE_ATTEMPTS_1=0
+  PHASE_STATUS_2="pending"   PHASE_ATTEMPTS_2=0
+  PHASE_STATUS_3="pending"   PHASE_ATTEMPTS_3=0
+  write_progress "$TEST_DIR/PROGRESS.md" "PLAN.md"
+  [ -f "$TEST_DIR/PROGRESS.md" ]
+}
+
+@test "write_progress: does not leave .tmp file behind (atomic write)" {
+  PHASE_STATUS_1="pending"   PHASE_ATTEMPTS_1=0
+  PHASE_STATUS_2="pending"   PHASE_ATTEMPTS_2=0
+  PHASE_STATUS_3="pending"   PHASE_ATTEMPTS_3=0
+  write_progress "$TEST_DIR/PROGRESS.md" "PLAN.md"
+  [ ! -f "$TEST_DIR/PROGRESS.md.tmp" ]
+}
+
+@test "write_progress: round-trip with read_progress is stable" {
+  PHASE_STATUS_1="completed" PHASE_ATTEMPTS_1=1
+  PHASE_STATUS_2="failed"    PHASE_ATTEMPTS_2=2
+  PHASE_STATUS_3="pending"   PHASE_ATTEMPTS_3=0
+  write_progress "$TEST_DIR/PROGRESS.md" "PLAN.md"
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "failed" ]
+  [ "$PHASE_ATTEMPTS_2" = "2" ]
+}
+
+# --- update_phase_status() ---
+
+@test "update_phase_status: sets status" {
+  PHASE_STATUS_1="pending" PHASE_ATTEMPTS_1=0
+  update_phase_status 1 "in_progress"
+  [ "$PHASE_STATUS_1" = "in_progress" ]
+}
+
+@test "update_phase_status: sets PHASE_START_TIME for in_progress" {
+  PHASE_ATTEMPTS_1=0 PHASE_START_TIME_1=""
+  update_phase_status 1 "in_progress"
+  [ -n "$PHASE_START_TIME_1" ]
+}
+
+@test "update_phase_status: sets PHASE_END_TIME for completed" {
+  PHASE_ATTEMPTS_1=0 PHASE_END_TIME_1=""
+  update_phase_status 1 "completed"
+  [ -n "$PHASE_END_TIME_1" ]
+}
+
+@test "update_phase_status: sets PHASE_END_TIME for failed" {
+  PHASE_ATTEMPTS_1=0 PHASE_END_TIME_1=""
+  update_phase_status 1 "failed"
+  [ -n "$PHASE_END_TIME_1" ]
+}
+
+@test "update_phase_status: increments PHASE_ATTEMPTS for in_progress" {
+  PHASE_ATTEMPTS_1=0
+  update_phase_status 1 "in_progress"
+  [ "$PHASE_ATTEMPTS_1" = "1" ]
+}
+
+@test "update_phase_status: increments PHASE_ATTEMPTS on second attempt" {
+  PHASE_ATTEMPTS_1=1
+  update_phase_status 1 "in_progress"
+  [ "$PHASE_ATTEMPTS_1" = "2" ]
+}
+```
+
+---
+
 ## Implementation: lib/dependencies.sh
 
 **Current issues:** `#!/opt/homebrew/bin/bash` shebang, `${PHASE_STATUS[$phase_num]}` array access, `${PHASE_DEPENDENCIES[$phase_num]}` array access, `[[ ]]` pattern matching, bash array operations (`visited=()`, `rec_stack+=()`, `${rec_stack[@]/$phase}`), `$(seq ...)` loops
@@ -476,20 +772,13 @@ update_phase_status() {
 
 ## Verification
 
-After implementing:
-
 ```sh
-# 1. Syntax check
+# 0. Write tests first, confirm they fail
+bats tests/test_dependencies.sh tests/test_progress.sh
+
+# 1. Implement, then confirm tests pass
+bats tests/test_dependencies.sh tests/test_progress.sh
+
+# 2. Syntax check
 shellcheck -s sh lib/dependencies.sh lib/progress.sh
-
-# 2. Basic parse test (requires TODO1 and TODO3 complete)
-/bin/sh claudeloop --plan examples/PLAN.md.example --dry-run
-
-# 3. Test cycle detection (should error)
-# Create a plan with Phase 2 depending on Phase 3 and Phase 3 depending on Phase 2
-
-# 4. Test progress persistence
-# Run, interrupt with Ctrl+C, verify PROGRESS.md written correctly, resume
 ```
-
-Expected: no syntax errors, dependency detection works, progress reads/writes correctly across interrupts.

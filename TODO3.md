@@ -129,6 +129,296 @@ source "$SCRIPT_DIR/lib/parser.sh"
 
 ---
 
+## TDD Workflow
+
+**Steps:**
+
+1. Update `tests/test_parser.sh` with the content below (fixes shebang, `source` → `.`, adds new tests).
+2. Run `bats tests/test_parser.sh` — the three new tests should **fail** (red); existing tests may already pass.
+3. Implement `lib/parser.sh` and `claudeloop` per the Implementation sections below.
+4. Run the tests again — all tests should **pass** (green).
+
+### tests/test_parser.sh (full updated content)
+
+```bash
+#!/usr/bin/env bash
+# bats file_tags=parser
+
+# Test Phase Parser
+# These tests are written FIRST (TDD approach)
+
+setup() {
+  export TEST_DIR="$(mktemp -d)"
+  . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+}
+
+teardown() {
+  rm -rf "$TEST_DIR"
+}
+
+@test "parse_simple_plan: extracts correct number of phases" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# My Project Plan
+
+## Phase 1: Setup
+Create the initial setup.
+
+## Phase 2: Implementation
+Implement the feature.
+
+## Phase 3: Testing
+Add tests.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "3" ]
+}
+
+@test "parse_simple_plan: extracts phase titles correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup Database
+Create database schema.
+
+## Phase 2: Add API
+Create REST endpoints.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup Database" ]
+
+  run get_phase_title 2
+  [ "$status" -eq 0 ]
+  [ "$output" = "Add API" ]
+}
+
+@test "parse_simple_plan: extracts phase descriptions correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Create the initial setup.
+This includes multiple lines.
+
+## Phase 2: Implementation
+Implement the feature.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_description 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Create the initial setup."* ]]
+  [[ "$output" == *"This includes multiple lines."* ]]
+}
+
+@test "parse_dependencies: extracts dependency declarations" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Create database.
+
+## Phase 2: API
+**Depends on:** Phase 1
+
+Create API endpoints.
+
+## Phase 3: Tests
+**Depends on:** Phase 2
+
+Add tests.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_dependencies 2
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+
+  run get_phase_dependencies 3
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+}
+
+@test "parse_dependencies: handles multiple dependencies" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Create database.
+
+## Phase 2: API
+Create API.
+
+## Phase 3: Integration
+**Depends on:** Phase 1, Phase 2
+
+Integrate everything.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_dependencies 3
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1"* ]]
+  [[ "$output" == *"2"* ]]
+}
+
+@test "validate_plan: rejects non-sequential phase numbers" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Setup phase.
+
+## Phase 3: Testing
+Testing phase.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sequential"* ]] || [[ "$output" == *"Expected Phase 2"* ]]
+}
+
+@test "validate_plan: rejects duplicate phase numbers" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Setup phase.
+
+## Phase 1: Another Setup
+Another setup phase.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"duplicate"* ]] || [[ "$output" == *"Duplicate"* ]] || [[ "$output" == *"Expected Phase 2, found Phase 1"* ]]
+}
+
+@test "validate_plan: rejects invalid dependency references" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Setup phase.
+
+## Phase 2: Implementation
+**Depends on:** Phase 5
+
+Implementation phase.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"non-existent"* ]] || [[ "$output" == *"invalid"* ]] || [[ "$output" == *"depends on"* ]]
+}
+
+@test "parse_plan: handles empty lines and spacing" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Project
+
+## Phase 1: Setup
+
+Create setup.
+
+
+## Phase 2: Implementation
+
+Implement feature.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+}
+
+@test "parse_plan: ignores non-phase headers" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Project Title
+
+Some intro text.
+
+## Phase 1: Setup
+Create setup.
+
+### Subsection
+This is not a phase.
+
+## Phase 2: Implementation
+Implement feature.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+}
+
+@test "parse_plan: handles single-quote in phase title" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Install 'foo' package
+Install the foo package.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"foo"* ]]
+}
+
+@test "parse_plan: preserves dollar sign in description without expanding" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Configure
+Set the $DEBUG variable to true.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_description 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'$DEBUG'* ]]
+}
+
+@test "validate_plan: rejects forward dependency" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+**Depends on:** Phase 2
+
+Setup phase.
+
+## Phase 2: Implementation
+Implementation phase.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"forward"* ]] || [[ "$output" == *"cannot depend"* ]]
+}
+```
+
+### tests/test_killswitch.sh (update after TODO2)
+
+`tests/test_killswitch.sh` already uses POSIX flat variables for the interrupt-handling assertions. After TODO2 completes, make two fixes:
+
+1. Remove the stale comment on line 110:
+   ```sh
+   # progress.sh still uses associative arrays; updated in TODO2/3
+   ```
+
+2. Change lines 111–113 from associative-array syntax to flat-variable syntax:
+   ```sh
+   # Before:
+   [ "${PHASE_STATUS[1]}" = "completed" ]
+   [ "${PHASE_STATUS[2]}" = "pending" ]
+   [ "${PHASE_STATUS[3]}" = "pending" ]
+
+   # After:
+   [ "$PHASE_STATUS_1" = "completed" ]
+   [ "$PHASE_STATUS_2" = "pending" ]
+   [ "$PHASE_STATUS_3" = "pending" ]
+   ```
+
+---
+
 ## Implementation: lib/parser.sh
 
 **Current issues:** `#!/opt/homebrew/bin/bash` shebang, `declare -A` array declarations, `PHASE_TITLES=()` array resets, `[[ "$line" =~ ... ]]` + `BASH_REMATCH`, `${PHASE_TITLES[$phase_num]:-}` array access, `PHASE_TITLES[$phase_num]="..."` array assignment, `${!PHASE_DEPENDENCIES[@]}` key iteration, `current_description+=$'\n'` append syntax, `current_description+="$line"` append syntax
@@ -806,47 +1096,16 @@ main "$@"
 
 ## Verification
 
-After all three TODO files are implemented:
-
-### 1. Syntax Check
 ```sh
+# 0. Write / update tests first, confirm they fail
+bats tests/test_parser.sh
+
+# 1. Implement, then confirm tests pass
+bats tests/test_parser.sh tests/test_killswitch.sh
+
+# 2. Full suite
+./tests/run_all_tests.sh
+
+# 3. Syntax check
 shellcheck -s sh claudeloop lib/*.sh
 ```
-Should pass with no errors (may warn about `local` not being strictly POSIX — acceptable).
-
-### 2. Dry-run Test
-```sh
-/bin/sh claudeloop --plan examples/PLAN.md.example --dry-run
-```
-Should parse successfully and display all phases.
-
-### 3. Shell Compatibility
-```sh
-dash claudeloop --plan examples/PLAN.md.example --dry-run
-busybox sh claudeloop --plan examples/PLAN.md.example --dry-run
-```
-
-### 4. Quote and Special Character Handling
-Test with a plan containing:
-- Phase title with single quotes: `## Phase 1: Install 'foo' package`
-- Phase title with double quotes: `## Phase 2: Set "DEBUG" flag`
-- Phase description with `$VAR` dollar signs
-- Multi-line descriptions with blank lines
-
-### 5. Dependency Edge Cases
-- Phase depending on multiple phases
-- Multiple phases depending on same phase
-- Circular dependency detection (should error)
-- Forward dependency detection (should error)
-
-### 6. Interrupt and Resume Test
-Start execution, press Ctrl+C during phase 2:
-- Verify PROGRESS.md shows phase 1 completed, phase 2 pending
-- Verify attempt count is not incremented for interrupted phase
-- Resume and verify it continues from phase 2
-
-### 7. Retry Logic Test
-Create a phase that fails:
-- Verify it retries with exponential backoff
-- Verify attempt count increments correctly
-- Verify it stops after MAX_RETRIES
