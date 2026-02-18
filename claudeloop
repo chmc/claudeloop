@@ -17,6 +17,7 @@ _CL_MAX_DELAY="${MAX_DELAY:-}"
 _CL_SIMPLE_MODE="${SIMPLE_MODE:-}"
 _CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
 _CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
+_CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -39,6 +40,7 @@ CURRENT_PHASE=""
 PHASE_PROMPT_FILE=""
 SIMPLE_MODE=false
 VERBOSE_MODE=false
+SKIP_PERMISSIONS=false
 
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
@@ -68,6 +70,7 @@ load_config() {
       BASE_DELAY)             BASE_DELAY="$value" ;;
       MAX_DELAY)              MAX_DELAY="$value" ;;
       QUOTA_RETRY_INTERVAL)   QUOTA_RETRY_INTERVAL="$value" ;;
+      SKIP_PERMISSIONS)       SKIP_PERMISSIONS="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -205,6 +208,7 @@ Options:
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
+  --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --help                 Show this help message
 
 Examples:
@@ -261,6 +265,10 @@ parse_args() {
         ;;
       --verbose)
         VERBOSE_MODE=true
+        shift
+        ;;
+      --dangerously-skip-permissions)
+        SKIP_PERMISSIONS=true
         shift
         ;;
       --help|-h)
@@ -364,7 +372,11 @@ Implement the above phase completely. Make sure to:
   echo "Executing Claude CLI..."
   {
     _rc=0
-    echo "$prompt" | claude --non-interactive 2>&1 || _rc=$?
+    if [ "$SKIP_PERMISSIONS" = "true" ]; then
+      echo "$prompt" | claude --print --dangerously-skip-permissions 2>&1 || _rc=$?
+    else
+      echo "$prompt" | claude --print 2>&1 || _rc=$?
+    fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
   } | tee "$log_file"
 
@@ -383,6 +395,15 @@ Implement the above phase completely. Make sure to:
   fi
 
   if [ "$claude_exit" -eq 0 ]; then
+    if is_permission_error "$log_file"; then
+      log_verbose "execute_phase: phase $phase_num exited 0 but requested permissions"
+      print_error "Phase $phase_num: Claude requested write permissions but none were granted."
+      print_error "Re-run with --dangerously-skip-permissions to bypass permission prompts."
+      update_phase_status "$phase_num" "failed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 1
+    fi
     log_verbose "execute_phase: phase $phase_num succeeded"
     print_success "Phase $phase_num completed successfully"
     update_phase_status "$phase_num" "completed"
@@ -467,6 +488,10 @@ main_loop() {
         sleep "$QUOTA_RETRY_INTERVAL"
         continue
       fi
+      if is_permission_error "$_log_file"; then
+        print_error "Phase $next_phase: Claude requested write permissions — re-run with --dangerously-skip-permissions"
+        return 1
+      fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
         local _attempts
@@ -503,6 +528,7 @@ main() {
   [ -n "$_CL_SIMPLE_MODE" ]       && SIMPLE_MODE="$_CL_SIMPLE_MODE"
   [ -n "$_CL_PHASE_PROMPT_FILE" ]       && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
   [ -n "$_CL_QUOTA_RETRY_INTERVAL" ]    && QUOTA_RETRY_INTERVAL="$_CL_QUOTA_RETRY_INTERVAL"
+  [ -n "$_CL_SKIP_PERMISSIONS" ]        && SKIP_PERMISSIONS="$_CL_SKIP_PERMISSIONS"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

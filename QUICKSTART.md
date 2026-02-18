@@ -47,6 +47,7 @@ claudeloop --reset             # reset progress and start over
 claudeloop --continue          # resume after Ctrl+C interrupt
 claudeloop --phase 3           # start from a specific phase
 claudeloop --dry-run           # validate without executing
+claudeloop --dangerously-skip-permissions  # skip write permission prompts
 ```
 
 ## Tips
@@ -55,5 +56,6 @@ claudeloop --dry-run           # validate without executing
 - Keep phases small and focused — one clear task per phase
 - Each phase should commit its changes so the next phase starts clean
 - Check `.claudeloop/logs/phase-N.log` if a phase fails
+- Claude output streams live to the terminal. Logs are saved to `.claudeloop/logs/phase-N.log`
 
 See `examples/PLAN.md.example` for a full example, and `README.md` for complete documentation.

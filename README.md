@@ -42,6 +42,7 @@ See `examples/PLAN.md.example` for a complete example.
 --dry-run            Validate plan without executing
 --max-retries <n>    Max retry attempts per phase (default: 3)
 --simple             Plain output (no colors)
+--dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --help               Show help
 ```
 
@@ -74,6 +75,14 @@ claudeloop/
     └── PLAN.md.example
 ```
 
+## Output and logs
+
+Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`.
+
+To watch a phase log in real time in another terminal:
+
+    tail -f .claudeloop/logs/phase-1.log
+
 ## Troubleshooting
 
 **`claude: command not found`** — install the Claude CLI and ensure it's in your PATH
@@ -81,6 +90,8 @@ claudeloop/
 **`Not in a git repository`** — run `git init && git add . && git commit -m "init"` in your project
 
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`, break complex phases into smaller ones
+
+**Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings.
 
 ## Testing
 

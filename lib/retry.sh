@@ -62,6 +62,15 @@ is_quota_error() {
   grep -qiE "usage limit|quota|rate.?limit|too many requests|429|rate_limit_error|overloaded" "$log_file"
 }
 
+# Check if a phase log contains an unanswered permission prompt from Claude
+# Args: $1 - path to log file
+# Returns: 0 if permission error detected, 1 otherwise
+is_permission_error() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+  grep -qiE "write permissions haven't been granted|approve the file write|approve.*write operation|permission to write|hasn't been granted" "$log_file"
+}
+
 # Check if phase should be retried
 # Args: $1 - phase number
 # Returns: 0 if should retry, 1 if max retries exceeded
