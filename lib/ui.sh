@@ -117,3 +117,13 @@ print_warning() {
   local message="$1"
   printf '%b\n' "${COLOR_YELLOW}⚠ $message${COLOR_RESET}"
 }
+
+# Print quota wait message
+print_quota_wait() {
+  local phase_num="$1"
+  local wait_secs="$2"
+  local wait_mins
+  wait_mins=$(( wait_secs / 60 ))
+  printf '%b\n' "${COLOR_YELLOW}⏸ Phase $phase_num: usage limit reached. Waiting ${wait_secs}s (${wait_mins}m) before retrying...${COLOR_RESET}"
+  printf '%b\n' "${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
+}

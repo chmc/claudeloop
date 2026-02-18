@@ -18,6 +18,11 @@ count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
 printf '%s\n' "\$count" > "\$count_file"
 printf 'stub output for call %s\n' "\$count"
+custom_outputs_file="${dir}/claude_custom_outputs"
+if [ -f "\$custom_outputs_file" ]; then
+  custom_text=\$(sed -n "\${count}p" "\$custom_outputs_file" 2>/dev/null || echo "")
+  [ -n "\$custom_text" ] && printf '%s\n' "\$custom_text"
+fi
 exit_codes_file="${dir}/claude_exit_codes"
 exit_code=0
 if [ -f "\$exit_codes_file" ]; then
@@ -286,4 +291,35 @@ PROGRESS
   echo "$dead_pid" > "$TEST_DIR/.claudeloop/lock"
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# Scenario 10: Quota error does not consume retry slot
+# =============================================================================
+@test "integration: quota error does not consume retry slot and phase retries" {
+  # Call 1 (phase 1): quota error. Call 2 (phase 1 retry): success. Call 3 (phase 2): success.
+  printf '1\n0\n0\n' > "$TEST_DIR/claude_exit_codes"
+  printf 'rate limit exceeded\n\n\n' > "$TEST_DIR/claude_custom_outputs"
+
+  _cl --plan PLAN.md --max-retries 2 --quota-retry-interval 0
+  [ "$status" -eq 0 ]
+  [ "$(_call_count)" -eq 3 ]
+  [ "$(_completed_count)" -eq 2 ]
+  # Attempts counter not consumed: phase 1 shows Attempts: 1
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/PROGRESS.md" | grep -q "Attempts: 1"
+}
+
+# =============================================================================
+# Scenario 11: Quota errors are independent of max-retries budget
+# =============================================================================
+@test "integration: quota errors are independent of max-retries budget" {
+  # Calls 1+2 are quota errors (don't consume retries). Call 3 is a real error.
+  # With max-retries=1, after 1 real failure, phase 1 is abandoned.
+  printf '1\n1\n1\n' > "$TEST_DIR/claude_exit_codes"
+  printf 'usage limit exceeded\nusage limit exceeded\n\n' > "$TEST_DIR/claude_custom_outputs"
+
+  _cl --plan PLAN.md --max-retries 1 --quota-retry-interval 0
+  [ "$status" -ne 0 ]
+  [ "$(_call_count)" -eq 3 ]
+  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
 }

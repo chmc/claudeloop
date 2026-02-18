@@ -16,6 +16,7 @@ _CL_BASE_DELAY="${BASE_DELAY:-}"
 _CL_MAX_DELAY="${MAX_DELAY:-}"
 _CL_SIMPLE_MODE="${SIMPLE_MODE:-}"
 _CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
+_CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -64,8 +65,9 @@ load_config() {
       MAX_RETRIES)       MAX_RETRIES="$value" ;;
       SIMPLE_MODE)       SIMPLE_MODE="$value" ;;
       PHASE_PROMPT_FILE) PHASE_PROMPT_FILE="$value" ;;
-      BASE_DELAY)        BASE_DELAY="$value" ;;
-      MAX_DELAY)         MAX_DELAY="$value" ;;
+      BASE_DELAY)             BASE_DELAY="$value" ;;
+      MAX_DELAY)              MAX_DELAY="$value" ;;
+      QUOTA_RETRY_INTERVAL)   QUOTA_RETRY_INTERVAL="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -200,6 +202,7 @@ Options:
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
   --max-retries <n>      Maximum retry attempts per phase (default: 3)
+  --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
   --help                 Show this help message
@@ -246,6 +249,10 @@ parse_args() {
         ;;
       --max-retries)
         MAX_RETRIES="$2"
+        shift 2
+        ;;
+      --quota-retry-interval)
+        QUOTA_RETRY_INTERVAL="$2"
         shift 2
         ;;
       --simple)
@@ -445,7 +452,22 @@ main_loop() {
       # Success - continue to next phase
       continue
     else
-      # Failure - check if we should retry
+      local _log_file
+      _log_file=".claudeloop/logs/phase-${next_phase}.log"
+      if is_quota_error "$_log_file"; then
+        # Quota error: restore attempt counter (same pattern as handle_interrupt)
+        local _cur_attempts
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
+        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
+        log_verbose "main_loop: quota error on phase $next_phase, attempts restored to $((_cur_attempts - 1))"
+        # Reset to pending so find_next_phase picks it up after the wait
+        eval "PHASE_STATUS_${next_phase}=pending"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        print_quota_wait "$next_phase" "$QUOTA_RETRY_INTERVAL"
+        sleep "$QUOTA_RETRY_INTERVAL"
+        continue
+      fi
+      # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
         local _attempts
         _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
@@ -479,7 +501,8 @@ main() {
   [ -n "$_CL_BASE_DELAY" ]        && BASE_DELAY="$_CL_BASE_DELAY"
   [ -n "$_CL_MAX_DELAY" ]         && MAX_DELAY="$_CL_MAX_DELAY"
   [ -n "$_CL_SIMPLE_MODE" ]       && SIMPLE_MODE="$_CL_SIMPLE_MODE"
-  [ -n "$_CL_PHASE_PROMPT_FILE" ] && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
+  [ -n "$_CL_PHASE_PROMPT_FILE" ]       && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
+  [ -n "$_CL_QUOTA_RETRY_INTERVAL" ]    && QUOTA_RETRY_INTERVAL="$_CL_QUOTA_RETRY_INTERVAL"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

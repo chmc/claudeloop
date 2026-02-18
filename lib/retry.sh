@@ -7,6 +7,7 @@
 MAX_RETRIES="${MAX_RETRIES:-3}"
 BASE_DELAY="${BASE_DELAY:-5}"
 MAX_DELAY="${MAX_DELAY:-60}"
+QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
 
 # Calculate integer power: base^exp
 power() {
@@ -50,6 +51,15 @@ calculate_backoff() {
   local jitter
   jitter=$(get_random $((delay / 4 + 1)))
   echo $((delay + jitter))
+}
+
+# Check if a phase log contains quota/rate-limit error output
+# Args: $1 - path to log file
+# Returns: 0 if quota error detected, 1 otherwise
+is_quota_error() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+  grep -qiE "usage limit|quota|rate.?limit|too many requests|429|rate_limit_error|overloaded" "$log_file"
 }
 
 # Check if phase should be retried
