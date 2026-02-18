@@ -14,6 +14,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/lib/progress.sh"
 . "$SCRIPT_DIR/lib/retry.sh"
 . "$SCRIPT_DIR/lib/ui.sh"
+. "$SCRIPT_DIR/lib/prompt.sh"
 
 # Default configuration
 PLAN_FILE="${PLAN_FILE:-PLAN.md}"
@@ -25,6 +26,7 @@ START_PHASE=""
 DRY_RUN=false
 INTERRUPTED=false
 CURRENT_PHASE=""
+PHASE_PROMPT_FILE=""
 
 # Save current state to state file
 save_state() {
@@ -153,6 +155,7 @@ Options:
   --continue           Continue from last checkpoint (default)
   --phase <n>          Start from specific phase number
   --dry-run            Validate plan without execution
+  --phase-prompt <file>  Custom prompt template for phase execution
   --max-retries <n>    Maximum retry attempts per phase (default: 3)
   --simple             Use simple output mode (no colors/fancy UI)
   --help               Show this help message
@@ -192,6 +195,10 @@ parse_args() {
       --dry-run)
         DRY_RUN=true
         shift
+        ;;
+      --phase-prompt)
+        PHASE_PROMPT_FILE="$2"
+        shift 2
         ;;
       --max-retries)
         MAX_RETRIES="$2"
@@ -265,7 +272,14 @@ execute_phase() {
   print_phase_exec_header "$phase_num"
 
   # Construct prompt for Claude
-  local prompt="You are executing Phase $phase_num of a multi-phase plan.
+  local prompt
+  if [ -n "$PHASE_PROMPT_FILE" ]; then
+    if ! prompt=$(build_phase_prompt "$PHASE_PROMPT_FILE" "$phase_num" "$title" "$description" "$PLAN_FILE"); then
+      print_error "Failed to build prompt from template: $PHASE_PROMPT_FILE"
+      return 1
+    fi
+  else
+    prompt="You are executing Phase $phase_num of a multi-phase plan.
 
 ## Phase $phase_num: $title
 
@@ -284,6 +298,7 @@ Implement the above phase completely. Make sure to:
 2. Implement required changes
 3. Test your implementation thoroughly
 4. Commit your changes when complete"
+  fi
 
   # Execute claude
   echo "Executing Claude CLI..."
@@ -383,6 +398,12 @@ main() {
   # Check if plan file exists
   if [ ! -f "$PLAN_FILE" ]; then
     print_error "Plan file not found: $PLAN_FILE"
+    exit 1
+  fi
+
+  # Validate phase prompt file if provided
+  if [ -n "$PHASE_PROMPT_FILE" ] && [ ! -r "$PHASE_PROMPT_FILE" ]; then
+    print_error "Phase prompt file not found or not readable: $PHASE_PROMPT_FILE"
     exit 1
   fi
 
