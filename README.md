@@ -1,5 +1,7 @@
 # ClaudeLoop
 
+[![Sponsor](https://img.shields.io/github/sponsors/chmc?style=social)](https://github.com/sponsors/chmc)
+
 A phase-by-phase execution tool that spawns fresh Claude CLI instances for each phase of a multi-phase plan, preventing context degradation and ensuring focused execution.
 
 **→ [QUICKSTART.md](QUICKSTART.md)** — install and run in minutes
@@ -91,3 +93,7 @@ shellcheck -s sh lib/retry.sh   # lint
 ## Credits
 
 Inspired by [ralph](https://github.com/snarktank/ralph) by snarktank.
+
+## Author
+
+**Aleksi Sutela** ([chmc](https://github.com/chmc)) — if you find ClaudeLoop useful, [consider sponsoring](https://github.com/sponsors/chmc).
