@@ -1,19 +1,19 @@
-#!/opt/homebrew/bin/bash
+#!/bin/sh
 
 # ClaudeLoop - Phase-by-Phase Execution Tool
 # Executes multi-phase plans by spawning fresh Claude instances per phase
 
-set -euo pipefail
+set -eu
 
 # Script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Source libraries
-source "$SCRIPT_DIR/lib/parser.sh"
-source "$SCRIPT_DIR/lib/dependencies.sh"
-source "$SCRIPT_DIR/lib/progress.sh"
-source "$SCRIPT_DIR/lib/retry.sh"
-source "$SCRIPT_DIR/lib/ui.sh"
+. "$SCRIPT_DIR/lib/parser.sh"
+. "$SCRIPT_DIR/lib/dependencies.sh"
+. "$SCRIPT_DIR/lib/progress.sh"
+. "$SCRIPT_DIR/lib/retry.sh"
+. "$SCRIPT_DIR/lib/ui.sh"
 
 # Default configuration
 PLAN_FILE="${PLAN_FILE:-PLAN.md}"
@@ -50,12 +50,14 @@ load_state() {
   # Simple parsing of JSON (basic implementation)
   if grep -q '"interrupted": true' "$STATE_FILE"; then
     print_warning "Found interrupted session"
-    echo -n "Resume from last checkpoint? (Y/n) "
+    printf 'Resume from last checkpoint? (Y/n) '
     read -r response
-    if [[ "$response" =~ ^[Nn]$ ]]; then
-      rm -f "$STATE_FILE"
-      return 1
-    fi
+    case "$response" in
+      [Nn])
+        rm -f "$STATE_FILE"
+        return 1
+        ;;
+    esac
     return 0
   fi
 
@@ -101,11 +103,17 @@ handle_interrupt() {
   print_warning "Saving state and shutting down gracefully..."
 
   # Mark current phase as pending if it was in progress
-  if [ -n "$CURRENT_PHASE" ] && [ "${PHASE_STATUS[$CURRENT_PHASE]:-}" = "in_progress" ]; then
-    print_warning "Marking Phase $CURRENT_PHASE as pending for retry"
-    PHASE_STATUS[$CURRENT_PHASE]="pending"
-    # Don't count this as an attempt since it was interrupted
-    PHASE_ATTEMPTS[$CURRENT_PHASE]=$((${PHASE_ATTEMPTS[$CURRENT_PHASE]} - 1))
+  if [ -n "$CURRENT_PHASE" ]; then
+    local _status
+    _status=$(eval "echo \"\$PHASE_STATUS_$CURRENT_PHASE\"")
+    if [ "$_status" = "in_progress" ]; then
+      print_warning "Marking Phase $CURRENT_PHASE as pending for retry"
+      eval "PHASE_STATUS_${CURRENT_PHASE}=pending"
+      # Don't count this as an attempt since it was interrupted
+      local _attempts
+      _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$CURRENT_PHASE\"")
+      eval "PHASE_ATTEMPTS_${CURRENT_PHASE}=$((_attempts - 1))"
+    fi
   fi
 
   # Save progress
@@ -217,16 +225,19 @@ validate_environment() {
   # Check for uncommitted changes
   if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     print_warning "Uncommitted changes detected. Consider committing before starting."
-    echo -n "Continue anyway? (y/N) "
+    printf 'Continue anyway? (y/N) '
     read -r response
-    if [[ ! "$response" =~ ^[Yy]$ ]]; then
-      echo "Aborted."
-      exit 0
-    fi
+    case "$response" in
+      [Yy]) ;;  # Continue
+      *)
+        echo "Aborted."
+        exit 0
+        ;;
+    esac
   fi
 
   # Check if claude CLI is available
-  if ! command -v claude &> /dev/null; then
+  if ! command -v claude > /dev/null 2>&1; then
     print_error "claude CLI not found. Please install it first."
     exit 1
   fi
@@ -235,8 +246,10 @@ validate_environment() {
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"
-  local title="${PHASE_TITLES[$phase_num]}"
-  local description="${PHASE_DESCRIPTIONS[$phase_num]}"
+  local title
+  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  local description
+  description=$(eval "echo \"\$PHASE_DESCRIPTION_$phase_num\"")
   local log_file=".claudeloop/logs/phase-$phase_num.log"
 
   # Set current phase for interrupt handler
@@ -306,15 +319,18 @@ main_loop() {
       # No runnable phases - check why
       local has_pending=false
       local has_failed=false
-      local i
+      local i=1
 
-      for i in $(seq 1 "$PHASE_COUNT"); do
-        if [ "${PHASE_STATUS[$i]}" = "pending" ]; then
+      while [ "$i" -le "$PHASE_COUNT" ]; do
+        local _status
+        _status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+        if [ "$_status" = "pending" ]; then
           has_pending=true
         fi
-        if [ "${PHASE_STATUS[$i]}" = "failed" ]; then
+        if [ "$_status" = "failed" ]; then
           has_failed=true
         fi
+        i=$((i + 1))
       done
 
       if ! $has_pending && ! $has_failed; then
@@ -337,8 +353,10 @@ main_loop() {
     else
       # Failure - check if we should retry
       if should_retry_phase "$next_phase"; then
+        local _attempts
+        _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
         local delay
-        delay=$(calculate_backoff "${PHASE_ATTEMPTS[$next_phase]}")
+        delay=$(calculate_backoff "$_attempts")
         print_warning "Retrying phase $next_phase after $delay seconds..."
         sleep "$delay"
         continue
@@ -353,7 +371,7 @@ main_loop() {
 # Main function
 main() {
   # Set up signal handlers and cleanup
-  trap handle_interrupt SIGINT SIGTERM
+  trap handle_interrupt INT TERM
   trap cleanup EXIT
 
   # Parse arguments

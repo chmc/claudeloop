@@ -51,17 +51,15 @@ main → parse_plan → init_progress → main_loop
   on Ctrl+C:   handle_interrupt → write_progress → save_state → exit 130
 ```
 
-### POSIX migration (in progress)
+### POSIX migration
 
-Migrating from `#!/opt/homebrew/bin/bash` (associative arrays, `[[ ]]`, `BASH_REMATCH`, `**`, `$RANDOM`, `echo -e`) to `#!/bin/sh`:
+Migrated from `#!/opt/homebrew/bin/bash` (associative arrays, `[[ ]]`, `BASH_REMATCH`, `**`, `$RANDOM`, `echo -e`) to `#!/bin/sh`:
 
 | TODO | Files | Status |
 |------|-------|--------|
 | TODO1.md | `lib/retry.sh`, `lib/ui.sh` | ✅ done |
-| TODO2.md | `lib/dependencies.sh`, `lib/progress.sh` | pending |
-| TODO3.md | `lib/parser.sh`, `claudeloop` | pending |
-
-`test_killswitch.sh` still uses `${PHASE_STATUS[N]}` array syntax for the `init_progress` restore assertions — intentional until TODO2 is done.
+| TODO2.md | `lib/dependencies.sh`, `lib/progress.sh` | ✅ done |
+| TODO3.md | `lib/parser.sh`, `claudeloop` | ✅ done |
 
 ## Testing
 

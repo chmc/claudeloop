@@ -1,18 +1,15 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # bats file_tags=parser
 
 # Test Phase Parser
 # These tests are written FIRST (TDD approach)
 
 setup() {
-  # Create temp directory for test files
   export TEST_DIR="$(mktemp -d)"
-  # Source the parser
-  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
 }
 
 teardown() {
-  # Clean up temp directory
   rm -rf "$TEST_DIR"
 }
 
@@ -30,10 +27,8 @@ Implement the feature.
 Add tests.
 EOF
 
-  # Don't use run here - we need global state to persist
   parse_plan "$TEST_DIR/PLAN.md"
 
-  # Should have 3 phases
   run get_phase_count
   [ "$status" -eq 0 ]
   [ "$output" = "3" ]
@@ -151,7 +146,6 @@ EOF
 
   run parse_plan "$TEST_DIR/PLAN.md"
   [ "$status" -ne 0 ]
-  # Duplicate is caught as sequential error: "Expected Phase 2, found Phase 1"
   [[ "$output" == *"duplicate"* ]] || [[ "$output" == *"Duplicate"* ]] || [[ "$output" == *"Expected Phase 2, found Phase 1"* ]]
 }
 
@@ -213,4 +207,46 @@ EOF
   run get_phase_count
   [ "$status" -eq 0 ]
   [ "$output" = "2" ]
+}
+
+@test "parse_plan: handles single-quote in phase title" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Install 'foo' package
+Install the foo package.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"foo"* ]]
+}
+
+@test "parse_plan: preserves dollar sign in description without expanding" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Configure
+Set the $DEBUG variable to true.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_description 1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'$DEBUG'* ]]
+}
+
+@test "validate_plan: rejects forward dependency" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+**Depends on:** Phase 2
+
+Setup phase.
+
+## Phase 2: Implementation
+Implementation phase.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"forward"* ]] || [[ "$output" == *"cannot depend"* ]]
 }
