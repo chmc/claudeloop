@@ -1,0 +1,23 @@
+# Runtime directory
+.claudeloop/
+
+# Generated progress tracking (optional - remove if you want to commit it)
+PROGRESS.md
+
+# Log files
+*.log
+
+# macOS artifacts
+.DS_Store
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Test artifacts
+tests/.tmp/
+tests/fixtures/.tmp/
+
+# Backup files
+*.bak

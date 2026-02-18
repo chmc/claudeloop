@@ -1,0 +1,101 @@
+# Example Project: Todo List API
+
+This is an example PLAN.md file showing how to structure a multi-phase plan for ClaudeLoop.
+
+## Phase 1: Project Setup
+Create a new Node.js project with Express.
+Initialize npm and install dependencies:
+- express
+- sqlite3
+- body-parser
+- jest (for testing)
+
+Create basic project structure:
+- src/
+- tests/
+- package.json with scripts
+
+## Phase 2: Database Schema
+**Depends on:** Phase 1
+
+Create SQLite database schema for todos:
+- id (INTEGER PRIMARY KEY)
+- title (TEXT NOT NULL)
+- description (TEXT)
+- completed (BOOLEAN DEFAULT 0)
+- created_at (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+
+Create database initialization script.
+Add schema migration file.
+
+## Phase 3: Todo Model
+**Depends on:** Phase 2
+
+Create Todo model with methods:
+- create(title, description)
+- findAll()
+- findById(id)
+- update(id, data)
+- delete(id)
+
+Include proper error handling.
+Use prepared statements for SQL queries.
+
+## Phase 4: API Routes
+**Depends on:** Phase 3
+
+Implement REST API endpoints:
+- GET /todos - List all todos
+- GET /todos/:id - Get specific todo
+- POST /todos - Create new todo
+- PUT /todos/:id - Update todo
+- DELETE /todos/:id - Delete todo
+
+Include request validation and error handling.
+Return appropriate HTTP status codes.
+
+## Phase 5: Unit Tests
+**Depends on:** Phase 3
+
+Write unit tests for Todo model:
+- Test create operations
+- Test read operations
+- Test update operations
+- Test delete operations
+- Test error cases
+
+Aim for >90% code coverage on model.
+
+## Phase 6: Integration Tests
+**Depends on:** Phase 4, Phase 5
+
+Write integration tests for API:
+- Test all endpoints
+- Test error responses
+- Test validation
+- Test edge cases
+
+Use supertest for HTTP testing.
+Ensure tests run in isolation with test database.
+
+## Phase 7: Documentation
+**Depends on:** Phase 4
+
+Create API documentation:
+- README with setup instructions
+- API endpoint documentation
+- Example requests/responses
+- Error code reference
+
+Add inline code comments where needed.
+
+## Phase 8: Deployment Script
+**Depends on:** Phase 6, Phase 7
+
+Create deployment script:
+- Environment configuration
+- Database initialization
+- Health check endpoint
+- Graceful shutdown handling
+
+Add docker-compose.yml for local development.

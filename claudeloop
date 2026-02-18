@@ -1,0 +1,434 @@
+#!/opt/homebrew/bin/bash
+
+# ClaudeLoop - Phase-by-Phase Execution Tool
+# Executes multi-phase plans by spawning fresh Claude instances per phase
+
+set -euo pipefail
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source libraries
+source "$SCRIPT_DIR/lib/parser.sh"
+source "$SCRIPT_DIR/lib/dependencies.sh"
+source "$SCRIPT_DIR/lib/progress.sh"
+source "$SCRIPT_DIR/lib/retry.sh"
+source "$SCRIPT_DIR/lib/ui.sh"
+
+# Default configuration
+PLAN_FILE="${PLAN_FILE:-PLAN.md}"
+PROGRESS_FILE="${PROGRESS_FILE:-PROGRESS.md}"
+STATE_FILE=".claudeloop/state/current.json"
+LOCK_FILE=".claudeloop/lock"
+RESET_PROGRESS=false
+START_PHASE=""
+DRY_RUN=false
+INTERRUPTED=false
+CURRENT_PHASE=""
+
+# Save current state to state file
+save_state() {
+  mkdir -p "$(dirname "$STATE_FILE")"
+
+  cat > "$STATE_FILE" << EOF
+{
+  "plan_file": "$PLAN_FILE",
+  "progress_file": "$PROGRESS_FILE",
+  "current_phase": "$CURRENT_PHASE",
+  "interrupted": true,
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+}
+
+# Load state from state file
+load_state() {
+  if [ ! -f "$STATE_FILE" ]; then
+    return 1
+  fi
+
+  # Simple parsing of JSON (basic implementation)
+  if grep -q '"interrupted": true' "$STATE_FILE"; then
+    print_warning "Found interrupted session"
+    echo -n "Resume from last checkpoint? (Y/n) "
+    read -r response
+    if [[ "$response" =~ ^[Nn]$ ]]; then
+      rm -f "$STATE_FILE"
+      return 1
+    fi
+    return 0
+  fi
+
+  return 1
+}
+
+# Clear state file
+clear_state() {
+  rm -f "$STATE_FILE"
+}
+
+# Create lock file
+create_lock() {
+  local lock_dir
+  lock_dir="$(dirname "$LOCK_FILE")"
+  mkdir -p "$lock_dir"
+
+  if [ -f "$LOCK_FILE" ]; then
+    local pid
+    pid=$(cat "$LOCK_FILE" 2>/dev/null)
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      print_error "Another instance is running (PID: $pid)"
+      exit 1
+    else
+      print_warning "Removing stale lock file"
+      rm -f "$LOCK_FILE"
+    fi
+  fi
+
+  echo $$ > "$LOCK_FILE"
+}
+
+# Remove lock file
+remove_lock() {
+  rm -f "$LOCK_FILE"
+}
+
+# Signal handler for graceful shutdown
+handle_interrupt() {
+  INTERRUPTED=true
+  echo ""
+  print_warning "Interrupt received (Ctrl+C)"
+  print_warning "Saving state and shutting down gracefully..."
+
+  # Mark current phase as pending if it was in progress
+  if [ -n "$CURRENT_PHASE" ] && [ "${PHASE_STATUS[$CURRENT_PHASE]:-}" = "in_progress" ]; then
+    print_warning "Marking Phase $CURRENT_PHASE as pending for retry"
+    PHASE_STATUS[$CURRENT_PHASE]="pending"
+    # Don't count this as an attempt since it was interrupted
+    PHASE_ATTEMPTS[$CURRENT_PHASE]=$((${PHASE_ATTEMPTS[$CURRENT_PHASE]} - 1))
+  fi
+
+  # Save progress
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+
+  # Save state for resume
+  save_state
+
+  # Cleanup
+  remove_lock
+
+  echo ""
+  print_success "State saved successfully"
+  print_success "Resume with: $0 --continue"
+  exit 130
+}
+
+# Cleanup on exit
+cleanup() {
+  remove_lock
+  if [ "$INTERRUPTED" = false ]; then
+    clear_state
+  fi
+}
+
+# Usage information
+usage() {
+  cat << EOF
+ClaudeLoop - Phase-by-Phase Execution Tool
+
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  --plan <file>        Plan file to execute (default: PLAN.md)
+  --progress <file>    Progress file (default: PROGRESS.md)
+  --reset              Reset progress and start from beginning
+  --continue           Continue from last checkpoint (default)
+  --phase <n>          Start from specific phase number
+  --dry-run            Validate plan without execution
+  --max-retries <n>    Maximum retry attempts per phase (default: 3)
+  --simple             Use simple output mode (no colors/fancy UI)
+  --help               Show this help message
+
+Examples:
+  $(basename "$0") --plan my_plan.md
+  $(basename "$0") --reset
+  $(basename "$0") --phase 3 --continue
+
+EOF
+}
+
+# Parse command-line arguments
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --plan)
+        PLAN_FILE="$2"
+        shift 2
+        ;;
+      --progress)
+        PROGRESS_FILE="$2"
+        shift 2
+        ;;
+      --reset)
+        RESET_PROGRESS=true
+        shift
+        ;;
+      --continue)
+        # Default behavior
+        shift
+        ;;
+      --phase)
+        START_PHASE="$2"
+        shift 2
+        ;;
+      --dry-run)
+        DRY_RUN=true
+        shift
+        ;;
+      --max-retries)
+        MAX_RETRIES="$2"
+        shift 2
+        ;;
+      --simple)
+        SIMPLE_MODE=true
+        shift
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        echo "Error: Unknown option $1" >&2
+        usage
+        exit 1
+        ;;
+    esac
+  done
+}
+
+# Validate environment
+validate_environment() {
+  # Check if in git repository
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    print_error "Not in a git repository. ClaudeLoop requires git for safety."
+    exit 1
+  fi
+
+  # Check for uncommitted changes
+  if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+    print_warning "Uncommitted changes detected. Consider committing before starting."
+    echo -n "Continue anyway? (y/N) "
+    read -r response
+    if [[ ! "$response" =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
+  fi
+
+  # Check if claude CLI is available
+  if ! command -v claude &> /dev/null; then
+    print_error "claude CLI not found. Please install it first."
+    exit 1
+  fi
+}
+
+# Execute a single phase
+execute_phase() {
+  local phase_num="$1"
+  local title="${PHASE_TITLES[$phase_num]}"
+  local description="${PHASE_DESCRIPTIONS[$phase_num]}"
+  local log_file=".claudeloop/logs/phase-$phase_num.log"
+
+  # Set current phase for interrupt handler
+  CURRENT_PHASE="$phase_num"
+
+  # Create log directory
+  mkdir -p ".claudeloop/logs"
+
+  # Update status
+  update_phase_status "$phase_num" "in_progress"
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+
+  print_phase_exec_header "$phase_num"
+
+  # Construct prompt for Claude
+  local prompt="You are executing Phase $phase_num of a multi-phase plan.
+
+## Phase $phase_num: $title
+
+$description
+
+## Context
+- This is a fresh Claude instance dedicated to this phase only
+- Previous phases have been completed and committed to git
+- Review recent git history and existing code before implementing
+- When done, ensure all changes are tested and working
+- Commit your changes when complete
+
+## Task
+Implement the above phase completely. Make sure to:
+1. Read relevant existing code
+2. Implement required changes
+3. Test your implementation thoroughly
+4. Commit your changes when complete"
+
+  # Execute claude
+  echo "Executing Claude CLI..."
+  if echo "$prompt" | claude --non-interactive 2>&1 | tee "$log_file"; then
+    print_success "Phase $phase_num completed successfully"
+    update_phase_status "$phase_num" "completed"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    CURRENT_PHASE=""
+    return 0
+  else
+    print_error "Phase $phase_num failed"
+    update_phase_status "$phase_num" "failed"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    CURRENT_PHASE=""
+    return 1
+  fi
+}
+
+# Main execution loop
+main_loop() {
+  local continue_execution=true
+
+  while $continue_execution; do
+    # Check for interruption
+    if $INTERRUPTED; then
+      print_warning "Execution interrupted"
+      return 130
+    fi
+
+    # Find next runnable phase
+    local next_phase
+    if ! next_phase=$(find_next_phase); then
+      # No runnable phases - check why
+      local has_pending=false
+      local has_failed=false
+      local i
+
+      for i in $(seq 1 "$PHASE_COUNT"); do
+        if [ "${PHASE_STATUS[$i]}" = "pending" ]; then
+          has_pending=true
+        fi
+        if [ "${PHASE_STATUS[$i]}" = "failed" ]; then
+          has_failed=true
+        fi
+      done
+
+      if ! $has_pending && ! $has_failed; then
+        # All phases completed
+        print_success "All phases completed!"
+        return 0
+      elif $has_pending; then
+        print_error "Remaining phases are blocked by dependencies"
+        return 1
+      else
+        print_error "Some phases failed and no more phases can run"
+        return 1
+      fi
+    fi
+
+    # Execute the next phase
+    if execute_phase "$next_phase"; then
+      # Success - continue to next phase
+      continue
+    else
+      # Failure - check if we should retry
+      if should_retry_phase "$next_phase"; then
+        local delay
+        delay=$(calculate_backoff "${PHASE_ATTEMPTS[$next_phase]}")
+        print_warning "Retrying phase $next_phase after $delay seconds..."
+        sleep "$delay"
+        continue
+      else
+        print_error "Phase $next_phase failed after ${MAX_RETRIES} attempts"
+        return 1
+      fi
+    fi
+  done
+}
+
+# Main function
+main() {
+  # Set up signal handlers and cleanup
+  trap handle_interrupt SIGINT SIGTERM
+  trap cleanup EXIT
+
+  # Parse arguments
+  parse_args "$@"
+
+  # Print header
+  print_header "$PLAN_FILE"
+
+  # Check if plan file exists
+  if [ ! -f "$PLAN_FILE" ]; then
+    print_error "Plan file not found: $PLAN_FILE"
+    exit 1
+  fi
+
+  # Parse plan
+  print_success "Parsing plan file: $PLAN_FILE"
+  if ! parse_plan "$PLAN_FILE"; then
+    print_error "Failed to parse plan file"
+    exit 1
+  fi
+
+  echo "Found $PHASE_COUNT phases"
+  echo ""
+
+  # Validate environment (skip in dry-run)
+  if ! $DRY_RUN; then
+    validate_environment
+  fi
+
+  # Check for interrupted session (skip in dry-run and reset)
+  if ! $DRY_RUN && ! $RESET_PROGRESS; then
+    load_state || true
+  fi
+
+  # Initialize progress
+  if $RESET_PROGRESS; then
+    rm -f "$PROGRESS_FILE" "$STATE_FILE"
+  fi
+
+  init_progress "$PROGRESS_FILE"
+
+  # Print phase list
+  print_all_phases
+
+  # Dry run mode
+  if $DRY_RUN; then
+    print_success "Dry run complete - plan is valid"
+    exit 0
+  fi
+
+  # Create lock file to prevent concurrent runs
+  create_lock
+
+  print_warning "Press Ctrl+C at any time to stop (state will be saved)"
+  echo ""
+
+  # Execute phases
+  main_loop
+  local exit_code=$?
+
+  # Final progress update
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+
+  # Clear state on successful completion
+  if [ $exit_code -eq 0 ]; then
+    clear_state
+  fi
+
+  # Print final summary
+  echo ""
+  print_header "$PLAN_FILE"
+  print_all_phases
+
+  exit $exit_code
+}
+
+# Run main function
+main "$@"
