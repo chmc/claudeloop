@@ -33,11 +33,11 @@ teardown() {
   # Parse plan
   parse_plan "$TEST_DIR/PLAN.md"
 
-  # Initialize progress
-  PHASE_STATUS[1]="completed"
-  PHASE_STATUS[2]="in_progress"
-  PHASE_STATUS[3]="pending"
-  PHASE_ATTEMPTS[2]=1
+  # Initialize progress (POSIX flat variables)
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="in_progress"
+  PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_2=1
 
   # Simulate being in phase 2
   CURRENT_PHASE=2
@@ -45,15 +45,17 @@ teardown() {
 
   # Manually call the interrupt logic (without the trap)
   INTERRUPTED=true
-  if [ -n "$CURRENT_PHASE" ] && [ "${PHASE_STATUS[$CURRENT_PHASE]}" = "in_progress" ]; then
-    PHASE_STATUS[$CURRENT_PHASE]="pending"
-    PHASE_ATTEMPTS[$CURRENT_PHASE]=$((${PHASE_ATTEMPTS[$CURRENT_PHASE]} - 1))
+  current_status=$(eval "echo \"\$PHASE_STATUS_$CURRENT_PHASE\"")
+  if [ -n "$CURRENT_PHASE" ] && [ "$current_status" = "in_progress" ]; then
+    eval "PHASE_STATUS_${CURRENT_PHASE}='pending'"
+    current_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$CURRENT_PHASE\"")
+    eval "PHASE_ATTEMPTS_${CURRENT_PHASE}=$((current_attempts - 1))"
   fi
 
   # Check that phase 2 was marked as pending
-  [ "${PHASE_STATUS[2]}" = "pending" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
   # Check that attempts was decremented (was 1, should be 0 now)
-  [ "${PHASE_ATTEMPTS[2]}" = "0" ]
+  [ "$PHASE_ATTEMPTS_2" = "0" ]
 }
 
 @test "killswitch: state file is created with correct format" {
@@ -105,7 +107,7 @@ EOF
   # Initialize with empty state
   init_progress "$TEST_DIR/PROGRESS.md"
 
-  # Check that status was restored
+  # Check that status was restored (progress.sh still uses associative arrays; updated in TODO2/3)
   [ "${PHASE_STATUS[1]}" = "completed" ]
   [ "${PHASE_STATUS[2]}" = "pending" ]
   [ "${PHASE_STATUS[3]}" = "pending" ]

@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/bash
+#!/bin/sh
 
 # Terminal UI Library
 # Handles terminal output and progress display
@@ -17,12 +17,16 @@ SIMPLE_MODE="${SIMPLE_MODE:-false}"
 print_header() {
   local plan_file="$1"
   local completed=0
-  local i
+  local i=1
+  local status
 
-  for i in $(seq 1 "$PHASE_COUNT"); do
-    if [ "${PHASE_STATUS[$i]:-pending}" = "completed" ]; then
+  while [ "$i" -le "$PHASE_COUNT" ]; do
+    status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+    status="${status:-pending}"
+    if [ "$status" = "completed" ]; then
       completed=$((completed + 1))
     fi
+    i=$((i + 1))
   done
 
   echo "═══════════════════════════════════════════════════════════"
@@ -37,8 +41,12 @@ print_header() {
 # Print phase status
 print_phase_status() {
   local phase_num="$1"
-  local status="${PHASE_STATUS[$phase_num]:-pending}"
-  local title="${PHASE_TITLES[$phase_num]:-Unknown}"
+  local status
+  status=$(eval "echo \"\$PHASE_STATUS_$phase_num\"")
+  status="${status:-pending}"
+  local title
+  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  title="${title:-Unknown}"
   local icon="⏳"
   local color="$COLOR_RESET"
 
@@ -61,14 +69,15 @@ print_phase_status() {
       ;;
   esac
 
-  echo -e "${color}${icon} Phase $phase_num: $title${COLOR_RESET}"
+  printf '%b\n' "${color}${icon} Phase $phase_num: $title${COLOR_RESET}"
 }
 
 # Print all phases
 print_all_phases() {
-  local i
-  for i in $(seq 1 "$PHASE_COUNT"); do
+  local i=1
+  while [ "$i" -le "$PHASE_COUNT" ]; do
     print_phase_status "$i"
+    i=$((i + 1))
   done
   echo ""
 }
@@ -76,14 +85,16 @@ print_all_phases() {
 # Print phase execution header
 print_phase_exec_header() {
   local phase_num="$1"
-  local title="${PHASE_TITLES[$phase_num]}"
-  local attempt="${PHASE_ATTEMPTS[$phase_num]}"
+  local title
+  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  local attempt
+  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
 
   echo ""
   echo "───────────────────────────────────────────────────────────"
-  echo -e "${COLOR_BLUE}▶ Executing Phase $phase_num: $title${COLOR_RESET}"
+  printf '%b\n' "${COLOR_BLUE}▶ Executing Phase $phase_num: $title${COLOR_RESET}"
   if [ "$attempt" -gt 1 ]; then
-    echo -e "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
+    printf '%b\n' "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
   fi
   echo "───────────────────────────────────────────────────────────"
   echo ""
@@ -92,17 +103,17 @@ print_phase_exec_header() {
 # Print success message
 print_success() {
   local message="$1"
-  echo -e "${COLOR_GREEN}✓ $message${COLOR_RESET}"
+  printf '%b\n' "${COLOR_GREEN}✓ $message${COLOR_RESET}"
 }
 
 # Print error message
 print_error() {
   local message="$1"
-  echo -e "${COLOR_RED}✗ $message${COLOR_RESET}" >&2
+  printf '%b\n' "${COLOR_RED}✗ $message${COLOR_RESET}" >&2
 }
 
 # Print warning message
 print_warning() {
   local message="$1"
-  echo -e "${COLOR_YELLOW}⚠ $message${COLOR_RESET}"
+  printf '%b\n' "${COLOR_YELLOW}⚠ $message${COLOR_RESET}"
 }

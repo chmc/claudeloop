@@ -16,7 +16,12 @@ echo "======================"
 echo
 
 # Check if bats is installed
-if ! command -v bats &> /dev/null; then
+BATS_CMD=""
+if command -v bats &> /dev/null; then
+  BATS_CMD="bats"
+elif [ -x /opt/homebrew/bin/bats ]; then
+  BATS_CMD="/opt/homebrew/bin/bats"
+else
   echo -e "${YELLOW}Warning: bats-core is not installed${NC}"
   echo
   echo "To install bats-core:"
@@ -40,15 +45,13 @@ TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 
-# Ensure we use bash 5+ for tests (required for associative arrays)
 export PATH="/opt/homebrew/bin:$PATH"
 
 # Run each test file
 for test_file in test_*.sh; do
   if [ -f "$test_file" ]; then
     echo -e "${YELLOW}Running $test_file${NC}"
-    # Run with explicit bash 5
-    if /opt/homebrew/bin/bats "$test_file"; then
+    if $BATS_CMD "$test_file"; then
       echo -e "${GREEN}✓ $test_file passed${NC}"
       echo
     else
