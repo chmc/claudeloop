@@ -51,7 +51,7 @@ parse_plan() {
 
           # Check for duplicate phase numbers (caught by sequential check above, but be explicit)
           local existing_title
-          existing_title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+          existing_title=$(eval "echo \"\${PHASE_TITLE_${phase_num}:-}\"")
           if [ -n "$existing_title" ]; then
             echo "Error: Duplicate phase number $phase_num at line $line_num" >&2
             return 1
