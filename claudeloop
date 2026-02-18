@@ -8,6 +8,15 @@ set -eu
 # Script directory
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
+# Capture env vars before defaults (precedence: defaults → config → env → CLI)
+_CL_PLAN_FILE="${PLAN_FILE:-}"
+_CL_PROGRESS_FILE="${PROGRESS_FILE:-}"
+_CL_MAX_RETRIES="${MAX_RETRIES:-}"
+_CL_BASE_DELAY="${BASE_DELAY:-}"
+_CL_MAX_DELAY="${MAX_DELAY:-}"
+_CL_SIMPLE_MODE="${SIMPLE_MODE:-}"
+_CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
+
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
 . "$SCRIPT_DIR/lib/dependencies.sh"
@@ -17,8 +26,8 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 . "$SCRIPT_DIR/lib/prompt.sh"
 
 # Default configuration
-PLAN_FILE="${PLAN_FILE:-PLAN.md}"
-PROGRESS_FILE="${PROGRESS_FILE:-PROGRESS.md}"
+PLAN_FILE="PLAN.md"
+PROGRESS_FILE="PROGRESS.md"
 STATE_FILE=".claudeloop/state/current.json"
 LOCK_FILE=".claudeloop/lock"
 RESET_PROGRESS=false
@@ -27,6 +36,39 @@ DRY_RUN=false
 INTERRUPTED=false
 CURRENT_PHASE=""
 PHASE_PROMPT_FILE=""
+SIMPLE_MODE=false
+VERBOSE_MODE=false
+
+# Print a message only when VERBOSE_MODE is true
+log_verbose() {
+  [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
+}
+
+# Load .claudeloop.conf key=value config file (do NOT source)
+load_config() {
+  local conf_file=".claudeloop.conf"
+  [ ! -f "$conf_file" ] && return 0
+
+  local line key value
+  while IFS= read -r line; do
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    key=$(printf '%s' "$key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    value=$(printf '%s' "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    case "$key" in
+      PLAN_FILE)         PLAN_FILE="$value" ;;
+      PROGRESS_FILE)     PROGRESS_FILE="$value" ;;
+      MAX_RETRIES)       MAX_RETRIES="$value" ;;
+      SIMPLE_MODE)       SIMPLE_MODE="$value" ;;
+      PHASE_PROMPT_FILE) PHASE_PROMPT_FILE="$value" ;;
+      BASE_DELAY)        BASE_DELAY="$value" ;;
+      MAX_DELAY)         MAX_DELAY="$value" ;;
+    esac
+  done < "$conf_file"
+}
 
 # Save current state to state file
 save_state() {
@@ -103,6 +145,7 @@ handle_interrupt() {
   echo ""
   print_warning "Interrupt received (Ctrl+C)"
   print_warning "Saving state and shutting down gracefully..."
+  log_verbose "handle_interrupt: CURRENT_PHASE=$CURRENT_PHASE"
 
   # Mark current phase as pending if it was in progress
   if [ -n "$CURRENT_PHASE" ]; then
@@ -149,16 +192,17 @@ ClaudeLoop - Phase-by-Phase Execution Tool
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  --plan <file>        Plan file to execute (default: PLAN.md)
-  --progress <file>    Progress file (default: PROGRESS.md)
-  --reset              Reset progress and start from beginning
-  --continue           Continue from last checkpoint (default)
-  --phase <n>          Start from specific phase number
-  --dry-run            Validate plan without execution
+  --plan <file>          Plan file to execute (default: PLAN.md)
+  --progress <file>      Progress file (default: PROGRESS.md)
+  --reset                Reset progress and start from beginning
+  --continue             Continue from last checkpoint (default)
+  --phase <n>            Start from specific phase number
+  --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
-  --max-retries <n>    Maximum retry attempts per phase (default: 3)
-  --simple             Use simple output mode (no colors/fancy UI)
-  --help               Show this help message
+  --max-retries <n>      Maximum retry attempts per phase (default: 3)
+  --simple               Use simple output mode (no colors/fancy UI)
+  --verbose              Enable verbose debug output
+  --help                 Show this help message
 
 Examples:
   $(basename "$0") --plan my_plan.md
@@ -206,6 +250,10 @@ parse_args() {
         ;;
       --simple)
         SIMPLE_MODE=true
+        shift
+        ;;
+      --verbose)
+        VERBOSE_MODE=true
         shift
         ;;
       --help|-h)
@@ -265,6 +313,8 @@ execute_phase() {
   # Create log directory
   mkdir -p ".claudeloop/logs"
 
+  log_verbose "execute_phase: phase=$phase_num title=$title"
+
   # Update status
   update_phase_status "$phase_num" "in_progress"
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -300,15 +350,40 @@ Implement the above phase completely. Make sure to:
 4. Commit your changes when complete"
   fi
 
-  # Execute claude
+  # Execute claude, capturing its exit status separately from tee
+  # (pipeline exit status is tee's, not claude's — so save to temp file)
+  local _exit_tmp
+  _exit_tmp=$(mktemp)
   echo "Executing Claude CLI..."
-  if echo "$prompt" | claude --non-interactive 2>&1 | tee "$log_file"; then
+  {
+    _rc=0
+    echo "$prompt" | claude --non-interactive 2>&1 || _rc=$?
+    printf '%s\n' "$_rc" > "$_exit_tmp"
+  } | tee "$log_file"
+
+  local claude_exit=1
+  if [ -f "$_exit_tmp" ]; then
+    claude_exit=$(cat "$_exit_tmp")
+    rm -f "$_exit_tmp"
+  fi
+
+  # Log rotation: keep last 500 lines if file exceeds limit
+  local line_count
+  line_count=$(wc -l < "$log_file")
+  if [ "$line_count" -gt 500 ]; then
+    tail -n 500 "$log_file" > "${log_file}.tmp" && mv "${log_file}.tmp" "$log_file"
+    log_verbose "execute_phase: rotated log for phase $phase_num ($line_count → 500 lines)"
+  fi
+
+  if [ "$claude_exit" -eq 0 ]; then
+    log_verbose "execute_phase: phase $phase_num succeeded"
     print_success "Phase $phase_num completed successfully"
     update_phase_status "$phase_num" "completed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
     return 0
   else
+    log_verbose "execute_phase: phase $phase_num failed"
     print_error "Phase $phase_num failed"
     update_phase_status "$phase_num" "failed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -330,6 +405,7 @@ main_loop() {
 
     # Find next runnable phase
     local next_phase
+    log_verbose "main_loop: finding next runnable phase"
     if ! next_phase=$(find_next_phase); then
       # No runnable phases - check why
       local has_pending=false
@@ -361,8 +437,11 @@ main_loop() {
       fi
     fi
 
+    log_verbose "main_loop: next runnable phase is $next_phase"
+
     # Execute the next phase
     if execute_phase "$next_phase"; then
+      log_verbose "main_loop: phase $next_phase succeeded, continuing"
       # Success - continue to next phase
       continue
     else
@@ -372,6 +451,7 @@ main_loop() {
         _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
         local delay
         delay=$(calculate_backoff "$_attempts")
+        log_verbose "main_loop: scheduling retry of phase $next_phase in ${delay}s (attempt $_attempts)"
         print_warning "Retrying phase $next_phase after $delay seconds..."
         sleep "$delay"
         continue
@@ -389,7 +469,19 @@ main() {
   trap handle_interrupt INT TERM
   trap cleanup EXIT
 
-  # Parse arguments
+  # Load config file (defaults → config file)
+  load_config
+
+  # Apply env var overrides (env vars take priority over config file)
+  [ -n "$_CL_PLAN_FILE" ]         && PLAN_FILE="$_CL_PLAN_FILE"
+  [ -n "$_CL_PROGRESS_FILE" ]     && PROGRESS_FILE="$_CL_PROGRESS_FILE"
+  [ -n "$_CL_MAX_RETRIES" ]       && MAX_RETRIES="$_CL_MAX_RETRIES"
+  [ -n "$_CL_BASE_DELAY" ]        && BASE_DELAY="$_CL_BASE_DELAY"
+  [ -n "$_CL_MAX_DELAY" ]         && MAX_DELAY="$_CL_MAX_DELAY"
+  [ -n "$_CL_SIMPLE_MODE" ]       && SIMPLE_MODE="$_CL_SIMPLE_MODE"
+  [ -n "$_CL_PHASE_PROMPT_FILE" ] && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
+
+  # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
 
   # Print header
@@ -434,6 +526,16 @@ main() {
 
   init_progress "$PROGRESS_FILE"
 
+  # Apply --phase N: mark phases before START_PHASE as completed (skip them)
+  if [ -n "$START_PHASE" ]; then
+    local i=1
+    while [ "$i" -lt "$START_PHASE" ]; do
+      eval "PHASE_STATUS_${i}='completed'"
+      i=$((i + 1))
+    done
+    log_verbose "main: skipped phases 1-$((START_PHASE - 1)) (marked completed)"
+  fi
+
   # Print phase list
   print_all_phases
 
@@ -450,8 +552,8 @@ main() {
   echo ""
 
   # Execute phases
-  main_loop
-  local exit_code=$?
+  local exit_code=0
+  main_loop || exit_code=$?
 
   # Final progress update
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -469,5 +571,7 @@ main() {
   exit $exit_code
 }
 
-# Run main function
-main "$@"
+# Run main (skip if script is sourced for testing)
+if [ "${_CLAUDELOOP_SOURCE_ONLY:-0}" != "1" ]; then
+  main "$@"
+fi
