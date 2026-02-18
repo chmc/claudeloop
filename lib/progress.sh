@@ -1,13 +1,7 @@
-#!/opt/homebrew/bin/bash
+#!/bin/sh
 
 # Progress Tracking Library
 # Manages PROGRESS.md file and tracks execution state
-
-# Global associative array for phase status
-declare -A PHASE_STATUS
-declare -A PHASE_START_TIME
-declare -A PHASE_END_TIME
-declare -A PHASE_ATTEMPTS
 
 # Initialize progress tracking
 # Args: $1 - progress file path
@@ -15,12 +9,13 @@ init_progress() {
   local progress_file="$1"
 
   # Initialize status for all phases as pending
-  local i
-  for i in $(seq 1 "$PHASE_COUNT"); do
-    PHASE_STATUS[$i]="pending"
-    PHASE_ATTEMPTS[$i]=0
-    PHASE_START_TIME[$i]=""
-    PHASE_END_TIME[$i]=""
+  local i=1
+  while [ "$i" -le "$PHASE_COUNT" ]; do
+    eval "PHASE_STATUS_${i}=pending"
+    eval "PHASE_ATTEMPTS_${i}=0"
+    eval "PHASE_START_TIME_${i}=''"
+    eval "PHASE_END_TIME_${i}=''"
+    i=$((i + 1))
   done
 
   # Read existing progress if file exists
@@ -41,16 +36,27 @@ read_progress() {
   local current_phase=""
   while IFS= read -r line; do
     # Match phase headers: ### ✅ Phase 1: Title
-    if [[ "$line" =~ ^###\ +[^\ ]+\ +Phase\ +([0-9]+): ]]; then
-      current_phase="${BASH_REMATCH[1]}"
-    elif [ -n "$current_phase" ] && [[ "$line" =~ ^Status:\ +(.+) ]]; then
-      PHASE_STATUS[$current_phase]="${BASH_REMATCH[1]}"
-    elif [ -n "$current_phase" ] && [[ "$line" =~ ^Started:\ +(.+) ]]; then
-      PHASE_START_TIME[$current_phase]="${BASH_REMATCH[1]}"
-    elif [ -n "$current_phase" ] && [[ "$line" =~ ^Completed:\ +(.+) ]]; then
-      PHASE_END_TIME[$current_phase]="${BASH_REMATCH[1]}"
-    elif [ -n "$current_phase" ] && [[ "$line" =~ ^Attempts:\ +([0-9]+) ]]; then
-      PHASE_ATTEMPTS[$current_phase]="${BASH_REMATCH[1]}"
+    if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+:'; then
+      current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\):.*/\1/p')
+    elif [ -n "$current_phase" ]; then
+      case "$line" in
+        "Status: "*)
+          status_value=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          eval "PHASE_STATUS_${current_phase}='$status_value'"
+          ;;
+        "Started: "*)
+          time_value=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          eval "PHASE_START_TIME_${current_phase}='$time_value'"
+          ;;
+        "Completed: "*)
+          time_value=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          eval "PHASE_END_TIME_${current_phase}='$time_value'"
+          ;;
+        "Attempts: "*)
+          attempts_value=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          eval "PHASE_ATTEMPTS_${current_phase}=$attempts_value"
+          ;;
+      esac
     fi
   done < "$progress_file"
 
@@ -85,20 +91,23 @@ EOF
 
 # Generate status summary section
 generate_status_summary() {
-  local total=$PHASE_COUNT
+  local total="$PHASE_COUNT"
   local completed=0
   local in_progress=0
   local pending=0
   local failed=0
 
-  local i
-  for i in $(seq 1 "$PHASE_COUNT"); do
-    case "${PHASE_STATUS[$i]}" in
-      completed) completed=$((completed + 1)) ;;
+  local i=1
+  while [ "$i" -le "$PHASE_COUNT" ]; do
+    local status
+    status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+    case "$status" in
+      completed)   completed=$((completed + 1)) ;;
       in_progress) in_progress=$((in_progress + 1)) ;;
-      pending) pending=$((pending + 1)) ;;
-      failed) failed=$((failed + 1)) ;;
+      pending)     pending=$((pending + 1)) ;;
+      failed)      failed=$((failed + 1)) ;;
     esac
+    i=$((i + 1))
   done
 
   echo "- Total phases: $total"
@@ -110,50 +119,61 @@ generate_status_summary() {
 
 # Generate phase details section
 generate_phase_details() {
-  local i
-  for i in $(seq 1 "$PHASE_COUNT"); do
-    local status="${PHASE_STATUS[$i]}"
-    local title="${PHASE_TITLES[$i]}"
+  local i=1
+  while [ "$i" -le "$PHASE_COUNT" ]; do
+    local status
+    status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+    local title
+    title=$(eval "echo \"\$PHASE_TITLE_$i\"")
     local icon="⏳"
 
     case "$status" in
-      completed) icon="✅" ;;
+      completed)   icon="✅" ;;
       in_progress) icon="🔄" ;;
-      failed) icon="❌" ;;
-      pending) icon="⏳" ;;
+      failed)      icon="❌" ;;
+      pending)     icon="⏳" ;;
     esac
 
     echo "### $icon Phase $i: $title"
     echo "Status: $status"
 
-    if [ -n "${PHASE_START_TIME[$i]}" ]; then
-      echo "Started: ${PHASE_START_TIME[$i]}"
+    local start_time
+    start_time=$(eval "echo \"\$PHASE_START_TIME_$i\"")
+    if [ -n "$start_time" ]; then
+      echo "Started: $start_time"
     fi
 
-    if [ -n "${PHASE_END_TIME[$i]}" ]; then
-      echo "Completed: ${PHASE_END_TIME[$i]}"
+    local end_time
+    end_time=$(eval "echo \"\$PHASE_END_TIME_$i\"")
+    if [ -n "$end_time" ]; then
+      echo "Completed: $end_time"
     fi
 
-    if [ "${PHASE_ATTEMPTS[$i]}" -gt 0 ]; then
-      echo "Attempts: ${PHASE_ATTEMPTS[$i]}"
+    local attempts
+    attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$i\"")
+    if [ "$attempts" -gt 0 ]; then
+      echo "Attempts: $attempts"
     fi
 
-    local deps="${PHASE_DEPENDENCIES[$i]}"
+    local deps
+    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$i\"")
     if [ -n "$deps" ]; then
-      echo -n "Depends on:"
+      printf 'Depends on:'
       for dep in $deps; do
-        local dep_status="${PHASE_STATUS[$dep]}"
+        local dep_status
+        dep_status=$(eval "echo \"\$PHASE_STATUS_$dep\"")
         local dep_icon="⏳"
         case "$dep_status" in
           completed) dep_icon="✅" ;;
-          failed) dep_icon="❌" ;;
+          failed)    dep_icon="❌" ;;
         esac
-        echo -n " Phase $dep $dep_icon"
+        printf ' Phase %s %s' "$dep" "$dep_icon"
       done
       echo ""
     fi
 
     echo ""
+    i=$((i + 1))
   done
 }
 
@@ -163,15 +183,17 @@ update_phase_status() {
   local phase_num="$1"
   local new_status="$2"
 
-  PHASE_STATUS[$phase_num]="$new_status"
+  eval "PHASE_STATUS_${phase_num}='$new_status'"
 
   case "$new_status" in
     in_progress)
-      PHASE_START_TIME[$phase_num]="$(date '+%Y-%m-%d %H:%M:%S')"
-      PHASE_ATTEMPTS[$phase_num]=$((${PHASE_ATTEMPTS[$phase_num]} + 1))
+      eval "PHASE_START_TIME_${phase_num}='$(date '+%Y-%m-%d %H:%M:%S')'"
+      local attempts
+      attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
+      eval "PHASE_ATTEMPTS_${phase_num}=$((attempts + 1))"
       ;;
     completed|failed)
-      PHASE_END_TIME[$phase_num]="$(date '+%Y-%m-%d %H:%M:%S')"
+      eval "PHASE_END_TIME_${phase_num}='$(date '+%Y-%m-%d %H:%M:%S')'"
       ;;
   esac
 }

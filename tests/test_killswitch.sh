@@ -107,10 +107,10 @@ EOF
   # Initialize with empty state
   init_progress "$TEST_DIR/PROGRESS.md"
 
-  # Check that status was restored (progress.sh still uses associative arrays; updated in TODO2/3)
-  [ "${PHASE_STATUS[1]}" = "completed" ]
-  [ "${PHASE_STATUS[2]}" = "pending" ]
-  [ "${PHASE_STATUS[3]}" = "pending" ]
+  # Check that status was restored
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
 }
 
 @test "killswitch: lock file prevents concurrent runs" {
