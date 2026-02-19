@@ -71,6 +71,14 @@ is_permission_error() {
   grep -qiE "write permissions haven't been granted|approve the file write|approve.*write operation|permission to write|hasn't been granted" "$log_file"
 }
 
+# Check if a phase log is missing or empty (Claude produced no output)
+# Args: $1 - path to log file
+# Returns: 0 if empty/missing, 1 if non-empty
+is_empty_log() {
+  local log_file="$1"
+  [ ! -s "$log_file" ]
+}
+
 # Check if phase should be retried
 # Args: $1 - phase number
 # Returns: 0 if should retry, 1 if max retries exceeded

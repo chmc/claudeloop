@@ -394,6 +394,15 @@ Implement the above phase completely. Make sure to:
     log_verbose "execute_phase: rotated log for phase $phase_num ($line_count → 500 lines)"
   fi
 
+  # Empty log means Claude produced no output — always a failure
+  if is_empty_log "$log_file"; then
+    print_error "Phase $phase_num: Claude produced no output (empty log)."
+    update_phase_status "$phase_num" "failed"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    CURRENT_PHASE=""
+    return 1
+  fi
+
   if [ "$claude_exit" -eq 0 ]; then
     if is_permission_error "$log_file"; then
       log_verbose "execute_phase: phase $phase_num exited 0 but requested permissions"
@@ -488,9 +497,26 @@ main_loop() {
         sleep "$QUOTA_RETRY_INTERVAL"
         continue
       fi
+      if is_empty_log "$_log_file"; then
+        print_error "Phase $next_phase: Claude produced no output (empty log). Check the claude CLI."
+        printf 'Press Enter to retry phase %s once the issue is resolved, or Ctrl+C to abort: ' "$next_phase"
+        read -r _dummy 2>/dev/null || return 1
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
+        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
+        eval "PHASE_STATUS_${next_phase}=pending"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        continue
+      fi
       if is_permission_error "$_log_file"; then
-        print_error "Phase $next_phase: Claude requested write permissions — re-run with --dangerously-skip-permissions"
-        return 1
+        print_error "Phase $next_phase: Claude requested write permissions."
+        print_warning "Grant the permission in the Claude UI (or re-run with --dangerously-skip-permissions)."
+        printf 'Press Enter to retry phase %s, or Ctrl+C to abort: ' "$next_phase"
+        read -r _dummy 2>/dev/null || return 1
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
+        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
+        eval "PHASE_STATUS_${next_phase}=pending"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        continue
       fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then

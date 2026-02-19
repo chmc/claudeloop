@@ -17,17 +17,21 @@ count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
 printf '%s\n' "\$count" > "\$count_file"
-printf 'stub output for call %s\n' "\$count"
-custom_outputs_file="${dir}/claude_custom_outputs"
-if [ -f "\$custom_outputs_file" ]; then
-  custom_text=\$(sed -n "\${count}p" "\$custom_outputs_file" 2>/dev/null || echo "")
-  [ -n "\$custom_text" ] && printf '%s\n' "\$custom_text"
-fi
 exit_codes_file="${dir}/claude_exit_codes"
 exit_code=0
 if [ -f "\$exit_codes_file" ]; then
     exit_code=\$(sed -n "\${count}p" "\$exit_codes_file" 2>/dev/null || echo "")
     [ -z "\$exit_code" ] && exit_code=0
+fi
+silent_calls_file="${dir}/claude_silent_calls"
+if grep -qx "\$count" "\$silent_calls_file" 2>/dev/null; then
+  exit "\$exit_code"
+fi
+printf 'stub output for call %s\n' "\$count"
+custom_outputs_file="${dir}/claude_custom_outputs"
+if [ -f "\$custom_outputs_file" ]; then
+  custom_text=\$(sed -n "\${count}p" "\$custom_outputs_file" 2>/dev/null || echo "")
+  [ -n "\$custom_text" ] && printf '%s\n' "\$custom_text"
 fi
 exit "\$exit_code"
 EOF
@@ -322,4 +326,35 @@ PROGRESS
   [ "$status" -ne 0 ]
   [ "$(_call_count)" -eq 3 ]
   grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+}
+
+# =============================================================================
+# Scenario 12: Empty log treated as failure (stdin closed — non-interactive)
+# =============================================================================
+@test "integration: empty log causes phase failure with non-zero exit" {
+  # Call 1 (phase 1): silent exit 0 → empty log → should fail
+  printf '1\n' > "$TEST_DIR/claude_silent_calls"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 1"
+  [ "$status" -ne 0 ]
+  # Log file exists but is empty
+  [ -f "$TEST_DIR/.claudeloop/logs/phase-1.log" ]
+  [ ! -s "$TEST_DIR/.claudeloop/logs/phase-1.log" ]
+  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+}
+
+# =============================================================================
+# Scenario 13: Permission error pauses then retries after Enter
+# =============================================================================
+@test "integration: permission error pauses then retries after Enter" {
+  # Call 1: outputs permission prompt (exit 0); Call 2: success; Call 3: phase 2 success
+  printf "write permissions haven't been granted\n\n\n" \
+    > "$TEST_DIR/claude_custom_outputs"
+  # Pipe a newline to simulate user pressing Enter at the prompt
+  run sh -c "printf '\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 2)"
+  [ "$status" -eq 0 ]
+  [ "$(_completed_count)" -eq 2 ]
+  # Phase 1 retried: 2 claude calls for phase 1, 1 for phase 2
+  [ "$(_call_count)" -eq 3 ]
+  # Attempt counter not inflated by the pause
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/PROGRESS.md" | grep -q "Attempts: 1"
 }
