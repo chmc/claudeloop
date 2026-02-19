@@ -197,3 +197,43 @@ teardown() { rm -f "$_log"; }
   run is_quota_error "$_log"
   [ "$status" -eq 0 ]
 }
+
+# --- is_empty_log() ---
+
+@test "is_empty_log: missing file returns 0 (empty)" {
+  run is_empty_log "/nonexistent/phase-99.log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_empty_log: zero-byte file returns 0 (empty)" {
+  printf '' > "$_log"
+  run is_empty_log "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_empty_log: new-format log with empty response returns 0 (empty)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== PROMPT ===\n' >> "$_log"
+  printf 'do something\n' >> "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 duration=1s time=2026-01-01T00:00:01 ===\n' >> "$_log"
+  run is_empty_log "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_empty_log: new-format log with non-empty response returns 1 (not empty)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== PROMPT ===\n' >> "$_log"
+  printf 'do something\n' >> "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
+  printf 'Claude output here.\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 duration=1s time=2026-01-01T00:00:01 ===\n' >> "$_log"
+  run is_empty_log "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_empty_log: old-format non-empty file returns 1 (not empty)" {
+  printf 'Some Claude output without headers.\n' > "$_log"
+  run is_empty_log "$_log"
+  [ "$status" -eq 1 ]
+}

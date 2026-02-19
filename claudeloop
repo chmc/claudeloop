@@ -26,6 +26,7 @@ _CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
 . "$SCRIPT_DIR/lib/retry.sh"
 . "$SCRIPT_DIR/lib/ui.sh"
 . "$SCRIPT_DIR/lib/prompt.sh"
+. "$SCRIPT_DIR/lib/stream_processor.sh"
 
 # Default configuration
 PLAN_FILE="PLAN.md"
@@ -311,6 +312,7 @@ validate_environment() {
     print_error "claude CLI not found. Please install it first."
     exit 1
   fi
+
 }
 
 # Execute a single phase
@@ -321,6 +323,8 @@ execute_phase() {
   local description
   description=$(eval "echo \"\$PHASE_DESCRIPTION_$phase_num\"")
   local log_file=".claudeloop/logs/phase-$phase_num.log"
+  local raw_log=".claudeloop/logs/phase-$phase_num.raw.json"
+  local start_ts duration
 
   # Set current phase for interrupt handler
   CURRENT_PHASE="$phase_num"
@@ -333,6 +337,10 @@ execute_phase() {
   # Update status
   update_phase_status "$phase_num" "in_progress"
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+
+  local attempt
+  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
+  start_ts=$(date '+%s')
 
   print_phase_exec_header "$phase_num"
 
@@ -365,20 +373,38 @@ Implement the above phase completely. Make sure to:
 4. Commit your changes when complete"
   fi
 
-  # Execute claude, capturing its exit status separately from tee
-  # (pipeline exit status is tee's, not claude's — so save to temp file)
-  local _exit_tmp
+  # Write metadata + prompt header to log (overwrite previous content)
+  {
+    printf '=== EXECUTION START phase=%s attempt=%s time=%s ===\n' \
+      "$phase_num" "$attempt" "$(date '+%Y-%m-%dT%H:%M:%S')"
+    printf '=== PROMPT ===\n'
+    printf '%s\n' "$prompt"
+    printf '=== RESPONSE ===\n'
+  } > "$log_file"
+
+  # Execute claude with stream-json output, pipe through stream processor
+  local _exit_tmp _claude_debug_flag
   _exit_tmp=$(mktemp)
+  _claude_debug_flag=""
+  if [ "$VERBOSE_MODE" = "true" ]; then
+    _claude_debug_flag="--debug-file .claudeloop/logs/phase-$phase_num.claude.debug"
+  fi
   echo "Executing Claude CLI..."
   {
     _rc=0
     if [ "$SKIP_PERMISSIONS" = "true" ]; then
-      echo "$prompt" | claude --print --dangerously-skip-permissions 2>&1 || _rc=$?
+      # shellcheck disable=SC2086
+      echo "$prompt" | claude --print --dangerously-skip-permissions \
+        --output-format=stream-json --include-partial-messages \
+        $_claude_debug_flag 2>&1 || _rc=$?
     else
-      echo "$prompt" | claude --print 2>&1 || _rc=$?
+      # shellcheck disable=SC2086
+      echo "$prompt" | claude --print \
+        --output-format=stream-json --include-partial-messages \
+        $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | tee "$log_file"
+  } | process_stream_json "$log_file" "$raw_log"
 
   local claude_exit=1
   if [ -f "$_exit_tmp" ]; then
@@ -386,12 +412,31 @@ Implement the above phase completely. Make sure to:
     rm -f "$_exit_tmp"
   fi
 
-  # Log rotation: keep last 500 lines if file exceeds limit
-  local line_count
-  line_count=$(wc -l < "$log_file")
-  if [ "$line_count" -gt 500 ]; then
-    tail -n 500 "$log_file" > "${log_file}.tmp" && mv "${log_file}.tmp" "$log_file"
-    log_verbose "execute_phase: rotated log for phase $phase_num ($line_count → 500 lines)"
+  # Write metadata footer to log
+  end_ts=$(date '+%s')
+  duration=$((end_ts - start_ts))
+  printf '=== EXECUTION END exit_code=%s duration=%ss time=%s ===\n' \
+    "$claude_exit" "$duration" "$(date '+%Y-%m-%dT%H:%M:%S')" >> "$log_file"
+
+  # Log rotation: preserve header up to RESPONSE marker, keep last 500 response lines
+  local response_header_lines response_lines total_lines
+  response_header_lines=$(grep -n '^=== RESPONSE ===$' "$log_file" | head -1 | cut -d: -f1)
+  if [ -n "$response_header_lines" ]; then
+    total_lines=$(wc -l < "$log_file")
+    response_lines=$((total_lines - response_header_lines))
+    if [ "$response_lines" -gt 500 ]; then
+      header=$(head -n "$response_header_lines" "$log_file")
+      tail_content=$(tail -n 500 "$log_file")
+      printf '%s\n%s\n' "$header" "$tail_content" > "${log_file}.tmp" && mv "${log_file}.tmp" "$log_file"
+      log_verbose "execute_phase: rotated log for phase $phase_num ($response_lines → 500 response lines)"
+    fi
+  else
+    # Old-format log: fall back to original rotation
+    line_count=$(wc -l < "$log_file")
+    if [ "$line_count" -gt 500 ]; then
+      tail -n 500 "$log_file" > "${log_file}.tmp" && mv "${log_file}.tmp" "$log_file"
+      log_verbose "execute_phase: rotated log for phase $phase_num ($line_count → 500 lines)"
+    fi
   fi
 
   # Empty log means Claude produced no output — always a failure

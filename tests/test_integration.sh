@@ -332,13 +332,12 @@ PROGRESS
 # Scenario 12: Empty log treated as failure (stdin closed — non-interactive)
 # =============================================================================
 @test "integration: empty log causes phase failure with non-zero exit" {
-  # Call 1 (phase 1): silent exit 0 → empty log → should fail
+  # Call 1 (phase 1): silent exit 0 → empty response section → should fail
   printf '1\n' > "$TEST_DIR/claude_silent_calls"
   run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 1"
   [ "$status" -ne 0 ]
-  # Log file exists but is empty
+  # Log file exists (now always has headers)
   [ -f "$TEST_DIR/.claudeloop/logs/phase-1.log" ]
-  [ ! -s "$TEST_DIR/.claudeloop/logs/phase-1.log" ]
   grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
 }
 

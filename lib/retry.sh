@@ -76,7 +76,21 @@ is_permission_error() {
 # Returns: 0 if empty/missing, 1 if non-empty
 is_empty_log() {
   local log_file="$1"
-  [ ! -s "$log_file" ]
+  local has_response
+  [ ! -f "$log_file" ] || [ ! -s "$log_file" ] && return 0
+  # New-format logs: check if anything was written after the RESPONSE marker
+  # and before the EXECUTION END marker
+  if grep -q '^=== RESPONSE ===$' "$log_file"; then
+    has_response=$(awk '
+      /^=== RESPONSE ===$/{f=1; next}
+      /^=== EXECUTION END /{exit}
+      f && /[^[:space:]]/{print "yes"; exit}
+    ' "$log_file")
+    [ -z "$has_response" ] && return 0
+    return 1
+  fi
+  # Old-format log (no marker): file is non-empty = not empty
+  return 1
 }
 
 # Check if phase should be retried
