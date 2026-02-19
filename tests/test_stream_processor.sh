@@ -30,6 +30,13 @@ run_processor() {
   grep -q "Hello world" "$_log"
 }
 
+@test "assistant text event: line prefixed with timestamp [HH:MM:SS]" {
+  local event='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello world"}]}}'
+  run run_processor "$event"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\ Hello\ world ]]
+}
+
 @test "assistant text event: raw JSON written to raw_log" {
   local event='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hi"}]}}'
   run_processor "$event" > /dev/null 2>&1
@@ -154,7 +161,8 @@ run_processor() {
   local text2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"world\n"}]}}'
   run bash -c "printf '%s\n%s\n%s\n' '$text1' '$tool' '$text2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'hello\nworld'* ]]
+  [[ "$output" == *"hello"* ]]
+  [[ "$output" == *"world"* ]]
 }
 
 # --- activity dots (Change 4) ---
@@ -181,10 +189,18 @@ run_processor() {
   [[ "$output" == *".."* ]]
 }
 
-@test "10 consecutive silent events: 10 dots then periodic timestamp" {
-  run bash -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo '{\"type\":\"unknown_event\"}'; done | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+@test "10 consecutive silent events: 10 dots, no dot-triggered timestamp (threshold is 50)" {
+  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -10 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *".........."* ]]
+  # BEGIN prints one timestamp; dot threshold not hit so no second timestamp follows dots
+  count=$(printf '%s' "$output" | grep -o '\[[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\]' | wc -l | tr -d ' ')
+  [ "$count" -eq 1 ]
+}
+
+@test "50 consecutive silent events: 50 dots then periodic timestamp" {
+  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -50 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
   [[ "$output" == *"["*":"*"]"* ]]
 }
 
@@ -193,7 +209,8 @@ run_processor() {
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
   run bash -c "printf '%s\n%s\n' '$silent' '$text' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *$'.\nhello'* ]]
+  [[ "$output" == *"."* ]]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\ hello ]]
 }
 
 @test "dot resets after visible text: second silent period gets new dot" {

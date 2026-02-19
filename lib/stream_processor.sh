@@ -95,6 +95,7 @@ process_stream_json() {
           fflush()
           at_line_start = 1
         }
+        if (at_line_start) printf "[%s] ", get_time()
         printf "%s", text
         printf "%s", text >> log_file
         fflush()
@@ -105,7 +106,7 @@ process_stream_json() {
         fflush()
         at_line_start = 0
         dot_count++
-        if (dot_count >= 10) {
+        if (dot_count >= 50) {
           printf "  [%s]\n", get_time()
           fflush()
           at_line_start = 1
@@ -175,7 +176,7 @@ process_stream_json() {
       fflush()
       at_line_start = 0
       dot_count++
-      if (dot_count >= 10) {
+      if (dot_count >= 50) {
         printf "  [%s]\n", get_time()
         fflush()
         at_line_start = 1

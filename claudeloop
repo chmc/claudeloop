@@ -337,7 +337,7 @@ setup_project() {
       esac
       printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
       print_success "Created .gitignore"
-      _add_platform_gitignore
+      _add_platform_gitignore silent
     else
       printf 'Add .claudeloop/ to .gitignore? (Y/n) '
       read -r response || return 0

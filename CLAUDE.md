@@ -63,4 +63,14 @@ Migrated from `#!/opt/homebrew/bin/bash` (associative arrays, `[[ ]]`, `BASH_REM
 
 ## Testing
 
-Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-core`). TDD: write `tests/test_<lib>.sh` before implementing. Each lib has a corresponding test file.
+Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-core`). Each lib has a corresponding `tests/test_<lib>.sh`.
+
+### TDD workflow (mandatory)
+
+1. **Write failing tests first** — add tests to the relevant `tests/test_<lib>.sh` before touching implementation
+2. **Verify tests fail** — `bats tests/test_<lib>.sh` must show the new tests as `not ok`
+3. **Implement** — make the minimal change to pass the tests
+4. **Verify tests pass** — `bats tests/test_<lib>.sh` must show all tests as `ok`
+5. **Run full suite** — `./tests/run_all_tests.sh` must pass (excluding pre-existing failures)
+
+When modifying existing behavior, update affected tests before changing implementation code.

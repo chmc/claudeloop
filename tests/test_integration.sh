@@ -346,10 +346,12 @@ PROGRESS
 # Scenario 13: Permission error pauses then retries after Enter
 # =============================================================================
 @test "integration: permission error pauses then retries after Enter" {
+  # Pre-create .gitignore so the gitignore prompt doesn't consume the piped newline
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
   # Call 1: outputs permission prompt (exit 0); Call 2: success; Call 3: phase 2 success
   printf "write permissions haven't been granted\n\n\n" \
     > "$TEST_DIR/claude_custom_outputs"
-  # Pipe a newline to simulate user pressing Enter at the prompt
+  # Pipe a newline to simulate user pressing Enter at the permission prompt
   run sh -c "printf '\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 2)"
   [ "$status" -eq 0 ]
   [ "$(_completed_count)" -eq 2 ]
