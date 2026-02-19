@@ -61,7 +61,19 @@ process_stream_json() {
     return s
   }
 
-  BEGIN { at_line_start = 1; silent_dot_printed = 0 }
+  # get_time() - return current HH:MM:SS via shell date (POSIX awk)
+  function get_time(    ts) {
+    "date '+%H:%M:%S'" | getline ts
+    close("date '+%H:%M:%S'")
+    return ts
+  }
+
+  BEGIN {
+    at_line_start = 1
+    dot_count = 0
+    printf "[%s]\n", get_time()
+    fflush()
+  }
 
   {
     line = $0
@@ -78,17 +90,26 @@ process_stream_json() {
     if (etype == "assistant") {
       text = extract(line, "text")
       if (text != "") {
+        if (!at_line_start) {
+          printf "\n"
+          fflush()
+          at_line_start = 1
+        }
         printf "%s", text
         printf "%s", text >> log_file
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
-        silent_dot_printed = 0
+        dot_count = 0
       } else {
-        if (!silent_dot_printed) {
-          printf "."
+        printf "."
+        fflush()
+        at_line_start = 0
+        dot_count++
+        if (dot_count >= 10) {
+          printf "  [%s]\n", get_time()
           fflush()
-          at_line_start = 0
-          silent_dot_printed = 1
+          at_line_start = 1
+          dot_count = 0
         }
       }
 
@@ -108,7 +129,7 @@ process_stream_json() {
       } else {
         printf "  [Tool: %s]\n", name > "/dev/stderr"
       }
-      silent_dot_printed = 0
+      dot_count = 0
 
     } else if (etype == "tool_result") {
       content = extract(line, "content")
@@ -129,7 +150,7 @@ process_stream_json() {
         }
       }
       printf "  [Tool result: %d chars]\n", total > "/dev/stderr"
-      silent_dot_printed = 0
+      dot_count = 0
 
     } else if (etype == "result") {
       cost = extract(line, "cost_usd")
@@ -147,14 +168,18 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
-      silent_dot_printed = 0
+      dot_count = 0
 
     } else {
-      if (!silent_dot_printed) {
-        printf "."
+      printf "."
+      fflush()
+      at_line_start = 0
+      dot_count++
+      if (dot_count >= 10) {
+        printf "  [%s]\n", get_time()
         fflush()
-        at_line_start = 0
-        silent_dot_printed = 1
+        at_line_start = 1
+        dot_count = 0
       }
     }
   }

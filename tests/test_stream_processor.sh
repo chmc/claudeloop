@@ -141,10 +141,9 @@ run_processor() {
 
 # --- empty input ---
 
-@test "empty input: no output, no crash" {
+@test "empty input: no crash" {
   run bash -c "echo -n | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw'"
   [ "$status" -eq 0 ]
-  [ -z "$output" ]
 }
 
 # --- newline separation (Change 3) ---
@@ -164,22 +163,37 @@ run_processor() {
   local event='{"type":"assistant","message":{"role":"assistant","content":[]}}'
   run run_processor "$event"
   [ "$status" -eq 0 ]
-  [[ "$output" == "." ]]
+  [[ "$output" == *"."* ]]
 }
 
 @test "unknown event type: dot printed to stdout" {
   local event='{"type":"unknown_event"}'
   run run_processor "$event"
   [ "$status" -eq 0 ]
-  [[ "$output" == "." ]]
+  [[ "$output" == *"."* ]]
 }
 
-@test "consecutive silent events: only one dot printed" {
+@test "consecutive silent events: each gets its own dot" {
   local e1='{"type":"assistant","message":{"role":"assistant","content":[]}}'
   local e2='{"type":"unknown_event"}'
   run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == "." ]]
+  [[ "$output" == *".."* ]]
+}
+
+@test "10 consecutive silent events: 10 dots then periodic timestamp" {
+  run bash -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo '{\"type\":\"unknown_event\"}'; done | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *".........."* ]]
+  [[ "$output" == *"["*":"*"]"* ]]
+}
+
+@test "text after silent dot: text starts on new line" {
+  local silent='{"type":"unknown_event"}'
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
+  run bash -c "printf '%s\n%s\n' '$silent' '$text' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'.\nhello'* ]]
 }
 
 @test "dot resets after visible text: second silent period gets new dot" {

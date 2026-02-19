@@ -95,7 +95,7 @@ print_phase_exec_header() {
 
   echo ""
   echo "───────────────────────────────────────────────────────────"
-  printf '%b\n' "${COLOR_BLUE}▶ Executing Phase $phase_num/$PHASE_COUNT: $title  [$timestamp]${COLOR_RESET}"
+  printf '%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title${COLOR_RESET}"
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
   fi
