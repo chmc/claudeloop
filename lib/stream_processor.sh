@@ -61,6 +61,8 @@ process_stream_json() {
     return s
   }
 
+  BEGIN { at_line_start = 1; silent_dot_printed = 0 }
+
   {
     line = $0
     print line >> raw_log
@@ -79,9 +81,23 @@ process_stream_json() {
         printf "%s", text
         printf "%s", text >> log_file
         fflush()
+        at_line_start = (substr(text, length(text), 1) == "\n")
+        silent_dot_printed = 0
+      } else {
+        if (!silent_dot_printed) {
+          printf "."
+          fflush()
+          at_line_start = 0
+          silent_dot_printed = 1
+        }
       }
 
     } else if (etype == "tool_use") {
+      if (!at_line_start) {
+        printf "\n"
+        fflush()
+        at_line_start = 1
+      }
       name = extract(line, "name")
       preview = ""
       if (name == "Bash") preview = extract(line, "command")
@@ -92,6 +108,7 @@ process_stream_json() {
       } else {
         printf "  [Tool: %s]\n", name > "/dev/stderr"
       }
+      silent_dot_printed = 0
 
     } else if (etype == "tool_result") {
       content = extract(line, "content")
@@ -112,6 +129,7 @@ process_stream_json() {
         }
       }
       printf "  [Tool result: %d chars]\n", total > "/dev/stderr"
+      silent_dot_printed = 0
 
     } else if (etype == "result") {
       cost = extract(line, "cost_usd")
@@ -129,6 +147,15 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
+      silent_dot_printed = 0
+
+    } else {
+      if (!silent_dot_printed) {
+        printf "."
+        fflush()
+        at_line_start = 0
+        silent_dot_printed = 1
+      }
     }
   }
   '

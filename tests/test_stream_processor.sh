@@ -146,3 +146,46 @@ run_processor() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# --- newline separation (Change 3) ---
+
+@test "tool_use after text without trailing newline: newline inserted in stdout" {
+  local text1='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}'
+  local tool='{"type":"tool_use","name":"Bash","input":{"command":"ls"}}'
+  local text2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"world\n"}]}}'
+  run bash -c "printf '%s\n%s\n%s\n' '$text1' '$tool' '$text2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'hello\nworld'* ]]
+}
+
+# --- activity dots (Change 4) ---
+
+@test "assistant event with empty text: dot printed to stdout" {
+  local event='{"type":"assistant","message":{"role":"assistant","content":[]}}'
+  run run_processor "$event"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "." ]]
+}
+
+@test "unknown event type: dot printed to stdout" {
+  local event='{"type":"unknown_event"}'
+  run run_processor "$event"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "." ]]
+}
+
+@test "consecutive silent events: only one dot printed" {
+  local e1='{"type":"assistant","message":{"role":"assistant","content":[]}}'
+  local e2='{"type":"unknown_event"}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "." ]]
+}
+
+@test "dot resets after visible text: second silent period gets new dot" {
+  local silent='{"type":"unknown_event"}'
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi\n"}]}}'
+  run bash -c "printf '%s\n%s\n%s\n' '$silent' '$text' '$silent' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"."*"hi"*"."* ]]
+}
