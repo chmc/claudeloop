@@ -290,7 +290,18 @@ validate_environment() {
   # Check if in git repository
   if ! git rev-parse --git-dir > /dev/null 2>&1; then
     print_error "Not in a git repository. ClaudeLoop requires git for safety."
-    exit 1
+    printf 'Initialize a git repository here? (Y/n) '
+    read -r response
+    case "$response" in
+      [Nn])
+        echo "Aborted."
+        exit 1
+        ;;
+      *)
+        git init .
+        print_success "Initialized git repository"
+        ;;
+    esac
   fi
 
   # Check for uncommitted changes
@@ -395,12 +406,12 @@ Implement the above phase completely. Make sure to:
     if [ "$SKIP_PERMISSIONS" = "true" ]; then
       # shellcheck disable=SC2086
       echo "$prompt" | claude --print --dangerously-skip-permissions \
-        --output-format=stream-json --include-partial-messages \
+        --output-format=stream-json --verbose --include-partial-messages \
         $_claude_debug_flag 2>&1 || _rc=$?
     else
       # shellcheck disable=SC2086
       echo "$prompt" | claude --print \
-        --output-format=stream-json --include-partial-messages \
+        --output-format=stream-json --verbose --include-partial-messages \
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
@@ -604,9 +615,6 @@ main() {
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
 
-  # Print header
-  print_header "$PLAN_FILE"
-
   # Check if plan file exists
   if [ ! -f "$PLAN_FILE" ]; then
     print_error "Plan file not found: $PLAN_FILE"
@@ -627,6 +635,9 @@ main() {
   fi
 
   echo "Found $PHASE_COUNT phases"
+
+  # Print header (after parse_plan so PHASE_COUNT is set)
+  print_header "$PLAN_FILE"
   echo ""
 
   # Validate environment (skip in dry-run)

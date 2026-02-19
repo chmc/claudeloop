@@ -21,7 +21,7 @@ print_header() {
   local status
 
   while [ "$i" -le "$PHASE_COUNT" ]; do
-    status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+    status=$(eval "echo \"\${PHASE_STATUS_$i:-}\"")
     status="${status:-pending}"
     if [ "$status" = "completed" ]; then
       completed=$((completed + 1))
