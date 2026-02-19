@@ -357,3 +357,51 @@ PROGRESS
   # Attempt counter not inflated by the pause
   grep -A5 "Phase 1: Setup" "$TEST_DIR/PROGRESS.md" | grep -q "Attempts: 1"
 }
+
+# =============================================================================
+# Scenario 14: setup_project — .gitignore creation and patching
+# =============================================================================
+
+@test "setup_project: creates .gitignore when none exists and user says yes" {
+  rm -f "$TEST_DIR/.gitignore"
+  # Answer 'y' to "Create .gitignore?" and 'n' to platform prompt
+  run sh -c "printf 'y\nn\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md)"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.gitignore" ]
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
+}
+
+@test "setup_project: does not create .gitignore when user says no" {
+  rm -f "$TEST_DIR/.gitignore"
+  run sh -c "printf 'n\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md)"
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.gitignore" ]
+}
+
+@test "setup_project: patches existing .gitignore missing .claudeloop/" {
+  printf '*.log\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  run sh -c "printf 'y\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md)"
+  [ "$status" -eq 0 ]
+  grep -qF '*.log' "$TEST_DIR/.gitignore"
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
+}
+
+@test "setup_project: skips prompt when .claudeloop/ already in .gitignore" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  # No stdin input — if it prompts, read will fail and the test will see unexpected behaviour
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  # .gitignore unchanged (no duplicate entry)
+  [ "$(grep -c '.claudeloop' "$TEST_DIR/.gitignore")" -eq 1 ]
+}
+
+@test "setup_project: dry-run never creates .gitignore" {
+  rm -f "$TEST_DIR/.gitignore"
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --dry-run"
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.gitignore" ]
+}
