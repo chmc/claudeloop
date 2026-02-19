@@ -30,7 +30,7 @@ _CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
 
 # Default configuration
 PLAN_FILE="PLAN.md"
-PROGRESS_FILE="PROGRESS.md"
+PROGRESS_FILE=".claudeloop/PROGRESS.md"
 STATE_FILE=".claudeloop/state/current.json"
 LOCK_FILE=".claudeloop/lock"
 RESET_PROGRESS=false

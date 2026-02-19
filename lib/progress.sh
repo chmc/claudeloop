@@ -71,6 +71,7 @@ write_progress() {
   local timestamp
   timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
+  mkdir -p "$(dirname "$progress_file")"
   local temp_file="${progress_file}.tmp"
 
   cat > "$temp_file" << EOF

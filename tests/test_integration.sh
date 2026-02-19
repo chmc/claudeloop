@@ -82,7 +82,7 @@ _cl() {
 
 # Helper: count completed phases in PROGRESS.md
 _completed_count() {
-  grep -c "Status: completed" "$TEST_DIR/PROGRESS.md" 2>/dev/null || echo 0
+  grep -c "Status: completed" "$TEST_DIR/.claudeloop/PROGRESS.md" 2>/dev/null || echo 0
 }
 
 # Helper: get claude call count
@@ -96,7 +96,7 @@ _call_count() {
 @test "integration: happy path exits 0 and all phases completed" {
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/PROGRESS.md" ]
+  [ -f "$TEST_DIR/.claudeloop/PROGRESS.md" ]
   [ "$(_completed_count)" -eq 2 ]
 }
 
@@ -120,7 +120,7 @@ _call_count() {
   printf '1\n1\n' > "$TEST_DIR/claude_exit_codes"
   _cl --plan PLAN.md --max-retries 2
   [ "$status" -ne 0 ]
-  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+  grep -q "Status: failed" "$TEST_DIR/.claudeloop/PROGRESS.md"
 }
 
 # =============================================================================
@@ -181,7 +181,8 @@ PLAN
 # =============================================================================
 @test "integration: resumes execution skipping already-completed phases" {
   # Write a PROGRESS.md with phase 1 already completed
-  cat > "$TEST_DIR/PROGRESS.md" << 'PROGRESS'
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
 # Progress for PLAN.md
 Last updated: 2026-01-01 00:00:00
 
@@ -310,7 +311,7 @@ PROGRESS
   [ "$(_call_count)" -eq 3 ]
   [ "$(_completed_count)" -eq 2 ]
   # Attempts counter not consumed: phase 1 shows Attempts: 1
-  grep -A5 "Phase 1: Setup" "$TEST_DIR/PROGRESS.md" | grep -q "Attempts: 1"
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/.claudeloop/PROGRESS.md" | grep -q "Attempts: 1"
 }
 
 # =============================================================================
@@ -325,7 +326,7 @@ PROGRESS
   _cl --plan PLAN.md --max-retries 1 --quota-retry-interval 0
   [ "$status" -ne 0 ]
   [ "$(_call_count)" -eq 3 ]
-  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+  grep -q "Status: failed" "$TEST_DIR/.claudeloop/PROGRESS.md"
 }
 
 # =============================================================================
@@ -338,7 +339,7 @@ PROGRESS
   [ "$status" -ne 0 ]
   # Log file exists (now always has headers)
   [ -f "$TEST_DIR/.claudeloop/logs/phase-1.log" ]
-  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+  grep -q "Status: failed" "$TEST_DIR/.claudeloop/PROGRESS.md"
 }
 
 # =============================================================================
@@ -355,7 +356,7 @@ PROGRESS
   # Phase 1 retried: 2 claude calls for phase 1, 1 for phase 2
   [ "$(_call_count)" -eq 3 ]
   # Attempt counter not inflated by the pause
-  grep -A5 "Phase 1: Setup" "$TEST_DIR/PROGRESS.md" | grep -q "Attempts: 1"
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/.claudeloop/PROGRESS.md" | grep -q "Attempts: 1"
 }
 
 # =============================================================================
