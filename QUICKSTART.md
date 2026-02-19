@@ -50,6 +50,25 @@ claudeloop --dry-run           # validate without executing
 claudeloop --dangerously-skip-permissions  # skip write permission prompts
 ```
 
+## Full examples
+
+```bash
+# Run a plan non-interactively (auto-approve file writes)
+claudeloop --plan PLAN.md --dangerously-skip-permissions
+
+# Validate a plan before running it
+claudeloop --plan PLAN.md --dry-run
+
+# Start (or restart) from phase 3, auto-approving writes
+claudeloop --plan PLAN.md --phase 3 --dangerously-skip-permissions
+
+# Resume after an interrupt, auto-approving writes
+claudeloop --continue --dangerously-skip-permissions
+
+# Reset progress and re-run from scratch
+claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
+```
+
 ## Tips
 
 - Press **Ctrl+C** at any time to stop — progress is saved, resume with `--continue`
