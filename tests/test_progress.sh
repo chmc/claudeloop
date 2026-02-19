@@ -167,3 +167,295 @@ EOF
   update_phase_status 1 "in_progress"
   [ "$PHASE_ATTEMPTS_1" = "2" ]
 }
+
+# --- read_old_phase_list() ---
+
+@test "read_old_phase_list: sets _OLD_PHASE_COUNT=0 when file absent" {
+  read_old_phase_list "$TEST_DIR/nonexistent.md"
+  [ "$_OLD_PHASE_COUNT" = "0" ]
+}
+
+@test "read_old_phase_list: returns 0 when file absent" {
+  run read_old_phase_list "$TEST_DIR/nonexistent.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "read_old_phase_list: parses titles, statuses, and attempts" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 2
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_COUNT" = "2" ]
+  [ "$_OLD_PHASE_TITLE_1" = "Phase One" ]
+  [ "$_OLD_PHASE_STATUS_1" = "completed" ]
+  [ "$_OLD_PHASE_ATTEMPTS_1" = "2" ]
+  [ "$_OLD_PHASE_TITLE_2" = "Phase Two" ]
+  [ "$_OLD_PHASE_STATUS_2" = "pending" ]
+}
+
+@test "read_old_phase_list: parses timestamps" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Started: 2026-02-18 10:00:00
+Completed: 2026-02-18 10:05:00
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_START_TIME_1" = "2026-02-18 10:00:00" ]
+  [ "$_OLD_PHASE_END_TIME_1" = "2026-02-18 10:05:00" ]
+}
+
+@test "read_old_phase_list: parses Depends on line" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ✅ Phase 2: Phase Two
+Status: completed
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+Depends on: Phase 1 ✅ Phase 2 ✅
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_DEPS_3" = "1 2" ]
+}
+
+@test "read_old_phase_list: sets count=0 for empty file" {
+  touch "$TEST_DIR/PROGRESS.md"
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_COUNT" = "0" ]
+}
+
+# --- detect_plan_changes() ---
+
+@test "detect_plan_changes: no-op when progress file absent" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  detect_plan_changes "$TEST_DIR/nonexistent.md" > "$TEST_DIR/out.txt" 2>&1
+  [ ! -s "$TEST_DIR/out.txt" ]
+  [ "$PHASE_STATUS_1" = "pending" ]
+}
+
+@test "detect_plan_changes: silent when plan unchanged; carries statuses forward" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  [ ! -s "$TEST_DIR/out.txt" ]
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+}
+
+@test "detect_plan_changes: reports renumbered phase and carries status" {
+  # New plan has phases swapped: Phase Two first, then Phase One
+  PHASE_COUNT=2
+  PHASE_TITLE_1="Phase Two"
+  PHASE_TITLE_2="Phase One"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  grep -q "renumbered" "$TEST_DIR/out.txt"
+  # Phase Two was old #2 (pending), now #1 → status pending
+  [ "$PHASE_STATUS_1" = "pending" ]
+  # Phase One was old #1 (completed), now #2 → status completed
+  [ "$PHASE_STATUS_2" = "completed" ]
+}
+
+@test "detect_plan_changes: reports added phase and leaves it pending" {
+  PHASE_COUNT=4
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_TITLE_4="Phase Four"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3="" PHASE_DEPENDENCIES_4=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending" PHASE_STATUS_4="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0 PHASE_ATTEMPTS_4=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  grep -q "Phase added" "$TEST_DIR/out.txt"
+  grep -q "Phase Four" "$TEST_DIR/out.txt"
+  [ "$PHASE_STATUS_4" = "pending" ]
+}
+
+@test "detect_plan_changes: reports removed phase" {
+  PHASE_COUNT=2
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  grep -q "Phase removed" "$TEST_DIR/out.txt"
+  grep -q "Phase Three" "$TEST_DIR/out.txt"
+}
+
+@test "detect_plan_changes: reports dependency change" {
+  PHASE_COUNT=3
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3="2"
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: Phase One
+Status: pending
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  grep -q "Dependencies changed" "$TEST_DIR/out.txt"
+  grep -q "Phase Three" "$TEST_DIR/out.txt"
+}
+
+@test "detect_plan_changes: no dep change reported when same deps after renumbering" {
+  # Old: Phase Three depends on Phase One (old #1); New: Phase Three depends on Phase One (now #2)
+  PHASE_COUNT=3
+  PHASE_TITLE_1="Phase Two"
+  PHASE_TITLE_2="Phase One"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3="2"
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: Phase One
+Status: pending
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+Depends on: Phase 1 ⏳
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  ! grep -q "Dependencies changed" "$TEST_DIR/out.txt"
+}
+
+@test "detect_plan_changes: carries attempts and timestamps for matched phases" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  PHASE_START_TIME_1="" PHASE_END_TIME_1=""
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Started: 2026-02-18 10:00:00
+Completed: 2026-02-18 10:05:00
+Attempts: 3
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_ATTEMPTS_1" = "3" ]
+  [ "$PHASE_START_TIME_1" = "2026-02-18 10:00:00" ]
+  [ "$PHASE_END_TIME_1" = "2026-02-18 10:05:00" ]
+}
+
+@test "detect_plan_changes: duplicate title — first old match wins" {
+  PHASE_COUNT=2
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase One"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+
+### ❌ Phase 2: Phase One
+Status: failed
+Attempts: 2
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "failed" ]
+}
+
+@test "detect_plan_changes: no output when nothing changed" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: Phase One
+Status: pending
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  [ ! -s "$TEST_DIR/out.txt" ]
+}
+
+@test "detect_plan_changes: prints summary when changes detected" {
+  PHASE_COUNT=2
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase New"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  grep -q "Plan has changed since last run" "$TEST_DIR/out.txt"
+}

@@ -716,6 +716,11 @@ main() {
 
   init_progress "$PROGRESS_FILE"
 
+  # Detect and reconcile plan changes (no-op on fresh/reset runs)
+  if ! $DRY_RUN && ! $RESET_PROGRESS; then
+    detect_plan_changes "$PROGRESS_FILE"
+  fi
+
   # Apply --phase N: mark phases before START_PHASE as completed (skip them)
   if [ -n "$START_PHASE" ]; then
     local i=1

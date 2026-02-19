@@ -177,6 +177,188 @@ generate_phase_details() {
   done
 }
 
+# Parse PROGRESS.md into _OLD_PHASE_* variables without affecting live PHASE_* globals.
+# Sets _OLD_PHASE_COUNT to 0 if file absent or empty.
+# Args: $1 - progress file path
+read_old_phase_list() {
+  local progress_file="$1"
+  _OLD_PHASE_COUNT=0
+
+  if [ ! -f "$progress_file" ]; then
+    return 0
+  fi
+
+  local current_phase=""
+  while IFS= read -r line; do
+    # Match phase headers: ### ✅ Phase 1: Title
+    if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+:'; then
+      current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\):.*/\1/p')
+      local title safe_title
+      title=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*:[[:space:]]*\(.*\)/\1/p')
+      safe_title=$(echo "$title" | sed "s/'/'\\''/g")
+      eval "_OLD_PHASE_TITLE_${current_phase}='${safe_title}'"
+      eval "_OLD_PHASE_STATUS_${current_phase}=pending"
+      eval "_OLD_PHASE_ATTEMPTS_${current_phase}=0"
+      eval "_OLD_PHASE_START_TIME_${current_phase}=''"
+      eval "_OLD_PHASE_END_TIME_${current_phase}=''"
+      eval "_OLD_PHASE_DEPS_${current_phase}=''"
+      if [ "$current_phase" -gt "$_OLD_PHASE_COUNT" ]; then
+        _OLD_PHASE_COUNT="$current_phase"
+      fi
+    elif [ -n "$current_phase" ]; then
+      case "$line" in
+        "Status: "*)
+          local sv
+          sv=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          eval "_OLD_PHASE_STATUS_${current_phase}='${sv}'"
+          ;;
+        "Started: "*)
+          local tv
+          tv=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          eval "_OLD_PHASE_START_TIME_${current_phase}='${tv}'"
+          ;;
+        "Completed: "*)
+          local tv
+          tv=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          eval "_OLD_PHASE_END_TIME_${current_phase}='${tv}'"
+          ;;
+        "Attempts: "*)
+          local av
+          av=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          eval "_OLD_PHASE_ATTEMPTS_${current_phase}=${av}"
+          ;;
+        "Depends on:"*)
+          local dv
+          dv=$(echo "$line" | grep -oE 'Phase [0-9]+' | sed 's/Phase //' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+          eval "_OLD_PHASE_DEPS_${current_phase}='${dv}'"
+          ;;
+      esac
+    fi
+  done < "$progress_file"
+
+  return 0
+}
+
+# Detect and reconcile plan changes between saved progress and current plan.
+# Matches old phases to new phases by title; reports added/removed/renumbered/dep-changed phases.
+# Carries forward status/attempts/timestamps for matched phases.
+# Args: $1 - progress file path
+detect_plan_changes() {
+  local progress_file="$1"
+  read_old_phase_list "$progress_file"
+
+  # No-op if no saved progress
+  if [ "$_OLD_PHASE_COUNT" -eq 0 ]; then
+    return 0
+  fi
+
+  local had_changes=false
+  local matched_old_phases=""
+
+  # For each new phase, find matching old phase by title
+  local new_i=1
+  while [ "$new_i" -le "$PHASE_COUNT" ]; do
+    local new_title
+    new_title=$(eval "echo \"\$PHASE_TITLE_$new_i\"")
+
+    # Linear scan through old phases to find title match (first unmatched match wins)
+    local matched_old_num="" old_j
+    old_j=1
+    while [ "$old_j" -le "$_OLD_PHASE_COUNT" ]; do
+      local old_title
+      old_title=$(eval "echo \"\$_OLD_PHASE_TITLE_$old_j\"")
+      if [ "$old_title" = "$new_title" ]; then
+        if ! echo " $matched_old_phases " | grep -qF " $old_j "; then
+          matched_old_num="$old_j"
+          break
+        fi
+      fi
+      old_j=$((old_j + 1))
+    done
+
+    if [ -z "$matched_old_num" ]; then
+      # Phase added — leave as pending
+      had_changes=true
+      printf 'Plan change: Phase added — "%s" (new Phase %d)\n' "$new_title" "$new_i"
+    else
+      matched_old_phases="$matched_old_phases $matched_old_num"
+      local old_status old_attempts old_start old_end
+      old_status=$(eval "echo \"\$_OLD_PHASE_STATUS_$matched_old_num\"")
+      old_attempts=$(eval "echo \"\$_OLD_PHASE_ATTEMPTS_$matched_old_num\"")
+      old_start=$(eval "echo \"\$_OLD_PHASE_START_TIME_$matched_old_num\"")
+      old_end=$(eval "echo \"\$_OLD_PHASE_END_TIME_$matched_old_num\"")
+
+      eval "PHASE_STATUS_${new_i}='${old_status}'"
+      eval "PHASE_ATTEMPTS_${new_i}=${old_attempts}"
+      eval "PHASE_START_TIME_${new_i}='${old_start}'"
+      eval "PHASE_END_TIME_${new_i}='${old_end}'"
+
+      # Report renumbering
+      if [ "$matched_old_num" -ne "$new_i" ]; then
+        had_changes=true
+        printf 'Plan change: Phase renumbered — "%s" was #%d, now #%d (status: %s)\n' \
+          "$new_title" "$matched_old_num" "$new_i" "$old_status"
+      fi
+
+      # Check dependency changes — compare by title to avoid false positives from renumbering
+      local old_dep_nums new_dep_nums
+      old_dep_nums=$(eval "echo \"\$_OLD_PHASE_DEPS_$matched_old_num\"")
+      new_dep_nums=$(eval "echo \"\$PHASE_DEPENDENCIES_$new_i\"")
+
+      # Translate dep numbers to newline-separated title lists for sorting
+      local old_dep_titles="" new_dep_titles="" old_dt new_dt
+      for dep_num in $old_dep_nums; do
+        old_dt=$(eval "echo \"\$_OLD_PHASE_TITLE_$dep_num\"")
+        [ -n "$old_dt" ] && old_dep_titles="${old_dep_titles}${old_dt}
+"
+      done
+      for dep_num in $new_dep_nums; do
+        new_dt=$(eval "echo \"\$PHASE_TITLE_$dep_num\"")
+        [ -n "$new_dt" ] && new_dep_titles="${new_dep_titles}${new_dt}
+"
+      done
+
+      local old_sorted new_sorted
+      old_sorted=$(printf '%s' "$old_dep_titles" | sort)
+      new_sorted=$(printf '%s' "$new_dep_titles" | sort)
+
+      if [ "$old_sorted" != "$new_sorted" ]; then
+        had_changes=true
+        local old_display new_display
+        old_display=$(printf '%s' "$old_dep_titles" | grep -v '^$' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+        new_display=$(printf '%s' "$new_dep_titles" | grep -v '^$' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
+        printf 'Plan change: Dependencies changed for "%s" — was: [%s], now: [%s]\n' \
+          "$new_title" "$old_display" "$new_display"
+      fi
+    fi
+
+    new_i=$((new_i + 1))
+  done
+
+  # Check for removed phases (old phases not matched to any new phase)
+  local old_k=1
+  while [ "$old_k" -le "$_OLD_PHASE_COUNT" ]; do
+    if ! echo " $matched_old_phases " | grep -qF " $old_k "; then
+      local removed_title removed_status
+      removed_title=$(eval "echo \"\$_OLD_PHASE_TITLE_$old_k\"")
+      if [ -n "$removed_title" ]; then
+        removed_status=$(eval "echo \"\$_OLD_PHASE_STATUS_$old_k\"")
+        had_changes=true
+        printf 'Plan change: Phase removed — "%s" (was Phase %d, status: %s)\n' \
+          "$removed_title" "$old_k" "$removed_status"
+      fi
+    fi
+    old_k=$((old_k + 1))
+  done
+
+  if $had_changes; then
+    echo ""
+    echo "Plan has changed since last run. Progress reconciled by title matching."
+  fi
+
+  return 0
+}
+
 # Update phase status
 # Args: $1 - phase number, $2 - new status
 update_phase_status() {
