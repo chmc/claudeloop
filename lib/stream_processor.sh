@@ -68,9 +68,18 @@ process_stream_json() {
     return ts
   }
 
+  # get_epoch() - return current Unix timestamp in seconds
+  function get_epoch(    ep) {
+    "date +%s" | getline ep
+    close("date +%s")
+    return ep + 0
+  }
+
   BEGIN {
     at_line_start = 1
-    dot_count = 0
+    spinner = "|/-\\"
+    spinner_idx = 0
+    spinner_start = 0
     printf "[%s]\n", get_time()
     fflush()
   }
@@ -91,35 +100,35 @@ process_stream_json() {
       text = extract(line, "text")
       if (text != "") {
         if (!at_line_start) {
-          printf "\n"
+          printf "\r%-12s\r\n", ""
           fflush()
           at_line_start = 1
         }
+        spinner_start = 0
         if (at_line_start) printf "[%s] ", get_time()
         printf "%s", text
         printf "%s", text >> log_file
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
-        dot_count = 0
       } else {
-        printf "."
+        now = get_epoch()
+        if (spinner_start == 0) {
+          spinner_start = now
+          if (!at_line_start) printf "\n"
+        }
+        printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start
         fflush()
         at_line_start = 0
-        dot_count++
-        if (dot_count >= 50) {
-          printf "  [%s]\n", get_time()
-          fflush()
-          at_line_start = 1
-          dot_count = 0
-        }
+        spinner_idx++
       }
 
     } else if (etype == "tool_use") {
       if (!at_line_start) {
-        printf "\n"
+        printf "\r%-12s\r\n", ""
         fflush()
         at_line_start = 1
       }
+      spinner_start = 0
       name = extract(line, "name")
       preview = ""
       if (name == "Bash") preview = extract(line, "command")
@@ -130,9 +139,14 @@ process_stream_json() {
       } else {
         printf "  [Tool: %s]\n", name > "/dev/stderr"
       }
-      dot_count = 0
 
     } else if (etype == "tool_result") {
+      if (!at_line_start) {
+        printf "\r%-12s\r\n", ""
+        fflush()
+        at_line_start = 1
+      }
+      spinner_start = 0
       content = extract(line, "content")
       if (content != "") {
         total = length(content)
@@ -151,9 +165,14 @@ process_stream_json() {
         }
       }
       printf "  [Tool result: %d chars]\n", total > "/dev/stderr"
-      dot_count = 0
 
     } else if (etype == "result") {
+      if (!at_line_start) {
+        printf "\r%-12s\r\n", ""
+        fflush()
+        at_line_start = 1
+      }
+      spinner_start = 0
       cost = extract(line, "cost_usd")
       duration_ms = extract(line, "duration_ms")
       num_turns = extract(line, "num_turns")
@@ -169,19 +188,17 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
-      dot_count = 0
 
     } else {
-      printf "."
+      now = get_epoch()
+      if (spinner_start == 0) {
+        spinner_start = now
+        if (!at_line_start) printf "\n"
+      }
+      printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start
       fflush()
       at_line_start = 0
-      dot_count++
-      if (dot_count >= 50) {
-        printf "  [%s]\n", get_time()
-        fflush()
-        at_line_start = 1
-        dot_count = 0
-      }
+      spinner_idx++
     }
   }
   '

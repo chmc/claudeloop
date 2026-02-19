@@ -167,56 +167,71 @@ run_processor() {
 
 # --- activity dots (Change 4) ---
 
-@test "assistant event with empty text: dot printed to stdout" {
+@test "assistant event with empty text: spinner printed to stdout" {
   local event='{"type":"assistant","message":{"role":"assistant","content":[]}}'
   run run_processor "$event"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"."* ]]
+  [[ "$output" == *$'\r'* ]]
 }
 
-@test "unknown event type: dot printed to stdout" {
+@test "unknown event type: spinner printed to stdout" {
   local event='{"type":"unknown_event"}'
   run run_processor "$event"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"."* ]]
+  [[ "$output" == *$'\r'* ]]
 }
 
-@test "consecutive silent events: each gets its own dot" {
+@test "consecutive silent events: each gets its own spinner update" {
   local e1='{"type":"assistant","message":{"role":"assistant","content":[]}}'
   local e2='{"type":"unknown_event"}'
   run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *".."* ]]
+  # Each silent event outputs \r; check at least two carriage returns
+  count=$(printf '%s' "$output" | tr -cd $'\r' | wc -c | tr -d ' ')
+  [ "$count" -ge 2 ]
 }
 
-@test "10 consecutive silent events: 10 dots, no dot-triggered timestamp (threshold is 50)" {
+@test "10 consecutive silent events: spinner shown, only one initial timestamp" {
   run bash -c "yes '{\"type\":\"unknown_event\"}' | head -10 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *".........."* ]]
-  # BEGIN prints one timestamp; dot threshold not hit so no second timestamp follows dots
+  # Spinner carriage-return updates should appear
+  [[ "$output" == *$'\r'* ]]
+  # BEGIN prints one timestamp; spinner never emits extra timestamps
   count=$(printf '%s' "$output" | grep -o '\[[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\]' | wc -l | tr -d ' ')
   [ "$count" -eq 1 ]
 }
 
-@test "50 consecutive silent events: 50 dots then periodic timestamp" {
+@test "50 consecutive silent events: spinner shows elapsed time in seconds" {
   run bash -c "yes '{\"type\":\"unknown_event\"}' | head -50 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"["*":"*"]"* ]]
+  # Timer format like "0s" should appear in spinner output
+  [[ "$output" =~ [0-9]+s ]]
 }
 
-@test "text after silent dot: text starts on new line" {
+@test "text after silent spinner: text starts on new line" {
   local silent='{"type":"unknown_event"}'
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
   run bash -c "printf '%s\n%s\n' '$silent' '$text' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"."* ]]
+  [[ "$output" == *$'\r'* ]]
   [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\ hello ]]
 }
 
-@test "dot resets after visible text: second silent period gets new dot" {
+@test "spinner resets after visible text: second silent period starts fresh" {
   local silent='{"type":"unknown_event"}'
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi\n"}]}}'
   run bash -c "printf '%s\n%s\n%s\n' '$silent' '$text' '$silent' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"."*"hi"*"."* ]]
+  [[ "$output" == *$'\r'*"hi"*$'\r'* ]]
+}
+
+@test "spinner after mid-line text: spinner starts on new line" {
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}'
+  local silent='{"type":"unknown_event"}'
+  local text2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"world\n"}]}}'
+  run bash -c "printf '%s\n%s\n%s\n' '$text' '$silent' '$text2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  # With fix: hello\n\r (newline before spinner)
+  # Without fix: hello\r (spinner overwrites text line)
+  [[ "$output" == *"hello"$'\n'$'\r'* ]]
 }
