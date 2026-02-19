@@ -326,6 +326,64 @@ validate_environment() {
 
 }
 
+# Offer to set up .gitignore for claudeloop artifacts
+setup_project() {
+  if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
+    if [ ! -f ".gitignore" ]; then
+      printf 'No .gitignore found. Create one? (Y/n) '
+      read -r response || return 0
+      case "$response" in
+        [Nn]) return 0 ;;
+      esac
+      printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
+      print_success "Created .gitignore"
+      _add_platform_gitignore
+    else
+      printf 'Add .claudeloop/ to .gitignore? (Y/n) '
+      read -r response || return 0
+      case "$response" in
+        [Nn]) return 0 ;;
+      esac
+      printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
+      print_success "Added .claudeloop/ to .gitignore"
+      _add_platform_gitignore silent
+    fi
+  fi
+}
+
+# $1: "silent" to skip prompting (used when patching an existing .gitignore)
+_add_platform_gitignore() {
+  local os silent
+  silent="${1:-}"
+  os=$(uname -s 2>/dev/null) || return 0
+  case "$os" in
+    Darwin)
+      if [ "$silent" = "silent" ]; then
+        printf '\n# macOS\n.DS_Store\n._*\n' >> .gitignore
+      else
+        printf 'Add macOS-specific ignores (.DS_Store, ._*)? (Y/n) '
+        read -r response || return 0
+        case "$response" in
+          [Nn]) ;;
+          *) printf '\n# macOS\n.DS_Store\n._*\n' >> .gitignore ;;
+        esac
+      fi
+      ;;
+    MINGW*|CYGWIN*|MSYS*)
+      if [ "$silent" = "silent" ]; then
+        printf '\n# Windows\nThumbs.db\ndesktop.ini\n' >> .gitignore
+      else
+        printf 'Add Windows-specific ignores (Thumbs.db, desktop.ini)? (Y/n) '
+        read -r response || return 0
+        case "$response" in
+          [Nn]) ;;
+          *) printf '\n# Windows\nThumbs.db\ndesktop.ini\n' >> .gitignore ;;
+        esac
+      fi
+      ;;
+  esac
+}
+
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"
@@ -643,6 +701,7 @@ main() {
   # Validate environment (skip in dry-run)
   if ! $DRY_RUN; then
     validate_environment
+    setup_project
   fi
 
   # Check for interrupted session (skip in dry-run and reset)
