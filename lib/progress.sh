@@ -42,6 +42,8 @@ read_progress() {
       case "$line" in
         "Status: "*)
           status_value=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
+          [ "$status_value" = "in_progress" ] && status_value="pending"
           eval "PHASE_STATUS_${current_phase}='$status_value'"
           ;;
         "Started: "*)
@@ -211,6 +213,8 @@ read_old_phase_list() {
         "Status: "*)
           local sv
           sv=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
+          [ "$sv" = "in_progress" ] && sv="pending"
           eval "_OLD_PHASE_STATUS_${current_phase}='${sv}'"
           ;;
         "Started: "*)

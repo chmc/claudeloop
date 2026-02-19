@@ -694,10 +694,6 @@ main() {
 
   echo "Found $PHASE_COUNT phases"
 
-  # Print header (after parse_plan so PHASE_COUNT is set)
-  print_header "$PLAN_FILE"
-  echo ""
-
   # Validate environment (skip in dry-run)
   if ! $DRY_RUN; then
     validate_environment
@@ -730,6 +726,10 @@ main() {
     done
     log_verbose "main: skipped phases 1-$((START_PHASE - 1)) (marked completed)"
   fi
+
+  # Print header (after init_progress/detect_plan_changes so completed count is correct)
+  print_header "$PLAN_FILE"
+  echo ""
 
   # Print phase list
   print_all_phases

@@ -408,3 +408,74 @@ PROGRESS
   [ "$status" -eq 0 ]
   [ ! -f "$TEST_DIR/.gitignore" ]
 }
+
+# =============================================================================
+# Scenario 15: Stale in_progress (SIGKILL) — phase retried on resume
+# =============================================================================
+@test "integration: stale in_progress phase from SIGKILL is retried on resume" {
+  # Simulate SIGKILL mid-execution: PROGRESS.md left with Phase 1 in_progress
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 0
+- In progress: 1
+- Pending: 1
+- Failed: 0
+
+## Phase Details
+
+### 🔄 Phase 1: Setup
+Status: in_progress
+Started: 2026-01-01 00:00:00
+Attempts: 1
+
+### ⏳ Phase 2: Build
+Status: pending
+PROGRESS
+
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  # Phase 1 must be re-run (was stuck as in_progress), then phase 2 → 2 calls total
+  [ "$(_call_count)" -eq 2 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+# =============================================================================
+# Resume: header shows correct completed count
+# =============================================================================
+@test "integration: initial header shows correct completed count when resuming" {
+  # Write a PROGRESS.md with phase 1 already completed
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 1
+- In progress: 0
+- Pending: 1
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+
+### ⏳ Phase 2: Build
+Status: pending
+PROGRESS
+
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  # The FIRST occurrence of "Progress:" in output must show 1/2, not 0/2
+  first_progress=$(echo "$output" | grep "Progress:" | head -1)
+  [[ "$first_progress" == *"Progress: 1/2 phases completed"* ]]
+}
