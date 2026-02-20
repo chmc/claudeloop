@@ -173,9 +173,14 @@ shellcheck -s sh lib/retry.sh   # lint
 
 ## Versioning & updates
 
-```bash
-claudeloop --version                     # check installed version
-git -C /path/to/claudeloop pull          # update to latest
+```sh
+claudeloop --version   # check installed version
+
+# Update to latest
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+
+# Uninstall
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
 ```
 
 Releases and changelogs are available on [GitHub Releases](https://github.com/chmc/claudeloop/releases).
