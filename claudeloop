@@ -43,6 +43,10 @@ SIMPLE_MODE=false
 VERBOSE_MODE=false
 SKIP_PERMISSIONS=false
 
+# Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
+_CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
+_CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
+
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
   [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
@@ -74,6 +78,55 @@ load_config() {
       SKIP_PERMISSIONS)       SKIP_PERMISSIONS="$value" ;;
     esac
   done < "$conf_file"
+}
+
+# Replace or append a key=value line in the conf file (POSIX, no sed -i)
+# Values containing sed metacharacters (&, \, |) are escaped before substitution.
+update_conf_key() {
+  local file="$1" key="$2" value="$3" tmp escaped
+  tmp="${file}.tmp"
+  escaped=$(printf '%s\n' "$value" | sed 's/[\\&|]/\\&/g')
+  if grep -q "^${key}=" "$file" 2>/dev/null; then
+    sed "s|^${key}=.*|${key}=${escaped}|" "$file" > "$tmp" && mv "$tmp" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+# Create or update .claudeloop.conf after arg parsing
+write_config() {
+  local conf_file=".claudeloop.conf"
+
+  # Never write config during dry-run
+  $DRY_RUN && return 0
+
+  if [ ! -f "$conf_file" ]; then
+    # First run: create conf with all current persistable settings
+    {
+      printf '# claudeloop configuration — edit or delete freely\n'
+      printf 'PLAN_FILE=%s\n'        "$PLAN_FILE"
+      printf 'PROGRESS_FILE=%s\n'    "$PROGRESS_FILE"
+      printf 'MAX_RETRIES=%s\n'      "$MAX_RETRIES"
+      printf 'SIMPLE_MODE=%s\n'      "$SIMPLE_MODE"
+      printf 'SKIP_PERMISSIONS=%s\n' "$SKIP_PERMISSIONS"
+      printf 'BASE_DELAY=%s\n'       "$BASE_DELAY"
+      printf 'MAX_DELAY=%s\n'        "$MAX_DELAY"
+      [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
+      [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
+    } > "$conf_file"
+    print_success "Created .claudeloop.conf"
+    return 0
+  fi
+
+  # Existing conf: update only CLI-set keys
+  [ -n "$_CLI_PLAN_FILE" ]            && update_conf_key "$conf_file" PLAN_FILE "$PLAN_FILE"
+  [ -n "$_CLI_PROGRESS_FILE" ]        && update_conf_key "$conf_file" PROGRESS_FILE "$PROGRESS_FILE"
+  [ -n "$_CLI_MAX_RETRIES" ]          && update_conf_key "$conf_file" MAX_RETRIES "$MAX_RETRIES"
+  [ -n "$_CLI_SIMPLE_MODE" ]          && update_conf_key "$conf_file" SIMPLE_MODE "$SIMPLE_MODE"
+  [ -n "$_CLI_PHASE_PROMPT_FILE" ]    && update_conf_key "$conf_file" PHASE_PROMPT_FILE "$PHASE_PROMPT_FILE"
+  [ -n "$_CLI_QUOTA_RETRY_INTERVAL" ] && update_conf_key "$conf_file" QUOTA_RETRY_INTERVAL "$QUOTA_RETRY_INTERVAL"
+  [ -n "$_CLI_SKIP_PERMISSIONS" ]     && update_conf_key "$conf_file" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
+  return 0
 }
 
 # Save current state to state file
@@ -233,11 +286,11 @@ parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --plan)
-        PLAN_FILE="$2"
+        PLAN_FILE="$2"; _CLI_PLAN_FILE=1
         shift 2
         ;;
       --progress)
-        PROGRESS_FILE="$2"
+        PROGRESS_FILE="$2"; _CLI_PROGRESS_FILE=1
         shift 2
         ;;
       --reset)
@@ -257,19 +310,19 @@ parse_args() {
         shift
         ;;
       --phase-prompt)
-        PHASE_PROMPT_FILE="$2"
+        PHASE_PROMPT_FILE="$2"; _CLI_PHASE_PROMPT_FILE=1
         shift 2
         ;;
       --max-retries)
-        MAX_RETRIES="$2"
+        MAX_RETRIES="$2"; _CLI_MAX_RETRIES=1
         shift 2
         ;;
       --quota-retry-interval)
-        QUOTA_RETRY_INTERVAL="$2"
+        QUOTA_RETRY_INTERVAL="$2"; _CLI_QUOTA_RETRY_INTERVAL=1
         shift 2
         ;;
       --simple)
-        SIMPLE_MODE=true
+        SIMPLE_MODE=true; _CLI_SIMPLE_MODE=1
         shift
         ;;
       --verbose)
@@ -277,7 +330,7 @@ parse_args() {
         shift
         ;;
       --dangerously-skip-permissions)
-        SKIP_PERMISSIONS=true
+        SKIP_PERMISSIONS=true; _CLI_SKIP_PERMISSIONS=1
         shift
         ;;
       --help|-h)
@@ -688,6 +741,9 @@ main() {
     print_error "Plan file not found: $PLAN_FILE"
     exit 1
   fi
+
+  # Persist settings to .claudeloop.conf (plan confirmed to exist)
+  write_config
 
   # Validate phase prompt file if provided
   if [ -n "$PHASE_PROMPT_FILE" ] && [ ! -r "$PHASE_PROMPT_FILE" ]; then

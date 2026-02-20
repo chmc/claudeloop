@@ -67,7 +67,7 @@ BASE_DELAY=0
 MAX_DELAY=0
 CONF
 
-  git -C "$TEST_DIR" add .
+  git -C "$TEST_DIR" add PLAN.md
   git -C "$TEST_DIR" commit -q -m "initial"
 }
 
@@ -135,7 +135,7 @@ Initialize
 Build it
 Depends on: Phase 1
 PLAN
-  git -C "$TEST_DIR" add .
+  git -C "$TEST_DIR" add PLAN_DEP.md
   git -C "$TEST_DIR" commit -q -m "add dep plan"
 
   # Phase 1 always fails with MAX_RETRIES=1 → 1 attempt only
@@ -462,6 +462,50 @@ EOF
   run sh -c "cd '$TEST_DIR' && echo 'N' | '$CLAUDELOOP' --plan PLAN.md"
   # "Phase 2: Build" must appear within 2 lines of the "Found interrupted" warning
   echo "$output" | grep -A2 "Found interrupted" | grep -q "Phase 2.*Build"
+}
+
+# =============================================================================
+# write_config: auto-create and auto-update .claudeloop.conf
+# =============================================================================
+
+@test "write_config: creates .claudeloop.conf on first run with no args" {
+  rm -f "$TEST_DIR/.claudeloop.conf"
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.claudeloop.conf" ]
+  grep -q "^PLAN_FILE=" "$TEST_DIR/.claudeloop.conf"
+}
+
+@test "write_config: saves CLI-provided settings to new conf" {
+  rm -f "$TEST_DIR/.claudeloop.conf"
+  _cl --plan PLAN.md --max-retries 5
+  [ "$status" -eq 0 ]
+  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop.conf"
+}
+
+@test "write_config: updates existing conf key when CLI arg changes it" {
+  printf 'MAX_RETRIES=2\n' >> "$TEST_DIR/.claudeloop.conf"
+  _cl --plan PLAN.md --max-retries 9
+  [ "$status" -eq 0 ]
+  grep -q "^MAX_RETRIES=9$" "$TEST_DIR/.claudeloop.conf"
+  # Other keys untouched
+  grep -q "^BASE_DELAY=0$" "$TEST_DIR/.claudeloop.conf"
+}
+
+@test "write_config: does not create or modify conf during --dry-run" {
+  rm -f "$TEST_DIR/.claudeloop.conf"
+  _cl --plan PLAN.md --dry-run
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.claudeloop.conf" ]
+}
+
+@test "write_config: does not persist one-time flags like --reset or --phase" {
+  rm -f "$TEST_DIR/.claudeloop.conf"
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.claudeloop.conf" ]
+  ! grep -q "RESET" "$TEST_DIR/.claudeloop.conf"
+  ! grep -q "START_PHASE" "$TEST_DIR/.claudeloop.conf"
 }
 
 @test "integration: initial header shows correct completed count when resuming" {

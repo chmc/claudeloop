@@ -48,6 +48,7 @@ claudeloop --continue          # resume after Ctrl+C interrupt
 claudeloop --phase 3           # start from a specific phase
 claudeloop --dry-run           # validate without executing
 claudeloop --dangerously-skip-permissions  # skip write permission prompts
+claudeloop --phase-prompt prompts/template.md  # use a custom prompt template
 ```
 
 ## Full examples
@@ -68,6 +69,20 @@ claudeloop --continue --dangerously-skip-permissions
 # Reset progress and re-run from scratch
 claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
 ```
+
+## Config file
+
+ClaudeLoop creates `.claudeloop.conf` automatically on first run. After that, you can just run `claudeloop` with no arguments:
+
+```bash
+# First run — conf is created with your settings
+claudeloop --plan my-plan.md --max-retries 5
+
+# Subsequent runs — settings are read from .claudeloop.conf
+claudeloop
+```
+
+Edit or delete `.claudeloop.conf` freely. `--dry-run` never writes to it.
 
 ## Tips
 
