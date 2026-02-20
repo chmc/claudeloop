@@ -5,16 +5,34 @@
 - **Claude CLI** — `claude` must be in your PATH
 - **Git** — your project must be a git repo
 
-```bash
-# Clone claudeloop
-git clone https://github.com/yourusername/claudeloop.git
-chmod +x claudeloop/claudeloop
+## Install
 
-# Optionally add to PATH
-ln -s "$(pwd)/claudeloop/claudeloop" /usr/local/bin/claudeloop
+**One-liner (public repo):**
 
-# Verify installation
+```sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+```
+
+**From a local clone (private repo or specific version):**
+
+```sh
+git clone git@github.com:chmc/claudeloop.git claudeloop-src
+cd claudeloop-src
+./install.sh
+```
+
+**Verify installation:**
+
+```sh
 claudeloop --version
+```
+
+**Uninstall:**
+
+```sh
+./uninstall.sh   # from the repo clone
+# or
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
 ```
 
 ## 2. Create a plan
