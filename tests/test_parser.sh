@@ -406,6 +406,251 @@ EOF
   [ "$output" = "2.5" ]
 }
 
+# --- Flexible semantic phase header tests ---
+
+@test "flexible_headers: single hash '# Phase 1: Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Phase 1: Setup
+Create setup.
+
+# Phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: triple hash '### Phase 1: Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+### Phase 1: Setup
+Create setup.
+
+### Phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: lowercase '## phase 1: Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## phase 1: Setup
+Create setup.
+
+## phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: bare colon 'Phase 1: Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+Phase 1: Setup
+Create setup.
+
+Phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: bare lowercase 'phase 1: Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+phase 1: Setup
+Create setup.
+
+phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: bare hyphen 'Phase 1 - Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+Phase 1 - Setup
+Create setup.
+
+Phase 2 - Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: hashed space-only '# Phase 1 Setup' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Phase 1 Setup
+Create setup.
+
+# Phase 2 Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "flexible_headers: bare no-title 'Phase 1' defaults title to 'Phase 1'" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+Phase 1
+Create setup.
+
+Phase 2
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Phase 1" ]
+}
+
+@test "flexible_headers: hashed no-title '## Phase 1' defaults title to 'Phase 1'" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1
+Create setup.
+
+## Phase 2
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Phase 1" ]
+}
+
+@test "flexible_headers: 'Phase 2 will follow next.' in description not treated as header" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Some content here.
+Phase 2 will follow next.
+
+## Phase 2: Build
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+}
+
+@test "flexible_headers: mixed formats in one file all parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Phase 1: Alpha
+Content 1.
+
+## Phase 2: Beta
+Content 2.
+
+### Phase 3: Gamma
+Content 3.
+
+Phase 4: Delta
+Content 4.
+
+Phase 5 - Epsilon
+Content 5.
+
+Phase 6
+Content 6.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "6" ]
+
+  run get_phase_title 1
+  [ "$output" = "Alpha" ]
+
+  run get_phase_title 2
+  [ "$output" = "Beta" ]
+
+  run get_phase_title 3
+  [ "$output" = "Gamma" ]
+
+  run get_phase_title 4
+  [ "$output" = "Delta" ]
+
+  run get_phase_title 5
+  [ "$output" = "Epsilon" ]
+
+  run get_phase_title 6
+  [ "$output" = "Phase 6" ]
+}
+
 @test "phase_to_var: converts dot to underscore" {
   run phase_to_var "2.5"
   [ "$status" -eq 0 ]
