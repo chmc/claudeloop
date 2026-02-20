@@ -12,6 +12,9 @@ chmod +x claudeloop/claudeloop
 
 # Optionally add to PATH
 ln -s "$(pwd)/claudeloop/claudeloop" /usr/local/bin/claudeloop
+
+# Verify installation
+claudeloop --version
 ```
 
 ## 2. Create a plan
@@ -42,6 +45,7 @@ claudeloop                # execute
 ## Common commands
 
 ```bash
+claudeloop --version           # print installed version
 claudeloop --plan my-plan.md   # use a specific plan file
 claudeloop --reset             # reset progress and start over
 claudeloop --continue          # resume after Ctrl+C interrupt

@@ -3,6 +3,8 @@
 # ClaudeLoop - Phase-by-Phase Execution Tool
 # Executes multi-phase plans by spawning fresh Claude instances per phase
 
+VERSION="0.1.0"
+
 set -eu
 
 # Script directory
@@ -371,6 +373,7 @@ Options:
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
+  --version, -V          Print version and exit
   --help                 Show this help message
 
 Examples:
@@ -432,6 +435,10 @@ parse_args() {
       --dangerously-skip-permissions)
         SKIP_PERMISSIONS=true; _CLI_SKIP_PERMISSIONS=1
         shift
+        ;;
+      --version|-V)
+        printf '%s\n' "$VERSION"
+        exit 0
         ;;
       --help|-h)
         usage

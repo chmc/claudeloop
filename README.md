@@ -45,6 +45,7 @@ See `examples/PLAN.md.example` for a complete example.
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
+--version, -V        Print version and exit
 --help               Show help
 ```
 
@@ -169,6 +170,15 @@ To watch a phase log in real time in another terminal:
 bats tests/test_parser.sh       # run one test file
 shellcheck -s sh lib/retry.sh   # lint
 ```
+
+## Versioning & updates
+
+```bash
+claudeloop --version                     # check installed version
+git -C /path/to/claudeloop pull          # update to latest
+```
+
+Releases and changelogs are available on [GitHub Releases](https://github.com/chmc/claudeloop/releases).
 
 ## Credits
 

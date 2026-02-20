@@ -1,0 +1,35 @@
+name: Release
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required to push commit + tag and create release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history needed for git log since last tag
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - name: Run release script
+        run: ./release.sh
+
+      - name: Push commit and tag
+        run: |
+          git push
+          git push --tags
+
+      - name: Create GitHub Release
+        run: |
+          tag=$(git describe --tags --abbrev=0)
+          gh release create "$tag" --generate-notes --title "$tag"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

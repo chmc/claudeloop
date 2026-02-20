@@ -509,6 +509,21 @@ EOF
   ! grep -q "START_PHASE" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
+# =============================================================================
+# --version / -V flag
+# =============================================================================
+@test "--version prints semver string" {
+  run "$CLAUDELOOP" --version
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'
+}
+
+@test "-V is alias for --version" {
+  run "$CLAUDELOOP" -V
+  [ "$status" -eq 0 ]
+  [ "$output" = "$("$CLAUDELOOP" --version)" ]
+}
+
 @test "integration: initial header shows correct completed count when resuming" {
   # Write a PROGRESS.md with phase 1 already completed
   mkdir -p "$TEST_DIR/.claudeloop"
