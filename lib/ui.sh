@@ -17,16 +17,16 @@ SIMPLE_MODE="${SIMPLE_MODE:-false}"
 print_header() {
   local plan_file="$1"
   local completed=0
-  local i=1
   local status
 
-  while [ "$i" -le "$PHASE_COUNT" ]; do
-    status=$(eval "echo \"\${PHASE_STATUS_$i:-}\"")
+  for _phase in $PHASE_NUMBERS; do
+    local _pv
+    _pv=$(phase_to_var "$_phase")
+    status=$(eval "echo \"\${PHASE_STATUS_${_pv}:-}\"")
     status="${status:-pending}"
     if [ "$status" = "completed" ]; then
       completed=$((completed + 1))
     fi
-    i=$((i + 1))
   done
 
   echo "═══════════════════════════════════════════════════════════"
@@ -41,11 +41,13 @@ print_header() {
 # Print phase status
 print_phase_status() {
   local phase_num="$1"
+  local phase_var
+  phase_var=$(phase_to_var "$phase_num")
   local status
-  status=$(eval "echo \"\$PHASE_STATUS_$phase_num\"")
+  status=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
   status="${status:-pending}"
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
   title="${title:-Unknown}"
   local icon="⏳"
   local color="$COLOR_RESET"
@@ -74,10 +76,8 @@ print_phase_status() {
 
 # Print all phases
 print_all_phases() {
-  local i=1
-  while [ "$i" -le "$PHASE_COUNT" ]; do
-    print_phase_status "$i"
-    i=$((i + 1))
+  for _phase in $PHASE_NUMBERS; do
+    print_phase_status "$_phase"
   done
   echo ""
 }
@@ -85,10 +85,12 @@ print_all_phases() {
 # Print phase execution header
 print_phase_exec_header() {
   local phase_num="$1"
+  local phase_var
+  phase_var=$(phase_to_var "$phase_num")
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
   local attempt
-  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
+  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_${phase_var}\"")
 
   local timestamp
   timestamp=$(date "+%H:%M:%S")

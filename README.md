@@ -25,7 +25,8 @@ Description of the next task.
 ```
 
 Rules:
-- Headers must be `## Phase N: Title` with sequential numbers (1, 2, 3…)
+- Headers must be `## Phase N: Title` where N is a number in ascending order
+- Gaps and decimals are allowed: `1, 2, 2.5, 2.6, 3` is valid (useful for inserting sub-phases)
 - Dependencies: `**Depends on:** Phase X, Phase Y` on the first line after the header
 - Phases can only depend on earlier phases
 

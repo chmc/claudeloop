@@ -121,7 +121,8 @@ EOF
   [[ "$output" == *"2"* ]]
 }
 
-@test "validate_plan: rejects non-sequential phase numbers" {
+@test "validate_plan: rejects out-of-order phase numbers (gaps now allowed)" {
+  # Gaps are allowed; only descending order is rejected
   cat > "$TEST_DIR/PLAN.md" << 'EOF'
 ## Phase 1: Setup
 Setup phase.
@@ -130,9 +131,11 @@ Setup phase.
 Testing phase.
 EOF
 
-  run parse_plan "$TEST_DIR/PLAN.md"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"sequential"* ]] || [[ "$output" == *"Expected Phase 2"* ]]
+  # This should now SUCCEED since 1 < 3 is ascending
+  parse_plan "$TEST_DIR/PLAN.md"
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
 }
 
 @test "validate_plan: rejects duplicate phase numbers" {
@@ -146,7 +149,8 @@ EOF
 
   run parse_plan "$TEST_DIR/PLAN.md"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"duplicate"* ]] || [[ "$output" == *"Duplicate"* ]] || [[ "$output" == *"Expected Phase 2, found Phase 1"* ]]
+  # Duplicate is caught either as "not ascending" or "duplicate"
+  [[ "$output" == *"duplicate"* ]] || [[ "$output" == *"Duplicate"* ]] || [[ "$output" == *"ascending"* ]] || [[ "$output" == *"order"* ]]
 }
 
 @test "validate_plan: rejects invalid dependency references" {
@@ -249,4 +253,204 @@ EOF
   run parse_plan "$TEST_DIR/PLAN.md"
   [ "$status" -ne 0 ]
   [[ "$output" == *"forward"* ]] || [[ "$output" == *"cannot depend"* ]]
+}
+
+# --- Decimal phase number tests ---
+
+@test "parse_plan: parses decimal phases 1 2 2.5 2.6 3 correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Core
+Do core.
+
+## Phase 2.5: Hotfix
+Do hotfix.
+
+## Phase 2.6: Followup
+Do followup.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "5" ]
+}
+
+@test "parse_plan: PHASE_NUMBERS contains decimal phases in order" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Core
+Do core.
+
+## Phase 2.5: Hotfix
+Do hotfix.
+
+## Phase 2.6: Followup
+Do followup.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+  [ "$PHASE_NUMBERS" = "1 2 2.5 2.6 3" ]
+}
+
+@test "parse_plan: decimal phase title stored with underscore variable" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2.5: Hotfix
+Do hotfix.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+  [ "$PHASE_TITLE_2_5" = "Hotfix" ]
+}
+
+@test "validate_plan: rejects out-of-order phases (3 2 1)" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 3: Finalize
+Wrap up.
+
+## Phase 2: Core
+Do core.
+
+## Phase 1: Setup
+Do setup.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ascending"* ]] || [[ "$output" == *"order"* ]]
+}
+
+@test "validate_plan: rejects out-of-order decimal (1 2 1.5 3)" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Core
+Do core.
+
+## Phase 1.5: Late insertion
+Should be rejected.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ascending"* ]] || [[ "$output" == *"order"* ]]
+}
+
+@test "validate_plan: rejects duplicate decimal (1 2 2 3)" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Core
+Do core.
+
+## Phase 2: Another Core
+Should be rejected.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_plan: decimal dependency parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Core
+Do core.
+
+## Phase 2.5: Hotfix
+**Depends on:** Phase 2
+
+Do hotfix.
+
+## Phase 3: Finalize
+**Depends on:** Phase 2.5
+
+Wrap up.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_dependencies 2.5
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_dependencies 3
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5" ]
+}
+
+@test "phase_to_var: converts dot to underscore" {
+  run phase_to_var "2.5"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2_5" ]
+}
+
+@test "phase_to_var: integer unchanged" {
+  run phase_to_var "3"
+  [ "$status" -eq 0 ]
+  [ "$output" = "3" ]
+}
+
+@test "phase_less_than: 2.5 < 3 returns 0" {
+  run phase_less_than 2.5 3
+  [ "$status" -eq 0 ]
+}
+
+@test "phase_less_than: 3 < 2.5 returns 1" {
+  run phase_less_than 3 2.5
+  [ "$status" -eq 1 ]
+}
+
+@test "phase_less_than: 2.5 < 2.15 is false (float comparison)" {
+  run phase_less_than 2.5 2.15
+  [ "$status" -eq 1 ]
+}
+
+@test "get_all_phases: returns decimal phases line by line" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2.5: Hotfix
+Do hotfix.
+
+## Phase 3: Finalize
+Wrap up.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_all_phases
+  [ "$status" -eq 0 ]
+  # Output should contain each phase on its own line
+  echo "$output" | grep -q "^1$"
+  echo "$output" | grep -q "^2.5$"
+  echo "$output" | grep -q "^3$"
 }

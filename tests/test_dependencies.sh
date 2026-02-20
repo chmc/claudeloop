@@ -4,9 +4,11 @@
 # Tests for lib/dependencies.sh POSIX-compatible implementation
 
 setup() {
+  . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/dependencies.sh"
   # 3-phase chain: 1 (no deps), 2 (dep: 1), 3 (deps: 1 2)
   PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
   PHASE_STATUS_1="pending"
   PHASE_STATUS_2="pending"
   PHASE_STATUS_3="pending"
@@ -103,4 +105,53 @@ setup() {
   run get_blocked_phases 3
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
+}
+
+# --- Decimal phase number tests ---
+
+setup_decimal() {
+  . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  PHASE_COUNT=4
+  PHASE_NUMBERS="1 2 2.5 3"
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_2_5="pending"
+  PHASE_STATUS_3="pending"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2="1"
+  PHASE_DEPENDENCIES_2_5="2"
+  PHASE_DEPENDENCIES_3="2.5"
+}
+
+@test "find_next_phase: returns decimal phase when it's the next runnable" {
+  setup_decimal
+  run find_next_phase
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5" ]
+}
+
+@test "is_phase_runnable: decimal phase runnable when deps completed" {
+  setup_decimal
+  run is_phase_runnable 2.5
+  [ "$status" -eq 0 ]
+}
+
+@test "is_phase_runnable: decimal phase not runnable when deps pending" {
+  setup_decimal
+  PHASE_STATUS_2="pending"
+  run is_phase_runnable 2.5
+  [ "$status" -eq 1 ]
+}
+
+@test "get_blocked_phases: returns decimal phase as blocker dependent" {
+  setup_decimal
+  run get_blocked_phases 2.5
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"3"* ]]
+}
+
+@test "detect_dependency_cycles: works with decimal phase numbers" {
+  setup_decimal
+  run detect_dependency_cycles
+  [ "$status" -eq 0 ]
 }

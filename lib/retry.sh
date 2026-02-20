@@ -99,7 +99,7 @@ is_empty_log() {
 should_retry_phase() {
   local phase_num="$1"
   local attempts
-  attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
+  attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$(phase_to_var "$phase_num")\"")
 
   if [ "$attempts" -lt "$MAX_RETRIES" ]; then
     return 0

@@ -4,6 +4,7 @@
 # Tests for lib/retry.sh POSIX-compatible implementation
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   source "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   MAX_RETRIES=3
   BASE_DELAY=5

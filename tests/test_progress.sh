@@ -5,9 +5,10 @@
 
 setup() {
   export TEST_DIR="$(mktemp -d)"
-  . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
   PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
   PHASE_TITLE_1="Phase One"
   PHASE_TITLE_2="Phase Two"
   PHASE_TITLE_3="Phase Three"
@@ -265,6 +266,7 @@ EOF
 @test "detect_plan_changes: reports renumbered phase and carries status" {
   # New plan has phases swapped: Phase Two first, then Phase One
   PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
   PHASE_TITLE_1="Phase Two"
   PHASE_TITLE_2="Phase One"
   PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
@@ -288,6 +290,7 @@ EOF
 
 @test "detect_plan_changes: reports added phase and leaves it pending" {
   PHASE_COUNT=4
+  PHASE_NUMBERS="1 2 3 4"
   PHASE_TITLE_1="Phase One"
   PHASE_TITLE_2="Phase Two"
   PHASE_TITLE_3="Phase Three"
@@ -313,6 +316,7 @@ EOF
 
 @test "detect_plan_changes: reports removed phase" {
   PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
   PHASE_TITLE_1="Phase One"
   PHASE_TITLE_2="Phase Two"
   PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
@@ -405,6 +409,7 @@ EOF
 
 @test "detect_plan_changes: duplicate title — first old match wins" {
   PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
   PHASE_TITLE_1="Phase One"
   PHASE_TITLE_2="Phase One"
   PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
@@ -443,6 +448,7 @@ EOF
 
 @test "detect_plan_changes: prints summary when changes detected" {
   PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
   PHASE_TITLE_1="Phase One"
   PHASE_TITLE_2="Phase New"
   PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
@@ -458,4 +464,78 @@ Status: pending
 EOF
   detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
   grep -q "Plan has changed since last run" "$TEST_DIR/out.txt"
+}
+
+# --- Decimal phase number tests ---
+
+setup_decimal_progress() {
+  PHASE_COUNT=4
+  PHASE_NUMBERS="1 2 2.5 3"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_2_5="Phase Two Point Five"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2=""
+  PHASE_DEPENDENCIES_2_5="2"
+  PHASE_DEPENDENCIES_3="2.5"
+}
+
+@test "init_progress: initializes decimal phase to pending" {
+  setup_decimal_progress
+  init_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_2_5" = "pending" ]
+  [ "$PHASE_ATTEMPTS_2_5" = "0" ]
+}
+
+@test "write_progress: includes decimal phase in output" {
+  setup_decimal_progress
+  PHASE_STATUS_1="completed" PHASE_ATTEMPTS_1=1
+  PHASE_STATUS_2="completed" PHASE_ATTEMPTS_2=1
+  PHASE_STATUS_2_5="pending"  PHASE_ATTEMPTS_2_5=0
+  PHASE_STATUS_3="pending"   PHASE_ATTEMPTS_3=0
+  write_progress "$TEST_DIR/PROGRESS.md" "PLAN.md"
+  grep -q "Phase 2.5" "$TEST_DIR/PROGRESS.md"
+}
+
+@test "read_progress: restores decimal phase status" {
+  setup_decimal_progress
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ✅ Phase 2: Phase Two
+Status: completed
+
+### ⏳ Phase 2.5: Phase Two Point Five
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2_5" = "pending" ]
+}
+
+@test "update_phase_status: updates decimal phase status" {
+  setup_decimal_progress
+  PHASE_STATUS_2_5="pending"
+  PHASE_ATTEMPTS_2_5=0
+  update_phase_status "2.5" "in_progress"
+  [ "$PHASE_STATUS_2_5" = "in_progress" ]
+  [ "$PHASE_ATTEMPTS_2_5" = "1" ]
+}
+
+@test "write_progress then read_progress: decimal round-trip stable" {
+  setup_decimal_progress
+  PHASE_STATUS_1="completed"   PHASE_ATTEMPTS_1=1
+  PHASE_STATUS_2="completed"   PHASE_ATTEMPTS_2=1
+  PHASE_STATUS_2_5="completed" PHASE_ATTEMPTS_2_5=2
+  PHASE_STATUS_3="pending"     PHASE_ATTEMPTS_3=0
+  write_progress "$TEST_DIR/PROGRESS.md" "PLAN.md"
+  PHASE_STATUS_2_5="pending" PHASE_ATTEMPTS_2_5=0
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_2_5" = "completed" ]
+  [ "$PHASE_ATTEMPTS_2_5" = "2" ]
 }

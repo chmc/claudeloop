@@ -21,18 +21,36 @@ All state is global shell variables — no config file, no subprocess state.
 
 ### Data model
 
-Phase data in flat numbered variables:
+Phase data in flat numbered variables (dots replaced with underscores in var names):
 ```
 PHASE_TITLE_N         PHASE_DESCRIPTION_N    PHASE_DEPENDENCIES_N  (space-separated nums)
 PHASE_STATUS_N        (pending|in_progress|completed|failed)
 PHASE_ATTEMPTS_N      PHASE_START_TIME_N     PHASE_END_TIME_N
-PHASE_COUNT
+PHASE_COUNT           (total number of phases)
+PHASE_NUMBERS         (space-separated ordered list, e.g. "1 2 2.5 2.6 3")
+```
+
+Phase numbers may be decimals (e.g. `2.5`). The dot is replaced with underscore for variable
+names: `PHASE_TITLE_2_5`. Two helpers defined in `lib/parser.sh` and available everywhere:
+
+```sh
+phase_to_var "2.5"          # → "2_5"  (used before every eval)
+phase_less_than "2.5" "3"   # → exit 0 (true); uses awk for correct float comparison
 ```
 
 Read/write pattern used everywhere:
 ```sh
-value=$(eval "echo \"\$PHASE_STATUS_$phase_num\"")
-eval "PHASE_STATUS_${phase_num}='completed'"
+phase_var=$(phase_to_var "$phase_num")
+value=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
+eval "PHASE_STATUS_${phase_var}='completed'"
+```
+
+Iteration pattern (replaces old `i=1; while [ "$i" -le "$PHASE_COUNT" ]` loops):
+```sh
+for phase_num in $PHASE_NUMBERS; do
+  phase_var=$(phase_to_var "$phase_num")
+  ...
+done
 ```
 
 ### Libraries

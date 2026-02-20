@@ -103,7 +103,7 @@ load_state() {
 
     print_warning "Found interrupted session"
     if [ -n "$_phase" ]; then
-      _title=$(eval "echo \"\$PHASE_TITLE_$_phase\"")
+      _title=$(eval "echo \"\$PHASE_TITLE_$(phase_to_var "$_phase")\"")
       printf '  Phase %s: %s\n' "$_phase" "$_title"
     fi
     printf 'Resume from last checkpoint? (Y/n) '
@@ -161,15 +161,17 @@ handle_interrupt() {
 
   # Mark current phase as pending if it was in progress
   if [ -n "$CURRENT_PHASE" ]; then
+    local _cpv
+    _cpv=$(phase_to_var "$CURRENT_PHASE")
     local _status
-    _status=$(eval "echo \"\$PHASE_STATUS_$CURRENT_PHASE\"")
+    _status=$(eval "echo \"\$PHASE_STATUS_${_cpv}\"")
     if [ "$_status" = "in_progress" ]; then
       print_warning "Marking Phase $CURRENT_PHASE as pending for retry"
-      eval "PHASE_STATUS_${CURRENT_PHASE}=pending"
+      eval "PHASE_STATUS_${_cpv}=pending"
       # Don't count this as an attempt since it was interrupted
       local _attempts
-      _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$CURRENT_PHASE\"")
-      eval "PHASE_ATTEMPTS_${CURRENT_PHASE}=$((_attempts - 1))"
+      _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_cpv}\"")
+      eval "PHASE_ATTEMPTS_${_cpv}=$((_attempts - 1))"
     fi
   fi
 
@@ -393,10 +395,12 @@ _add_platform_gitignore() {
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"
+  local _epv
+  _epv=$(phase_to_var "$phase_num")
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_$phase_num\"")
+  title=$(eval "echo \"\$PHASE_TITLE_${_epv}\"")
   local description
-  description=$(eval "echo \"\$PHASE_DESCRIPTION_$phase_num\"")
+  description=$(eval "echo \"\$PHASE_DESCRIPTION_${_epv}\"")
   local log_file=".claudeloop/logs/phase-$phase_num.log"
   local raw_log=".claudeloop/logs/phase-$phase_num.raw.json"
   local start_ts duration
@@ -414,7 +418,7 @@ execute_phase() {
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
   local attempt
-  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_$phase_num\"")
+  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_${_epv}\"")
   start_ts=$(date '+%s')
 
   print_phase_exec_header "$phase_num"
@@ -567,18 +571,16 @@ main_loop() {
       # No runnable phases - check why
       local has_pending=false
       local has_failed=false
-      local i=1
 
-      while [ "$i" -le "$PHASE_COUNT" ]; do
+      for _ml_phase in $PHASE_NUMBERS; do
         local _status
-        _status=$(eval "echo \"\$PHASE_STATUS_$i\"")
+        _status=$(eval "echo \"\$PHASE_STATUS_$(phase_to_var "$_ml_phase")\"")
         if [ "$_status" = "pending" ]; then
           has_pending=true
         fi
         if [ "$_status" = "failed" ]; then
           has_failed=true
         fi
-        i=$((i + 1))
       done
 
       if ! $has_pending && ! $has_failed; then
@@ -604,14 +606,16 @@ main_loop() {
     else
       local _log_file
       _log_file=".claudeloop/logs/phase-${next_phase}.log"
+      local _npv
+      _npv=$(phase_to_var "$next_phase")
       if is_quota_error "$_log_file"; then
         # Quota error: restore attempt counter (same pattern as handle_interrupt)
         local _cur_attempts
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
-        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
+        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
         log_verbose "main_loop: quota error on phase $next_phase, attempts restored to $((_cur_attempts - 1))"
         # Reset to pending so find_next_phase picks it up after the wait
-        eval "PHASE_STATUS_${next_phase}=pending"
+        eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         print_quota_wait "$next_phase" "$QUOTA_RETRY_INTERVAL"
         sleep "$QUOTA_RETRY_INTERVAL"
@@ -621,9 +625,9 @@ main_loop() {
         print_error "Phase $next_phase: Claude produced no output (empty log). Check the claude CLI."
         printf 'Press Enter to retry phase %s once the issue is resolved, or Ctrl+C to abort: ' "$next_phase"
         read -r _dummy 2>/dev/null || return 1
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
-        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
-        eval "PHASE_STATUS_${next_phase}=pending"
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
+        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+        eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
       fi
@@ -632,16 +636,16 @@ main_loop() {
         print_warning "Grant the permission in the Claude UI (or re-run with --dangerously-skip-permissions)."
         printf 'Press Enter to retry phase %s, or Ctrl+C to abort: ' "$next_phase"
         read -r _dummy 2>/dev/null || return 1
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
-        eval "PHASE_ATTEMPTS_${next_phase}=$((_cur_attempts - 1))"
-        eval "PHASE_STATUS_${next_phase}=pending"
+        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
+        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+        eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
       fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
         local _attempts
-        _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$next_phase\"")
+        _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         local delay
         delay=$(calculate_backoff "$_attempts")
         log_verbose "main_loop: scheduling retry of phase $next_phase in ${delay}s (attempt $_attempts)"
@@ -725,12 +729,11 @@ main() {
 
   # Apply --phase N: mark phases before START_PHASE as completed (skip them)
   if [ -n "$START_PHASE" ]; then
-    local i=1
-    while [ "$i" -lt "$START_PHASE" ]; do
-      eval "PHASE_STATUS_${i}='completed'"
-      i=$((i + 1))
+    for _p in $PHASE_NUMBERS; do
+      phase_less_than "$_p" "$START_PHASE" || break
+      eval "PHASE_STATUS_$(phase_to_var "$_p")='completed'"
     done
-    log_verbose "main: skipped phases 1-$((START_PHASE - 1)) (marked completed)"
+    log_verbose "main: skipped phases before $START_PHASE (marked completed)"
   fi
 
   # Print header (after init_progress/detect_plan_changes so completed count is correct)

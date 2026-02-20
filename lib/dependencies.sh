@@ -9,8 +9,10 @@
 # Returns: 0 if runnable, 1 if not
 is_phase_runnable() {
   local phase_num="$1"
+  local phase_var
+  phase_var=$(phase_to_var "$phase_num")
   local status
-  status=$(eval "echo \"\$PHASE_STATUS_$phase_num\"")
+  status=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
 
   # Phase must be pending or failed (not completed or in_progress)
   if [ "$status" != "pending" ] && [ "$status" != "failed" ]; then
@@ -19,10 +21,12 @@ is_phase_runnable() {
 
   # Check all dependencies are completed
   local deps
-  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$phase_num\"")
+  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${phase_var}\"")
   for dep in $deps; do
+    local dep_var
+    dep_var=$(phase_to_var "$dep")
     local dep_status
-    dep_status=$(eval "echo \"\$PHASE_STATUS_$dep\"")
+    dep_status=$(eval "echo \"\$PHASE_STATUS_${dep_var}\"")
     if [ "$dep_status" != "completed" ]; then
       return 1
     fi
@@ -32,16 +36,14 @@ is_phase_runnable() {
 }
 
 # Find next runnable phase
-# Uses global: PHASE_COUNT, PHASE_STATUS_N
+# Uses global: PHASE_NUMBERS, PHASE_STATUS_N
 # Returns: phase number (stdout) or empty if none
 find_next_phase() {
-  local i=1
-  while [ "$i" -le "$PHASE_COUNT" ]; do
-    if is_phase_runnable "$i"; then
-      echo "$i"
+  for phase_num in $PHASE_NUMBERS; do
+    if is_phase_runnable "$phase_num"; then
+      echo "$phase_num"
       return 0
     fi
-    i=$((i + 1))
   done
   return 1
 }
@@ -53,12 +55,10 @@ detect_dependency_cycles() {
   local rec_stack=""
 
   # DFS-based cycle detection
-  local phase=1
-  while [ "$phase" -le "$PHASE_COUNT" ]; do
+  for phase in $PHASE_NUMBERS; do
     if ! _dfs_cycle_check "$phase"; then
       return 1
     fi
-    phase=$((phase + 1))
   done
 
   return 0
@@ -87,7 +87,7 @@ _dfs_cycle_check() {
 
   # Check all dependencies
   local deps
-  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$phase\"")
+  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$(phase_to_var "$phase")\"")
   for dep in $deps; do
     if ! _dfs_cycle_check "$dep"; then
       return 1
@@ -111,17 +111,17 @@ _dfs_cycle_check() {
 get_blocked_phases() {
   local blocker_phase="$1"
   local blocked=""
-  local phase=1
 
-  while [ "$phase" -le "$PHASE_COUNT" ]; do
+  for phase in $PHASE_NUMBERS; do
+    local phase_var
+    phase_var=$(phase_to_var "$phase")
     local deps
-    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$phase\"")
+    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${phase_var}\"")
     case " $deps " in
       *" $blocker_phase "*)
         blocked="$blocked $phase"
         ;;
     esac
-    phase=$((phase + 1))
   done
 
   echo "${blocked# }"

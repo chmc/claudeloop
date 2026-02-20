@@ -4,9 +4,11 @@
 # Tests for lib/ui.sh POSIX-compatible implementation
 
 setup() {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
 
   PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
   PHASE_TITLE_1="Setup"
   PHASE_TITLE_2="Implementation"
   PHASE_TITLE_3="Testing"
