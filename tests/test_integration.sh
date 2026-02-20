@@ -62,7 +62,8 @@ Build the project
 PLAN
 
   # Config: zero delays for fast tests
-  cat > "$TEST_DIR/.claudeloop.conf" << 'CONF'
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
 MAX_DELAY=0
 CONF
@@ -469,43 +470,43 @@ EOF
 # =============================================================================
 
 @test "write_config: creates .claudeloop.conf on first run with no args" {
-  rm -f "$TEST_DIR/.claudeloop.conf"
+  rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/.claudeloop.conf" ]
-  grep -q "^PLAN_FILE=" "$TEST_DIR/.claudeloop.conf"
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  grep -q "^PLAN_FILE=" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "write_config: saves CLI-provided settings to new conf" {
-  rm -f "$TEST_DIR/.claudeloop.conf"
+  rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
   _cl --plan PLAN.md --max-retries 5
   [ "$status" -eq 0 ]
-  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop.conf"
+  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "write_config: updates existing conf key when CLI arg changes it" {
-  printf 'MAX_RETRIES=2\n' >> "$TEST_DIR/.claudeloop.conf"
+  printf 'MAX_RETRIES=2\n' >> "$TEST_DIR/.claudeloop/.claudeloop.conf"
   _cl --plan PLAN.md --max-retries 9
   [ "$status" -eq 0 ]
-  grep -q "^MAX_RETRIES=9$" "$TEST_DIR/.claudeloop.conf"
+  grep -q "^MAX_RETRIES=9$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
   # Other keys untouched
-  grep -q "^BASE_DELAY=0$" "$TEST_DIR/.claudeloop.conf"
+  grep -q "^BASE_DELAY=0$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "write_config: does not create or modify conf during --dry-run" {
-  rm -f "$TEST_DIR/.claudeloop.conf"
+  rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
   _cl --plan PLAN.md --dry-run
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_DIR/.claudeloop.conf" ]
+  [ ! -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
 }
 
 @test "write_config: does not persist one-time flags like --reset or --phase" {
-  rm -f "$TEST_DIR/.claudeloop.conf"
+  rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
   _cl --plan PLAN.md --reset
   [ "$status" -eq 0 ]
-  [ -f "$TEST_DIR/.claudeloop.conf" ]
-  ! grep -q "RESET" "$TEST_DIR/.claudeloop.conf"
-  ! grep -q "START_PHASE" "$TEST_DIR/.claudeloop.conf"
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  ! grep -q "RESET" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  ! grep -q "START_PHASE" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "integration: initial header shows correct completed count when resuming" {

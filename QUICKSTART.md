@@ -72,17 +72,17 @@ claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
 
 ## Config file
 
-ClaudeLoop creates `.claudeloop.conf` automatically on first run. After that, you can just run `claudeloop` with no arguments:
+ClaudeLoop creates `.claudeloop/.claudeloop.conf` automatically on first run. After that, you can just run `claudeloop` with no arguments:
 
 ```bash
 # First run — conf is created with your settings
 claudeloop --plan my-plan.md --max-retries 5
 
-# Subsequent runs — settings are read from .claudeloop.conf
+# Subsequent runs — settings are read from .claudeloop/.claudeloop.conf
 claudeloop
 ```
 
-Edit or delete `.claudeloop.conf` freely. `--dry-run` never writes to it.
+Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes to it.
 
 ## Tips
 

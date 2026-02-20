@@ -47,6 +47,9 @@ SKIP_PERMISSIONS=false
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
 
+# Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
+_WIZARD_FORCE="${_WIZARD_FORCE:-}"
+
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
   [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
@@ -54,7 +57,7 @@ log_verbose() {
 
 # Load .claudeloop.conf key=value config file (do NOT source)
 load_config() {
-  local conf_file=".claudeloop.conf"
+  local conf_file=".claudeloop/.claudeloop.conf"
   [ ! -f "$conf_file" ] && return 0
 
   local line key value
@@ -95,10 +98,12 @@ update_conf_key() {
 
 # Create or update .claudeloop.conf after arg parsing
 write_config() {
-  local conf_file=".claudeloop.conf"
+  local conf_file=".claudeloop/.claudeloop.conf"
 
   # Never write config during dry-run
   $DRY_RUN && return 0
+
+  mkdir -p ".claudeloop"
 
   if [ ! -f "$conf_file" ]; then
     # First run: create conf with all current persistable settings
@@ -114,7 +119,7 @@ write_config() {
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
-    print_success "Created .claudeloop.conf"
+    print_success "Created .claudeloop/.claudeloop.conf"
     return 0
   fi
 
@@ -127,6 +132,101 @@ write_config() {
   [ -n "$_CLI_QUOTA_RETRY_INTERVAL" ] && update_conf_key "$conf_file" QUOTA_RETRY_INTERVAL "$QUOTA_RETRY_INTERVAL"
   [ -n "$_CLI_SKIP_PERMISSIONS" ]     && update_conf_key "$conf_file" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
   return 0
+}
+
+# Interactive first-run wizard. Prompts for each configurable setting.
+# Only runs when: no .claudeloop.conf, stdin is a tty (or _WIZARD_FORCE=1), not --dry-run.
+# Mutates globals directly; write_config() persists them immediately after.
+run_setup_wizard() {
+  local conf_file=".claudeloop/.claudeloop.conf"
+  [ -f "$conf_file" ] && return 0
+  $DRY_RUN && return 0
+  [ -z "$_WIZARD_FORCE" ] && ! [ -t 0 ] && return 0
+
+  printf '\nWelcome to claudeloop! Let'"'"'s configure your project.\n'
+  printf 'Press Enter to accept the default [shown in brackets].\n\n'
+
+  local response
+
+  # PLAN_FILE
+  if [ -n "$_CLI_PLAN_FILE" ]; then
+    printf 'Plan file: using --plan %s\n' "$PLAN_FILE"
+  else
+    printf 'Plan file [%s]: ' "$PLAN_FILE"
+    read -r response || return 0
+    [ -n "$response" ] && PLAN_FILE="$response"
+  fi
+
+  # PROGRESS_FILE
+  if [ -n "$_CLI_PROGRESS_FILE" ]; then
+    printf 'Progress file: using --progress %s\n' "$PROGRESS_FILE"
+  else
+    printf 'Progress file [%s]: ' "$PROGRESS_FILE"
+    read -r response || return 0
+    [ -n "$response" ] && PROGRESS_FILE="$response"
+  fi
+
+  # MAX_RETRIES
+  if [ -n "$_CLI_MAX_RETRIES" ]; then
+    printf 'Max retries: using --max-retries %s\n' "$MAX_RETRIES"
+  else
+    printf 'Max retries on failure [%s]: ' "$MAX_RETRIES"
+    read -r response || return 0
+    if [ -n "$response" ]; then
+      case "$response" in
+        *[!0-9]*) ;;             # non-digit chars: keep default
+        *) MAX_RETRIES="$response" ;;
+      esac
+    fi
+  fi
+
+  # QUOTA_RETRY_INTERVAL
+  if [ -n "$_CLI_QUOTA_RETRY_INTERVAL" ]; then
+    printf 'Quota retry interval: using --quota-retry-interval %s\n' "$QUOTA_RETRY_INTERVAL"
+  else
+    printf 'Quota wait after API limit, seconds [%s]: ' "$QUOTA_RETRY_INTERVAL"
+    read -r response || return 0
+    if [ -n "$response" ]; then
+      case "$response" in
+        *[!0-9]*) ;;             # non-digit chars: keep default
+        *) QUOTA_RETRY_INTERVAL="$response" ;;
+      esac
+    fi
+  fi
+
+  # SIMPLE_MODE
+  if [ -n "$_CLI_SIMPLE_MODE" ]; then
+    printf 'Simple mode: using --simple\n'
+  else
+    printf 'Simple output, no colors (true/false) [%s]: ' "$SIMPLE_MODE"
+    read -r response || return 0
+    case "$response" in
+      true|false) SIMPLE_MODE="$response" ;;
+    esac
+  fi
+
+  # SKIP_PERMISSIONS
+  if [ -n "$_CLI_SKIP_PERMISSIONS" ]; then
+    printf 'Skip permissions: using --dangerously-skip-permissions\n'
+  else
+    printf 'Skip write permission prompts (true/false) [%s]: ' "$SKIP_PERMISSIONS"
+    read -r response || return 0
+    case "$response" in
+      true|false) SKIP_PERMISSIONS="$response" ;;
+    esac
+  fi
+
+  # PHASE_PROMPT_FILE
+  if [ -n "$_CLI_PHASE_PROMPT_FILE" ]; then
+    printf 'Phase prompt: using --phase-prompt %s\n' "$PHASE_PROMPT_FILE"
+  else
+    local prompt_default="${PHASE_PROMPT_FILE:-none}"
+    printf 'Phase prompt template file [%s]: ' "$prompt_default"
+    read -r response || return 0
+    [ -n "$response" ] && [ "$response" != "none" ] && PHASE_PROMPT_FILE="$response"
+  fi
+
+  printf '\n'
 }
 
 # Save current state to state file
@@ -736,14 +836,17 @@ main() {
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
 
+  # Run setup wizard on first launch (no conf, interactive stdin, not dry-run)
+  run_setup_wizard
+
+  # Persist settings immediately — before plan file check so conf is always written
+  write_config
+
   # Check if plan file exists
   if [ ! -f "$PLAN_FILE" ]; then
     print_error "Plan file not found: $PLAN_FILE"
     exit 1
   fi
-
-  # Persist settings to .claudeloop.conf (plan confirmed to exist)
-  write_config
 
   # Validate phase prompt file if provided
   if [ -n "$PHASE_PROMPT_FILE" ] && [ ! -r "$PHASE_PROMPT_FILE" ]; then

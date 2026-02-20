@@ -50,7 +50,7 @@
   - Graceful shutdown and resume
   - **`--phase N` flag** — skips phases before N (marks as completed)
   - **`--verbose` flag** — debug output via `log_verbose()`
-  - **Config file `.claudeloop.conf`** — key=value with allowlist, no source
+  - **Config file `.claudeloop/.claudeloop.conf`** — key=value with allowlist, no source
   - **Log rotation** — keeps last 500 lines per phase log file
 
 ### Documentation
@@ -106,16 +106,16 @@
 ✅ Signal handlers for clean shutdown
 ✅ `--phase N` skip to start from a specific phase
 ✅ `--verbose` flag for debug output
-✅ `.claudeloop.conf` config file support
+✅ `.claudeloop/.claudeloop.conf` config file support
 ✅ Log rotation (max 500 lines per phase log)
 ✅ Integration tests (17 tests covering end-to-end scenarios)
 ✅ Comprehensive test coverage for all libraries
 ✅ Comprehensive documentation
 
 ### Config File Precedence
-`defaults → .claudeloop.conf → env vars → CLI args`
+`defaults → .claudeloop/.claudeloop.conf → env vars → CLI args`
 
-Supported keys in `.claudeloop.conf`:
+Supported keys in `.claudeloop/.claudeloop.conf`:
 ```
 PLAN_FILE
 PROGRESS_FILE

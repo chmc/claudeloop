@@ -50,7 +50,7 @@ See `examples/PLAN.md.example` for a complete example.
 
 ## Config file
 
-On first run, ClaudeLoop automatically creates `.claudeloop.conf` in the current directory with the active settings. You can then run `claudeloop` with no arguments and it will reuse those settings.
+On first run, ClaudeLoop automatically creates `.claudeloop/.claudeloop.conf` with the active settings. You can then run `claudeloop` with no arguments and it will reuse those settings.
 
 If you pass CLI arguments on a subsequent run, only the explicitly set keys are updated in the conf file.
 
@@ -70,7 +70,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `PHASE_PROMPT_FILE` | `--phase-prompt` | _(empty)_ |
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
 
-Example `.claudeloop.conf`:
+Example `.claudeloop/.claudeloop.conf`:
 
 ```
 PLAN_FILE=my-plan.md
@@ -107,7 +107,7 @@ Phase: {{PHASE_NUM}}
 
 **Append mode** — if the template contains no `{{}}` placeholders, the phase data is appended as a markdown block at the end of your template. Useful for static system-level instructions.
 
-You can also set the template path in `.claudeloop.conf`:
+You can also set the template path in `.claudeloop/.claudeloop.conf`:
 
 ```
 PHASE_PROMPT_FILE=prompts/my-template.md
