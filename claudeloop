@@ -99,7 +99,13 @@ load_state() {
 
   # Simple parsing of JSON (basic implementation)
   if grep -q '"interrupted": true' "$STATE_FILE"; then
+    _phase=$(grep '"current_phase"' "$STATE_FILE" | sed 's/.*"current_phase": *"\([^"]*\)".*/\1/')
+
     print_warning "Found interrupted session"
+    if [ -n "$_phase" ]; then
+      _title=$(eval "echo \"\$PHASE_TITLE_$_phase\"")
+      printf '  Phase %s: %s\n' "$_phase" "$_title"
+    fi
     printf 'Resume from last checkpoint? (Y/n) '
     read -r response
     case "$response" in

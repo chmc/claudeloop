@@ -447,6 +447,23 @@ PROGRESS
 # =============================================================================
 # Resume: header shows correct completed count
 # =============================================================================
+@test "integration: resume prompt shows interrupted phase title" {
+  mkdir -p "$TEST_DIR/.claudeloop/state"
+  cat > "$TEST_DIR/.claudeloop/state/current.json" << 'EOF'
+{
+  "plan_file": "PLAN.md",
+  "progress_file": ".claudeloop/PROGRESS.md",
+  "current_phase": "2",
+  "interrupted": true,
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+EOF
+  # Answer N to decline resuming; check phase info appears in the resume prompt block
+  run sh -c "cd '$TEST_DIR' && echo 'N' | '$CLAUDELOOP' --plan PLAN.md"
+  # "Phase 2: Build" must appear within 2 lines of the "Found interrupted" warning
+  echo "$output" | grep -A2 "Found interrupted" | grep -q "Phase 2.*Build"
+}
+
 @test "integration: initial header shows correct completed count when resuming" {
   # Write a PROGRESS.md with phase 1 already completed
   mkdir -p "$TEST_DIR/.claudeloop"
