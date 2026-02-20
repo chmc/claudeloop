@@ -4,7 +4,25 @@
 
 A phase-by-phase execution tool that spawns fresh Claude CLI instances for each phase of a multi-phase plan, preventing context degradation and ensuring focused execution.
 
-**→ [QUICKSTART.md](QUICKSTART.md)** — install and run in minutes
+## Install / Update
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+```
+
+```sh
+claudeloop --version   # verify installation
+```
+
+For full setup instructions see **[QUICKSTART.md](QUICKSTART.md)**.
+
+
+**Uninstall:**
+```sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
+```
+
+Releases and changelogs: [GitHub Releases](https://github.com/chmc/claudeloop/releases).
 
 ## Why ClaudeLoop?
 
@@ -170,20 +188,6 @@ To watch a phase log in real time in another terminal:
 bats tests/test_parser.sh       # run one test file
 shellcheck -s sh lib/retry.sh   # lint
 ```
-
-## Versioning & updates
-
-```sh
-claudeloop --version   # check installed version
-
-# Update to latest
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
-
-# Uninstall
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
-```
-
-Releases and changelogs are available on [GitHub Releases](https://github.com/chmc/claudeloop/releases).
 
 ## Credits
 
