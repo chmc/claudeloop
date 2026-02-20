@@ -30,7 +30,7 @@ print_header() {
   done
 
   echo "═══════════════════════════════════════════════════════════"
-  echo "ClaudeLoop - Phase-by-Phase Execution"
+  echo "ClaudeLoop${VERSION:+ v${VERSION}} - Phase-by-Phase Execution"
   echo "═══════════════════════════════════════════════════════════"
   echo "Plan: $plan_file"
   echo "Progress: $completed/$PHASE_COUNT phases completed"

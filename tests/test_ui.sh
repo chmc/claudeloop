@@ -53,6 +53,13 @@ setup() {
   [[ "$output" == *"Progress: 0/3 phases completed"* ]]
 }
 
+@test "print_header: shows version from VERSION variable" {
+  VERSION="9.8.7"
+  run print_header "PLAN.md"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"v9.8.7"* ]]
+}
+
 # --- print_phase_status() ---
 
 @test "print_phase_status: shows checkmark for completed phase" {
