@@ -91,6 +91,61 @@ run_uninstaller() {
   ! echo "$output" | grep -q "not in your PATH"
 }
 
+# --- PATH auto-configuration ---
+
+@test "install: writes export line to profile when BIN_DIR not in PATH" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  grep -q "export PATH=" "$tmp_home/.zshrc"
+  rm -rf "$tmp_home"
+}
+
+@test "install: writes begin marker to profile when BIN_DIR not in PATH" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  grep -qF "# >>> claudeloop PATH begin <<<" "$tmp_home/.zshrc"
+  rm -rf "$tmp_home"
+}
+
+@test "install: writes end marker to profile when BIN_DIR not in PATH" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  grep -qF "# >>> claudeloop PATH end <<<" "$tmp_home/.zshrc"
+  rm -rf "$tmp_home"
+}
+
+@test "install: marker block appears exactly once when run twice (idempotent)" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  run_installer
+  count=$(grep -cF "# >>> claudeloop PATH begin <<<" "$tmp_home/.zshrc")
+  [ "$count" -eq 1 ]
+  rm -rf "$tmp_home"
+}
+
+@test "install: does not touch profile when BIN_DIR already in PATH" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  export PATH="$BIN_DIR_OVERRIDE:$PATH"
+  run_installer
+  [ ! -f "$tmp_home/.zshrc" ]
+  rm -rf "$tmp_home"
+}
+
 # --- uninstall.sh ---
 
 @test "uninstall: exits successfully" {
@@ -125,4 +180,38 @@ run_uninstaller() {
 @test "uninstall: prints uninstalled message when nothing was installed" {
   run_uninstaller
   echo "$output" | grep -q "uninstalled"
+}
+
+# --- uninstall PATH cleanup ---
+
+@test "uninstall: removes marker block from profile after install" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  run_uninstaller
+  ! grep -qF "# >>> claudeloop PATH begin <<<" "$tmp_home/.zshrc"
+  rm -rf "$tmp_home"
+}
+
+@test "uninstall: succeeds when marker block was never written" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_uninstaller
+  [ "$status" -eq 0 ]
+  rm -rf "$tmp_home"
+}
+
+@test "uninstall: prints 'Removed PATH entry' message" {
+  local tmp_home
+  tmp_home=$(mktemp -d)
+  export HOME="$tmp_home"
+  export SHELL="/bin/zsh"
+  run_installer
+  run_uninstaller
+  echo "$output" | grep -q "Removed PATH entry"
+  rm -rf "$tmp_home"
 }

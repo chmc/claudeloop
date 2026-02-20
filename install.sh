@@ -77,13 +77,39 @@ chmod +x "$BIN_DIR/$BIN_NAME"
 
 echo "claudeloop v${VERSION} installed → $BIN_DIR/$BIN_NAME"
 
-# PATH warning if needed
+# PATH auto-configuration
+MARKER_BEGIN="# >>> claudeloop PATH begin <<<"
+MARKER_END="# >>> claudeloop PATH end <<<"
+
+detect_profile() {
+  case "${SHELL:-}" in
+    */zsh)  printf '%s\n' "$HOME/.zshrc" ;;
+    */bash)
+      case "$(uname -s)" in
+        Darwin) printf '%s\n' "$HOME/.bash_profile" ;;
+        *)      printf '%s\n' "$HOME/.bashrc" ;;
+      esac
+      ;;
+    *)      printf '%s\n' "$HOME/.profile" ;;
+  esac
+}
+
 case ":${PATH}:" in
   *":$BIN_DIR:"*) ;;
   *)
-    echo ""
-    echo "Warning: $BIN_DIR is not in your PATH."
-    echo "Add this to your shell profile (~/.zshrc, ~/.bashrc, or ~/.profile):"
-    echo "  export PATH=\"$BIN_DIR:\$PATH\""
+    _profile=$(detect_profile)
+    if grep -qF "$MARKER_BEGIN" "$_profile" 2>/dev/null; then
+      echo ""
+      echo "Warning: $BIN_DIR is not in your PATH."
+      echo "PATH entry already present in $_profile — open a new shell or run:"
+      echo "  source $_profile"
+    else
+      printf '\n%s\nexport PATH="%s:$PATH"\n%s\n' \
+        "$MARKER_BEGIN" "$BIN_DIR" "$MARKER_END" >> "$_profile"
+      echo ""
+      echo "Warning: $BIN_DIR is not in your PATH."
+      echo "Added PATH entry to $_profile"
+      echo "To apply now, run: source $_profile"
+    fi
     ;;
 esac
