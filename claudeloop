@@ -47,6 +47,8 @@ VERBOSE_MODE=false
 SKIP_PERMISSIONS=false
 STREAM_TRUNCATE_LEN=300
 HOOKS_ENABLED=false
+LIVE_LOG=""
+MONITOR_MODE=false
 
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
@@ -388,6 +390,7 @@ Options:
   --yes, -y              Non-interactive mode: auto-answer all prompts
                          (enabled automatically when running inside Claude Code)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
+  --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
   --help                 Show this help message
 
@@ -458,6 +461,10 @@ parse_args() {
       --version|-V)
         printf '%s\n' "$VERSION"
         exit 0
+        ;;
+      --monitor)
+        MONITOR_MODE=true
+        shift
         ;;
       --help|-h)
         usage
@@ -668,6 +675,7 @@ Implement the above phase completely. Make sure to:
     _claude_debug_flag="--debug-file .claudeloop/logs/phase-$phase_num.claude.debug"
   fi
   echo "Executing Claude CLI..."
+  [ -n "${LIVE_LOG:-}" ] && echo "Executing Claude CLI..." >> "$LIVE_LOG" || true
   {
     _rc=0
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
@@ -683,7 +691,7 @@ Implement the above phase completely. Make sure to:
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED"
+  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}"
 
   local claude_exit=1
   if [ -f "$_exit_tmp" ]; then
@@ -868,6 +876,50 @@ main_loop() {
   done
 }
 
+# Monitor mode: follow .claudeloop/live.log of a running claudeloop instance
+run_monitor() {
+  trap 'printf "\n"; exit 0' INT TERM
+  trap - EXIT   # don't run cleanup — monitor never owns the lock
+
+  local _live_log=".claudeloop/live.log"
+  local _max_wait="${_MONITOR_WAIT_TIMEOUT:-30}"
+  local _wait=0
+
+  while [ ! -f "$_live_log" ]; do
+    if [ "$_wait" -ge "$_max_wait" ]; then
+      print_error "No live log found in .claudeloop/ after ${_max_wait}s"
+      printf 'Start claudeloop first: claudeloop --plan PLAN.md\n'
+      exit 1
+    fi
+    printf 'Waiting for claudeloop to start...\r'
+    sleep 1
+    _wait=$((_wait + 1))
+  done
+
+  local _running=false _lock_pid=""
+  if [ -f "$LOCK_FILE" ]; then
+    _lock_pid=$(cat "$LOCK_FILE" 2>/dev/null || true)
+    [ -n "$_lock_pid" ] && kill -0 "$_lock_pid" 2>/dev/null && _running=true
+  fi
+
+  printf '\n'
+  if [ "$_running" = true ]; then
+    printf '%b● RUNNING%b  PID: %s  |  Plan: %s\n' \
+      "$COLOR_GREEN" "$COLOR_RESET" "$_lock_pid" "$PLAN_FILE"
+  else
+    printf '%b○ COMPLETED%b  Plan: %s\n' \
+      "$COLOR_YELLOW" "$COLOR_RESET" "$PLAN_FILE"
+  fi
+  printf 'Following .claudeloop/live.log — Ctrl+C to stop\n\n'
+
+  if [ -n "${_MONITOR_NO_FOLLOW:-}" ]; then
+    tail -n 20 "$_live_log" 2>/dev/null || true
+    return 0
+  fi
+
+  tail -f "$_live_log"
+}
+
 # Main function
 main() {
   # Set up signal handlers and cleanup
@@ -896,6 +948,12 @@ main() {
   if [ -n "${CLAUDECODE:-}" ] && [ "$YES_MODE" = "false" ]; then
     print_warning "Running inside Claude Code — enabling non-interactive mode (--yes)."
     YES_MODE=true
+  fi
+
+  # Monitor mode: follow live output of a running instance (never runs setup/execution)
+  if [ "$MONITOR_MODE" = "true" ]; then
+    run_monitor
+    exit 0
   fi
 
   print_logo
@@ -931,6 +989,9 @@ main() {
   if ! $DRY_RUN; then
     validate_environment
     setup_project
+    # Initialize live log for this run (truncate previous content)
+    LIVE_LOG=".claudeloop/live.log"
+    > "$LIVE_LOG"
   fi
 
   # Check for interrupted session (skip in dry-run and reset)

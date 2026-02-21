@@ -63,6 +63,7 @@ See `examples/PLAN.md.example` for a complete example.
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
+--monitor            Watch live output of a running claudeloop instance
 --version, -V        Print version and exit
 --help               Show help
 ```
@@ -165,11 +166,15 @@ claudeloop/
 
 ## Output and logs
 
-Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`.
+Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`. ClaudeLoop also writes a combined live log to `.claudeloop/live.log`.
 
-To watch a phase log in real time in another terminal:
+To watch progress live from a second terminal, use:
 
-    tail -f .claudeloop/logs/phase-1.log
+    claudeloop --monitor
+
+Or to tail the raw log directly:
+
+    tail -f .claudeloop/live.log
 
 ## Troubleshooting
 

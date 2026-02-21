@@ -13,6 +13,7 @@ Use conventional commits
 bats tests/test_parser.sh             # run one test file
 shellcheck -s sh lib/retry.sh         # lint (SC3043 local warnings are acceptable)
 ./claudeloop --plan examples/PLAN.md.example --dry-run
+claudeloop --monitor  # watch live output from a second terminal
 ```
 
 ## Architecture
@@ -28,6 +29,7 @@ PHASE_STATUS_N        (pending|in_progress|completed|failed)
 PHASE_ATTEMPTS_N      PHASE_START_TIME_N     PHASE_END_TIME_N
 PHASE_COUNT           (total number of phases)
 PHASE_NUMBERS         (space-separated ordered list, e.g. "1 2 2.5 2.6 3")
+LIVE_LOG              (path to .claudeloop/live.log; empty string during dry-run)
 ```
 
 Phase numbers may be decimals (e.g. `2.5`). The dot is replaced with underscore for variable
@@ -71,7 +73,10 @@ main → parse_plan → init_progress → main_loop
   find_next_phase → execute_phase → update_phase_status → write_progress
   on failure:  should_retry_phase → calculate_backoff → sleep → retry
   on Ctrl+C:   handle_interrupt → write_progress → save_state → exit 130
+  --monitor:   run_monitor → tail -f .claudeloop/live.log
 ```
+
+All `print_*` output (via `lib/ui.sh`) and stream processor output are teed to `.claudeloop/live.log` via `LIVE_LOG` (set in `main()` after `setup_project`; empty during dry-run).
 
 ### POSIX migration
 

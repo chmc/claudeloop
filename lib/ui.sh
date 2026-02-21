@@ -13,6 +13,9 @@ COLOR_RESET='\033[0m'
 # Simple mode flag (no fancy UI)
 SIMPLE_MODE="${SIMPLE_MODE:-false}"
 
+# Write a line to the live log (no-op when LIVE_LOG is unset)
+log_live() { [ -n "${LIVE_LOG:-}" ] && printf '%b\n' "$@" >> "$LIVE_LOG" || true; }
+
 # Print startup logo (space ghost)
 print_logo() {
   [ "$SIMPLE_MODE" = "true" ] && return 0
@@ -118,31 +121,40 @@ print_phase_exec_header() {
   timestamp=$(date "+%H:%M:%S")
 
   echo ""
+  log_live ""
   echo "───────────────────────────────────────────────────────────"
+  log_live "───────────────────────────────────────────────────────────"
   printf '%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title${COLOR_RESET}"
+  log_live "[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title"
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
+    log_live "Attempt $attempt/$MAX_RETRIES"
   fi
   echo "───────────────────────────────────────────────────────────"
+  log_live "───────────────────────────────────────────────────────────"
   echo ""
+  log_live ""
 }
 
 # Print success message
 print_success() {
   local message="$1"
   printf '%b\n' "${COLOR_GREEN}✓ $message${COLOR_RESET}"
+  log_live "✓ $message"
 }
 
 # Print error message
 print_error() {
   local message="$1"
   printf '%b\n' "${COLOR_RED}✗ $message${COLOR_RESET}" >&2
+  log_live "✗ $message"
 }
 
 # Print warning message
 print_warning() {
   local message="$1"
   printf '%b\n' "${COLOR_YELLOW}⚠ $message${COLOR_RESET}"
+  log_live "⚠ $message"
 }
 
 # Print quota wait message
@@ -152,5 +164,7 @@ print_quota_wait() {
   local wait_mins
   wait_mins=$(( wait_secs / 60 ))
   printf '%b\n' "${COLOR_YELLOW}⏸ Phase $phase_num: usage limit reached. Waiting ${wait_secs}s (${wait_mins}m) before retrying...${COLOR_RESET}"
+  log_live "⏸ Phase $phase_num: usage limit reached. Waiting ${wait_secs}s (${wait_mins}m) before retrying..."
   printf '%b\n' "${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
+  log_live "  Press Ctrl+C to stop and save state."
 }

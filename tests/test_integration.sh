@@ -523,6 +523,16 @@ EOF
 }
 
 # =============================================================================
+# Scenario 17: execution creates non-empty live.log
+# =============================================================================
+@test "execution creates non-empty live.log" {
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  [ -s "$TEST_DIR/.claudeloop/live.log" ]
+  grep -q "Phase 1" "$TEST_DIR/.claudeloop/live.log"
+}
+
+# =============================================================================
 # Scenario 16: CLAUDECODE env var is stripped before spawning claude
 # =============================================================================
 @test "integration: CLAUDECODE is unset before spawning claude processes" {

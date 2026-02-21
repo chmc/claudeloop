@@ -10,9 +10,11 @@ process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
   local hooks_enabled="${3:-false}"
+  local live_log="${4:-}"
   awk -v log_file="$log_file" -v raw_log="$raw_log" \
       -v trunc_len="${STREAM_TRUNCATE_LEN:-300}" \
-      -v hooks_enabled="$hooks_enabled" '
+      -v hooks_enabled="$hooks_enabled" \
+      -v live_log="$live_log" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -85,6 +87,7 @@ process_stream_json() {
     spinner_start = 0
     last_rate_limit_pct = 0
     printf "[%s]\n", get_time()
+    if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
   }
 
@@ -95,6 +98,7 @@ process_stream_json() {
     if (substr(line, 1, 1) != "{") {
       print line
       print line >> log_file
+      if (live_log != "") { print line >> live_log; fflush(live_log) }
       next
     }
 
@@ -109,9 +113,13 @@ process_stream_json() {
           at_line_start = 1
         }
         spinner_start = 0
-        if (at_line_start) printf "[%s] ", get_time()
+        if (at_line_start) {
+          printf "[%s] ", get_time()
+          if (live_log != "") printf "[%s] ", get_time() >> live_log
+        }
         printf "%s", text
         printf "%s", text >> log_file
+        if (live_log != "") { printf "%s", text >> live_log; fflush(live_log) }
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
@@ -144,10 +152,16 @@ process_stream_json() {
           if (desc != "" && preview != "") preview = preview " \342\200\224 " trunc(desc, 80)
           else if (desc != "")             preview = trunc(desc, 80)
           if (hooks_enabled != "true") {
-            if (preview != "") printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
-            else               printf "  [Tool: %s]\n",    name         > "/dev/stderr"
+            if (preview != "") {
+              printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+              if (live_log != "") printf "  [Tool: %s] %s\n", name, preview >> live_log
+            } else {
+              printf "  [Tool: %s]\n", name > "/dev/stderr"
+              if (live_log != "") printf "  [Tool: %s]\n", name >> live_log
+            }
           }
         }
+        if (live_log != "") fflush(live_log)
       } else {
         now = get_epoch()
         if (spinner_start == 0) {
@@ -163,6 +177,7 @@ process_stream_json() {
       if (stop == "max_tokens") {
         if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
         printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" > "/dev/stderr"
+        if (live_log != "") { printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" >> live_log; fflush(live_log) }
       }
 
     } else if (etype == "tool_use") {
@@ -192,8 +207,10 @@ process_stream_json() {
       if (hooks_enabled != "true") {
         if (preview != "") {
           printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+          if (live_log != "") { printf "  [Tool: %s] %s\n", name, preview >> live_log; fflush(live_log) }
         } else {
           printf "  [Tool: %s]\n", name > "/dev/stderr"
+          if (live_log != "") { printf "  [Tool: %s]\n", name >> live_log; fflush(live_log) }
         }
       }
 
@@ -225,6 +242,7 @@ process_stream_json() {
         }
       }
       printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) > "/dev/stderr"
+      if (live_log != "") { printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) >> live_log; fflush(live_log) }
 
     } else if (etype == "user") {
       tool_result = extract(line, "tool_use_result")
@@ -233,6 +251,7 @@ process_stream_json() {
         spinner_start = 0
         is_err = (index(line, "\"is_error\":true") > 0) ? " [error]" : ""
         printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) > "/dev/stderr"
+        if (live_log != "") { printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
       }
 
     } else if (etype == "result") {
@@ -259,6 +278,7 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
+      if (live_log != "") { print summary >> live_log; fflush(live_log) }
 
     } else if (etype == "rate_limit_event") {
       util = extract(line, "utilization")
@@ -267,6 +287,7 @@ process_stream_json() {
         if (pct > last_rate_limit_pct) {
           if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
           printf "  [Rate limit: %d%% of 7-day quota used]\n", pct > "/dev/stderr"
+          if (live_log != "") { printf "  [Rate limit: %d%% of 7-day quota used]\n", pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
         }
       }
@@ -276,6 +297,7 @@ process_stream_json() {
       if (subtype_val == "init") {
         model_s = extract(line, "model")
         if (model_s != "") printf "[%s] model=%s\n", get_time(), model_s > "/dev/stderr"
+        if (model_s != "" && live_log != "") { printf "[%s] model=%s\n", get_time(), model_s >> live_log; fflush(live_log) }
       }
 
     } else {
@@ -295,6 +317,6 @@ process_stream_json() {
 
 _self="${0##*/}"
 if [ "$_self" = "stream_processor.sh" ]; then
-  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled]\n' >&2; exit 1; }
-  process_stream_json "$1" "$2" "${3:-false}"
+  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log]\n' >&2; exit 1; }
+  process_stream_json "$1" "$2" "${3:-false}" "${4:-}"
 fi

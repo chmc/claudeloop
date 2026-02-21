@@ -71,6 +71,7 @@ claudeloop --phase 3           # start from a specific phase
 claudeloop --dry-run           # validate without executing
 claudeloop --dangerously-skip-permissions  # skip write permission prompts
 claudeloop --phase-prompt prompts/template.md  # use a custom prompt template
+claudeloop --monitor           # watch live output from a second terminal
 ```
 
 ## Full examples
