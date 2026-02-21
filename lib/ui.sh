@@ -13,6 +13,28 @@ COLOR_RESET='\033[0m'
 # Simple mode flag (no fancy UI)
 SIMPLE_MODE="${SIMPLE_MODE:-false}"
 
+# Print startup logo (space ghost)
+print_logo() {
+  [ "$SIMPLE_MODE" = "true" ] && return 0
+  printf '%b' "${COLOR_BLUE}"
+  cat <<'EOF'
+    *  ·  .  *  ·  .  *  ·  .
+
+          .-""""""""-.
+    .    /  ◉      ◉  \    .
+     ·  |    .---.     |   ·
+    .   |   /~~~~~\    |    .
+     ·   \  `-----'   /   ·
+    .     `.~~~~~~~~~.'     .
+     ·   /  )       (  \   ·
+    .   /  /  ) ( (  \  \   .
+        ~~   ~~   ~~   ~~
+
+EOF
+  printf '%b' "${COLOR_RESET}"
+  printf '        claudeloop%s\n\n' "${VERSION:+ v${VERSION}}"
+}
+
 # Print header
 print_header() {
   local plan_file="$1"

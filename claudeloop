@@ -850,6 +850,8 @@ main() {
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
 
+  print_logo
+
   # Run setup wizard on first launch (no conf, interactive stdin, not dry-run)
   run_setup_wizard
 
