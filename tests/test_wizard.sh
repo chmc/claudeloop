@@ -238,3 +238,40 @@ _cl_wizard() {
   [ "$status" -ne 0 ]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
 }
+
+# =============================================================================
+# setup_project: .gitignore management
+# =============================================================================
+
+# Helper: replace setup()'s pre-baked .gitignore with one that lacks .claudeloop/
+# and re-commit so validate_environment sees a clean tree.
+_reset_gitignore_without_claudeloop() {
+  printf 'node_modules/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "gitignore without claudeloop"
+}
+
+@test "setup_project: auto-adds .claudeloop/ to existing .gitignore (non-interactive)" {
+  _reset_gitignore_without_claudeloop
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
+}
+
+@test "setup_project: auto-creates .gitignore when none exists (non-interactive)" {
+  git -C "$TEST_DIR" rm -q .gitignore
+  git -C "$TEST_DIR" commit -q -m "remove gitignore"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
+}
+
+# Regression guard (passes even without the fix — ensures no-op stays a no-op after fix)
+@test "setup_project: no-op when .claudeloop/ already in .gitignore" {
+  # setup() pre-creates .gitignore with .claudeloop/ — should remain exactly as-is
+  local before
+  before=$(cat "$TEST_DIR/.gitignore")
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/.gitignore")" = "$before" ]
+}

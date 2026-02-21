@@ -504,20 +504,24 @@ validate_environment() {
 setup_project() {
   if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
     if [ ! -f ".gitignore" ]; then
-      printf 'No .gitignore found. Create one? (Y/n) '
-      read -r response || return 0
-      case "$response" in
-        [Nn]) return 0 ;;
-      esac
+      if [ -t 0 ]; then
+        printf 'No .gitignore found. Create one? (Y/n) '
+        read -r response || true
+        case "$response" in
+          [Nn]) return 0 ;;
+        esac
+      fi
       printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
       print_success "Created .gitignore"
       _add_platform_gitignore silent
     else
-      printf 'Add .claudeloop/ to .gitignore? (Y/n) '
-      read -r response || return 0
-      case "$response" in
-        [Nn]) return 0 ;;
-      esac
+      if [ -t 0 ]; then
+        printf 'Add .claudeloop/ to .gitignore? (Y/n) '
+        read -r response || true
+        case "$response" in
+          [Nn]) return 0 ;;
+        esac
+      fi
       printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
       print_success "Added .claudeloop/ to .gitignore"
       _add_platform_gitignore silent

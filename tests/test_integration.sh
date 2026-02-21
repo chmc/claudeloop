@@ -375,11 +375,13 @@ PROGRESS
   grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
 }
 
-@test "setup_project: does not create .gitignore when user says no" {
+@test "setup_project: non-interactive always creates .gitignore (pipe input ignored)" {
   rm -f "$TEST_DIR/.gitignore"
+  # In non-interactive (piped) mode stdin is not a TTY — auto-creates regardless of pipe content
   run sh -c "printf 'n\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md)"
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_DIR/.gitignore" ]
+  [ -f "$TEST_DIR/.gitignore" ]
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
 }
 
 @test "setup_project: patches existing .gitignore missing .claudeloop/" {
