@@ -526,6 +526,29 @@ EOF
   [ "$output" = "$("$CLAUDELOOP" --version)" ]
 }
 
+# =============================================================================
+# Scenario 16: CLAUDECODE env var is stripped before spawning claude
+# =============================================================================
+@test "integration: CLAUDECODE is unset before spawning claude processes" {
+  # Embed TEST_DIR into the stub at write-time so the path is resolved now
+  cat > "$TEST_DIR/bin/claude" << EOF
+#!/bin/sh
+if [ -n "\${CLAUDECODE:-}" ]; then exit 99; fi
+count_file="$TEST_DIR/claude_call_count"
+count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+count=\$((count + 1))
+printf '%s\n' "\$count" > "\$count_file"
+printf 'stub output for call %s\n' "\$count"
+exit 0
+EOF
+  chmod +x "$TEST_DIR/bin/claude"
+
+  CLAUDECODE=1 run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md"
+  # If CLAUDECODE leaked into the stub, it would exit 99 and the phase would fail
+  [ "$status" -eq 0 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
 @test "integration: initial header shows correct completed count when resuming" {
   # Write a PROGRESS.md with phase 1 already completed
   mkdir -p "$TEST_DIR/.claudeloop"

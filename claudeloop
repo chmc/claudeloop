@@ -498,6 +498,10 @@ validate_environment() {
     exit 1
   fi
 
+  if [ -n "${CLAUDECODE:-}" ]; then
+    print_warning "Running inside Claude Code — CLAUDECODE will be unset for spawned claude processes."
+  fi
+
 }
 
 # Offer to set up .gitignore for claudeloop artifacts
@@ -641,6 +645,7 @@ Implement the above phase completely. Make sure to:
   echo "Executing Claude CLI..."
   {
     _rc=0
+    unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
     if [ "$SKIP_PERMISSIONS" = "true" ]; then
       # shellcheck disable=SC2086
       echo "$prompt" | claude --print --dangerously-skip-permissions \
