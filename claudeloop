@@ -55,6 +55,9 @@ _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
 
+# Session-level non-interactive mode: auto-answer all prompts (NOT persisted to conf)
+YES_MODE="${YES_MODE:-false}"
+
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
   [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
@@ -267,8 +270,12 @@ load_state() {
       _title=$(eval "echo \"\$PHASE_TITLE_$(phase_to_var "$_phase")\"")
       printf '  Phase %s: %s\n' "$_phase" "$_title"
     fi
-    printf 'Resume from last checkpoint? (Y/n) '
-    read -r response
+    if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+      response="y"
+    else
+      printf 'Resume from last checkpoint? (Y/n) '
+      read -r response
+    fi
     case "$response" in
       [Nn])
         rm -f "$STATE_FILE"
@@ -378,6 +385,8 @@ Options:
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
+  --yes, -y              Non-interactive mode: auto-answer all prompts
+                         (enabled automatically when running inside Claude Code)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --version, -V          Print version and exit
   --help                 Show this help message
@@ -438,6 +447,10 @@ parse_args() {
         VERBOSE_MODE=true
         shift
         ;;
+      --yes|-y)
+        YES_MODE=true
+        shift
+        ;;
       --dangerously-skip-permissions)
         SKIP_PERMISSIONS=true; _CLI_SKIP_PERMISSIONS=1
         shift
@@ -464,8 +477,12 @@ validate_environment() {
   # Check if in git repository
   if ! git rev-parse --git-dir > /dev/null 2>&1; then
     print_error "Not in a git repository. ClaudeLoop requires git for safety."
-    printf 'Initialize a git repository here? (Y/n) '
-    read -r response
+    if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+      response="y"
+    else
+      printf 'Initialize a git repository here? (Y/n) '
+      read -r response
+    fi
     case "$response" in
       [Nn])
         echo "Aborted."
@@ -481,25 +498,25 @@ validate_environment() {
   # Check for uncommitted changes
   if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     print_warning "Uncommitted changes detected. Consider committing before starting."
-    printf 'Continue anyway? (y/N) '
-    read -r response
-    case "$response" in
-      [Yy]) ;;  # Continue
-      *)
-        echo "Aborted."
-        exit 0
-        ;;
-    esac
+    if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
+      printf 'Continue anyway? (y/N) '
+      read -r response
+      case "$response" in
+        [Yy]) ;;
+        *) echo "Aborted."; exit 0 ;;
+      esac
+    elif [ "$YES_MODE" = "true" ]; then
+      : # continue — unattended mode
+    else
+      print_error "Uncommitted changes detected. Use --yes to proceed non-interactively."
+      exit 1
+    fi
   fi
 
   # Check if claude CLI is available
   if ! command -v claude > /dev/null 2>&1; then
     print_error "claude CLI not found. Please install it first."
     exit 1
-  fi
-
-  if [ -n "${CLAUDECODE:-}" ]; then
-    print_warning "Running inside Claude Code — CLAUDECODE will be unset for spawned claude processes."
   fi
 
 }
@@ -543,8 +560,12 @@ _add_platform_gitignore() {
       if [ "$silent" = "silent" ]; then
         printf '\n# macOS\n.DS_Store\n._*\n' >> .gitignore
       else
-        printf 'Add macOS-specific ignores (.DS_Store, ._*)? (Y/n) '
-        read -r response || return 0
+        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+          response="y"
+        else
+          printf 'Add macOS-specific ignores (.DS_Store, ._*)? (Y/n) '
+          read -r response || return 0
+        fi
         case "$response" in
           [Nn]) ;;
           *) printf '\n# macOS\n.DS_Store\n._*\n' >> .gitignore ;;
@@ -555,8 +576,12 @@ _add_platform_gitignore() {
       if [ "$silent" = "silent" ]; then
         printf '\n# Windows\nThumbs.db\ndesktop.ini\n' >> .gitignore
       else
-        printf 'Add Windows-specific ignores (Thumbs.db, desktop.ini)? (Y/n) '
-        read -r response || return 0
+        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+          response="y"
+        else
+          printf 'Add Windows-specific ignores (Thumbs.db, desktop.ini)? (Y/n) '
+          read -r response || return 0
+        fi
         case "$response" in
           [Nn]) ;;
           *) printf '\n# Windows\nThumbs.db\ndesktop.ini\n' >> .gitignore ;;
@@ -798,8 +823,12 @@ main_loop() {
       fi
       if is_empty_log "$_log_file"; then
         print_error "Phase $next_phase: Claude produced no output (empty log). Check the claude CLI."
-        printf 'Press Enter to retry phase %s once the issue is resolved, or Ctrl+C to abort: ' "$next_phase"
-        read -r _dummy 2>/dev/null || return 1
+        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+          return 1
+        else
+          printf 'Press Enter to retry phase %s once the issue is resolved, or Ctrl+C to abort: ' "$next_phase"
+          read -r _dummy 2>/dev/null || return 1
+        fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
         eval "PHASE_STATUS_${_npv}=pending"
@@ -809,8 +838,12 @@ main_loop() {
       if is_permission_error "$_log_file"; then
         print_error "Phase $next_phase: Claude requested write permissions."
         print_warning "Grant the permission in the Claude UI (or re-run with --dangerously-skip-permissions)."
-        printf 'Press Enter to retry phase %s, or Ctrl+C to abort: ' "$next_phase"
-        read -r _dummy 2>/dev/null || return 1
+        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+          return 1
+        else
+          printf 'Press Enter to retry phase %s, or Ctrl+C to abort: ' "$next_phase"
+          read -r _dummy 2>/dev/null || return 1
+        fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
         eval "PHASE_STATUS_${_npv}=pending"
@@ -858,6 +891,12 @@ main() {
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
+
+  # Auto-enable non-interactive mode when running inside Claude Code
+  if [ -n "${CLAUDECODE:-}" ] && [ "$YES_MODE" = "false" ]; then
+    print_warning "Running inside Claude Code — enabling non-interactive mode (--yes)."
+    YES_MODE=true
+  fi
 
   print_logo
 

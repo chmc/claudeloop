@@ -344,22 +344,18 @@ PROGRESS
 }
 
 # =============================================================================
-# Scenario 13: Permission error pauses then retries after Enter
+# Scenario 13: Permission error in non-TTY mode fails immediately
 # =============================================================================
-@test "integration: permission error pauses then retries after Enter" {
-  # Pre-create .gitignore so the gitignore prompt doesn't consume the piped newline
+@test "integration: permission error in non-TTY mode fails immediately" {
   printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
-  # Call 1: outputs permission prompt (exit 0); Call 2: success; Call 3: phase 2 success
-  printf "write permissions haven't been granted\n\n\n" \
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  # Call 1: outputs permission prompt text; exit 0 (permission check reads output)
+  printf "write permissions haven't been granted\n" \
     > "$TEST_DIR/claude_custom_outputs"
-  # Pipe a newline to simulate user pressing Enter at the permission prompt
-  run sh -c "printf '\n' | (cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 2)"
-  [ "$status" -eq 0 ]
-  [ "$(_completed_count)" -eq 2 ]
-  # Phase 1 retried: 2 claude calls for phase 1, 1 for phase 2
-  [ "$(_call_count)" -eq 3 ]
-  # Attempt counter not inflated by the pause
-  grep -A5 "Phase 1: Setup" "$TEST_DIR/.claudeloop/PROGRESS.md" | grep -q "Attempts: 1"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 2"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qi "permission"
 }
 
 # =============================================================================
@@ -580,4 +576,89 @@ PROGRESS
   # The FIRST occurrence of "Progress:" in output must show 1/2, not 0/2
   first_progress=$(echo "$output" | grep "Progress:" | head -1)
   [[ "$first_progress" == *"Progress: 1/2 phases completed"* ]]
+}
+
+# =============================================================================
+# YES_MODE / --yes flag
+# =============================================================================
+
+@test "yes_mode: --yes skips uncommitted-changes prompt and continues" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  # Modify a tracked file without committing → uncommitted changes
+  printf '\n# extra line\n' >> "$TEST_DIR/PLAN.md"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --yes"
+  [ "$status" -eq 0 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+@test "yes_mode: non-TTY without --yes exits non-zero when uncommitted changes detected" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  # Modify a tracked file without committing → uncommitted changes
+  printf '\n# extra line\n' >> "$TEST_DIR/PLAN.md"
+
+  # Unset CLAUDECODE so YES_MODE is not auto-enabled by the parent environment
+  run sh -c "exec </dev/null; unset CLAUDECODE; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qi "uncommitted"
+}
+
+@test "yes_mode: --yes auto-resumes interrupted session without prompting" {
+  mkdir -p "$TEST_DIR/.claudeloop/state"
+  cat > "$TEST_DIR/.claudeloop/state/current.json" << 'EOF'
+{
+  "plan_file": "PLAN.md",
+  "progress_file": ".claudeloop/PROGRESS.md",
+  "current_phase": "1",
+  "interrupted": true,
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+EOF
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 1
+- In progress: 0
+- Pending: 1
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+
+### ⏳ Phase 2: Build
+Status: pending
+PROGRESS
+
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --yes"
+  [ "$status" -eq 0 ]
+  # Only 1 call: phase 1 already completed, phase 2 runs
+  [ "$(_call_count)" -eq 1 ]
+}
+
+@test "yes_mode: CLAUDECODE=1 enables yes-mode automatically" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  # Uncommitted changes that would normally error in non-TTY without --yes
+  printf '\n# extra line\n' >> "$TEST_DIR/PLAN.md"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && CLAUDECODE=1 '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  [ "$(_completed_count)" -eq 2 ]
 }
