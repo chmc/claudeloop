@@ -5,11 +5,14 @@
 #   sh lib/stream_processor.sh <log_file> <raw_log>
 
 # process_stream_json: parse stream-json from stdin
-# Args: $1 - log_file path, $2 - raw_log path
+# Args: $1 - log_file path, $2 - raw_log path, $3 - hooks_enabled (true|false, default false)
 process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
-  awk -v log_file="$log_file" -v raw_log="$raw_log" '
+  local hooks_enabled="${3:-false}"
+  awk -v log_file="$log_file" -v raw_log="$raw_log" \
+      -v trunc_len="${STREAM_TRUNCATE_LEN:-300}" \
+      -v hooks_enabled="$hooks_enabled" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -80,6 +83,7 @@ process_stream_json() {
     spinner = "|/-\\"
     spinner_idx = 0
     spinner_start = 0
+    last_rate_limit_pct = 0
     printf "[%s]\n", get_time()
     fflush()
   }
@@ -110,6 +114,40 @@ process_stream_json() {
         printf "%s", text >> log_file
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
+      } else if (index(line, "\"type\":\"tool_use\"") > 0) {
+        n_tools = split(line, tool_segs, "\"type\":\"tool_use\"")
+        for (ti = 2; ti <= n_tools; ti++) {
+          seg = tool_segs[ti]
+          tool_id = extract(seg, "id")
+          if (tool_id != "" && (tool_id in shown_tools)) continue
+          if (tool_id != "") shown_tools[tool_id] = 1
+          if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
+          spinner_start = 0
+          name = extract(seg, "name")
+          cmd = ""; fp = ""; pat = ""; url = ""; query = ""; npath = ""; stype = ""
+          if      (name == "Bash")                                      cmd   = extract(seg, "command")
+          else if (name == "Read" || name == "Write" || name == "Edit") fp    = extract(seg, "file_path")
+          else if (name == "Glob" || name == "Grep")                    pat   = extract(seg, "pattern")
+          else if (name == "WebFetch")                                   url   = extract(seg, "url")
+          else if (name == "WebSearch")                                  query = extract(seg, "query")
+          else if (name == "NotebookEdit")                               npath = extract(seg, "notebook_path")
+          else if (name == "Task")                                       stype = extract(seg, "subagent_type")
+          desc = extract(seg, "description")
+          if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
+          else if (fp    != "")  preview = trunc(fp,    trunc_len)
+          else if (pat   != "")  preview = trunc(pat,   trunc_len)
+          else if (url   != "")  preview = trunc(url,   trunc_len)
+          else if (query != "")  preview = trunc(query, trunc_len)
+          else if (npath != "")  preview = trunc(npath, trunc_len)
+          else if (stype != "")  preview = stype
+          else                   preview = ""
+          if (desc != "" && preview != "") preview = preview " \342\200\224 " trunc(desc, 80)
+          else if (desc != "")             preview = trunc(desc, 80)
+          if (hooks_enabled != "true") {
+            if (preview != "") printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+            else               printf "  [Tool: %s]\n",    name         > "/dev/stderr"
+          }
+        }
       } else {
         now = get_epoch()
         if (spinner_start == 0) {
@@ -121,6 +159,11 @@ process_stream_json() {
         at_line_start = 0
         spinner_idx++
       }
+      stop = extract(line, "stop_reason")
+      if (stop == "max_tokens") {
+        if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
+        printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" > "/dev/stderr"
+      }
 
     } else if (etype == "tool_use") {
       if (!at_line_start) {
@@ -130,14 +173,28 @@ process_stream_json() {
       }
       spinner_start = 0
       name = extract(line, "name")
-      preview = ""
-      if (name == "Bash") preview = extract(line, "command")
-      else if (name == "Read" || name == "Write" || name == "Edit") preview = extract(line, "file_path")
-      else if (name == "Glob" || name == "Grep") preview = extract(line, "pattern")
-      if (preview != "") {
-        printf "  [Tool: %s] %s\n", name, trunc(preview, 80) > "/dev/stderr"
-      } else {
-        printf "  [Tool: %s]\n", name > "/dev/stderr"
+      cmd = ""; fp = ""; pat = ""; url = ""; query = ""; npath = ""; stype = ""
+      if      (name == "Bash")                                      cmd   = extract(line, "command")
+      else if (name == "Read" || name == "Write" || name == "Edit") fp    = extract(line, "file_path")
+      else if (name == "Glob" || name == "Grep")                    pat   = extract(line, "pattern")
+      else if (name == "WebFetch")                                   url   = extract(line, "url")
+      else if (name == "WebSearch")                                  query = extract(line, "query")
+      else if (name == "NotebookEdit")                               npath = extract(line, "notebook_path")
+      else if (name == "Task")                                       stype = extract(line, "subagent_type")
+      if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
+      else if (fp    != "")  preview = trunc(fp,    trunc_len)
+      else if (pat   != "")  preview = trunc(pat,   trunc_len)
+      else if (url   != "")  preview = trunc(url,   trunc_len)
+      else if (query != "")  preview = trunc(query, trunc_len)
+      else if (npath != "")  preview = trunc(npath, trunc_len)
+      else if (stype != "")  preview = stype
+      else                   preview = ""
+      if (hooks_enabled != "true") {
+        if (preview != "") {
+          printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+        } else {
+          printf "  [Tool: %s]\n", name > "/dev/stderr"
+        }
       }
 
     } else if (etype == "tool_result") {
@@ -148,8 +205,10 @@ process_stream_json() {
       }
       spinner_start = 0
       content = extract(line, "content")
+      preview = ""
       if (content != "") {
         total = length(content)
+        preview = substr(content, 1, 200)
       } else {
         total = 0
         n = split(line, parts, "\"text\":\"")
@@ -159,12 +218,22 @@ process_stream_json() {
             c = substr(parts[j], k, 1)
             if (c == "\\") { k += 2; continue }
             if (c == "\"") break
+            if (length(preview) < 200) preview = preview c
             total++
             k++
           }
         }
       }
-      printf "  [Tool result: %d chars]\n", total > "/dev/stderr"
+      printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) > "/dev/stderr"
+
+    } else if (etype == "user") {
+      tool_result = extract(line, "tool_use_result")
+      if (tool_result != "") {
+        if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
+        spinner_start = 0
+        is_err = (index(line, "\"is_error\":true") > 0) ? " [error]" : ""
+        printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) > "/dev/stderr"
+      }
 
     } else if (etype == "result") {
       if (!at_line_start) {
@@ -178,7 +247,9 @@ process_stream_json() {
       num_turns = extract(line, "num_turns")
       input_tokens = extract(line, "input_tokens")
       output_tokens = extract(line, "output_tokens")
+      model = extract(line, "model")
       summary = "[Session:"
+      if (model != "")      summary = summary " model=" model
       if (cost != "") summary = summary " cost=$" sprintf("%.4f", cost+0)
       if (duration_ms != "") summary = summary " duration=" sprintf("%.1f", (duration_ms+0)/1000) "s"
       if (num_turns != "") summary = summary " turns=" num_turns
@@ -188,6 +259,24 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
+
+    } else if (etype == "rate_limit_event") {
+      util = extract(line, "utilization")
+      if (util != "") {
+        pct = int((util + 0) * 100)
+        if (pct > last_rate_limit_pct) {
+          if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
+          printf "  [Rate limit: %d%% of 7-day quota used]\n", pct > "/dev/stderr"
+          last_rate_limit_pct = pct
+        }
+      }
+
+    } else if (etype == "system") {
+      subtype_val = extract(line, "subtype")
+      if (subtype_val == "init") {
+        model_s = extract(line, "model")
+        if (model_s != "") printf "[%s] model=%s\n", get_time(), model_s > "/dev/stderr"
+      }
 
     } else {
       now = get_epoch()
@@ -206,6 +295,6 @@ process_stream_json() {
 
 _self="${0##*/}"
 if [ "$_self" = "stream_processor.sh" ]; then
-  [ "$#" -ne 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log>\n' >&2; exit 1; }
-  process_stream_json "$1" "$2"
+  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled]\n' >&2; exit 1; }
+  process_stream_json "$1" "$2" "${3:-false}"
 fi

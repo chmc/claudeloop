@@ -235,3 +235,259 @@ run_processor() {
   # Without fix: hello\r (spinner overwrites text line)
   [[ "$output" == *"hello"$'\n'$'\r'* ]]
 }
+
+# --- trunc_len configurable (Phase A change 1) ---
+
+@test "tool_use event: 100-char command not truncated at 80 chars with default trunc_len" {
+  # Build a 100-char command (all 'x')
+  local cmd
+  cmd=$(printf '%0.sx' {1..100})
+  local event="{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":\"$cmd\"}}"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # The full 100-char command must appear in stderr output (not truncated at 80)
+  [[ "$output" == *"$cmd"* ]]
+}
+
+@test "tool_use event: command truncated at custom STREAM_TRUNCATE_LEN=50" {
+  # Build a 100-char command, set trunc_len to 50
+  local cmd
+  cmd=$(printf '%0.sx' {1..100})
+  local expected
+  expected=$(printf '%0.sx' {1..50})"..."
+  run bash -c "STREAM_TRUNCATE_LEN=50 sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' <<'JSON'
+{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":\"$cmd\"}}
+JSON"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$expected"* ]]
+}
+
+# --- tool_result content preview (Phase A change 2) ---
+
+@test "tool_result event: content preview shown alongside char count" {
+  local event='{"type":"tool_result","content":"hello preview output"}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool result:"* ]]
+  [[ "$output" == *"hello preview output"* ]]
+}
+
+# --- hooks_enabled suppresses tool_use (Phase A change 3) ---
+
+@test "tool_use event: suppressed when hooks_enabled=true" {
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Tool: Bash]"* ]]
+}
+
+@test "tool_use event: shown when hooks_enabled=false" {
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Bash]"* ]]
+}
+
+# --- assistant event with nested tool_use (Phase A+) ---
+
+@test "assistant event with tool_use: [Tool: Bash] shown to stderr" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Bash]"* ]]
+}
+
+@test "assistant event with tool_use: Bash command shown in preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git status"* ]]
+}
+
+@test "assistant event with tool_use: description shown after command" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status","description":"Show working tree status"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Show working tree status"* ]]
+}
+
+@test "assistant event with tool_use: Read shows file_path" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/some/file.sh"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Read]"* ]]
+  [[ "$output" == *"/some/file.sh"* ]]
+}
+
+@test "assistant event with tool_use: suppressed when hooks_enabled=true" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Tool: Bash]"* ]]
+}
+
+# --- type:user event with tool_use_result (Phase A+) ---
+
+@test "type:user event with tool_use_result: result shown to stderr" {
+  local event='{"type":"user","message":{},"tool_use_result":"output text here"}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Result:"* ]]
+  [[ "$output" == *"chars]"* ]]
+}
+
+@test "type:user event with is_error:true: [error] label shown" {
+  local event='{"type":"user","message":{},"tool_use_result":"error text","is_error":true}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Result [error]:"* ]]
+}
+
+@test "type:user event with is_error:false: no [error] label" {
+  local event='{"type":"user","message":{},"tool_use_result":"output text","is_error":false}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Result:"* ]]
+  [[ "$output" != *"[error]"* ]]
+}
+
+@test "type:user event without tool_use_result: no output" {
+  local event='{"type":"user","message":{"content":"hello"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Result"* ]]
+}
+
+# --- rate_limit_event (Phase A+) ---
+
+@test "rate_limit_event: warning shown when utilization=0.91" {
+  local event='{"type":"rate_limit_event","utilization":0.91}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Rate limit: 91%"* ]]
+}
+
+@test "rate_limit_event: warning shown when utilization=0.75" {
+  local event='{"type":"rate_limit_event","utilization":0.75}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Rate limit: 75%"* ]]
+}
+
+@test "rate_limit_event: warning suppressed when lower utilization follows higher" {
+  local event1='{"type":"rate_limit_event","utilization":0.91}'
+  local event2='{"type":"rate_limit_event","utilization":0.50}'
+  run bash -c "printf '%s\n%s\n' '$event1' '$event2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Rate limit: 91%"* ]]
+  [[ "$output" != *"[Rate limit: 50%"* ]]
+}
+
+@test "rate_limit_event: deduplicated when same pct fires twice" {
+  local event='{"type":"rate_limit_event","utilization":0.91}'
+  run bash -c "printf '%s\n%s\n' '$event' '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  count=$(printf '%s' "$output" | grep -c '\[Rate limit: 91%')
+  [ "$count" -eq 1 ]
+}
+
+# --- Phase B: more tool previews (§1) ---
+
+@test "assistant event with WebFetch: url shown in preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"WebFetch","input":{"url":"https://example.com","prompt":"summarize"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: WebFetch]"* ]]
+  [[ "$output" == *"https://example.com"* ]]
+}
+
+@test "assistant event with WebSearch: query shown in preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"WebSearch","input":{"query":"awk tutorial"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: WebSearch]"* ]]
+  [[ "$output" == *"awk tutorial"* ]]
+}
+
+@test "assistant event with Task: subagent_type shown in preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Task","input":{"subagent_type":"Bash","prompt":"run tests"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Task]"* ]]
+  [[ "$output" == *"Bash"* ]]
+}
+
+@test "assistant event with NotebookEdit: notebook_path shown in preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"NotebookEdit","input":{"notebook_path":"/some/notebook.ipynb"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: NotebookEdit]"* ]]
+  [[ "$output" == *"/some/notebook.ipynb"* ]]
+}
+
+# --- Phase B: iteration + ID deduplication (§2) ---
+
+@test "assistant event with two tool_use blocks: both shown" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_001","name":"Bash","input":{"command":"ls"}},{"type":"tool_use","id":"toolu_002","name":"Read","input":{"file_path":"/some/file"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Bash]"* ]]
+  [[ "$output" == *"[Tool: Read]"* ]]
+}
+
+@test "assistant event with tool_use: same toolu_ id shown only once across two events" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_abc","name":"Bash","input":{"command":"ls"}}]}}'
+  run bash -c "printf '%s\n%s\n' '$event' '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  count=$(printf '%s' "$output" | grep -c '\[Tool: Bash\]')
+  [ "$count" -eq 1 ]
+}
+
+# --- Phase B: stop_reason max_tokens warning (§3) ---
+
+@test "assistant event with stop_reason max_tokens: warning shown" {
+  local event='{"type":"assistant","message":{"stop_reason":"max_tokens","content":[]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"max_tokens"* ]]
+  [[ "$output" == *"truncated"* ]]
+}
+
+@test "assistant event with stop_reason end_turn: no warning" {
+  local event='{"type":"assistant","message":{"stop_reason":"end_turn","content":[]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"truncated"* ]]
+}
+
+# --- Phase B: model in session summary (§4) ---
+
+@test "result event with model: model shown in summary" {
+  local event='{"type":"result","cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"model":"claude-sonnet-4-6","usage":{"input_tokens":4200,"output_tokens":380}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"model=claude-sonnet-4-6"* ]]
+}
+
+# --- Phase B: system init event (§5) ---
+
+@test "system init event with model: model shown to stderr" {
+  local event='{"type":"system","subtype":"init","model":"claude-sonnet-4-6"}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"model=claude-sonnet-4-6"* ]]
+}
+
+@test "system init event with non-init subtype: no output" {
+  local event='{"type":"system","subtype":"something_else","model":"claude-sonnet-4-6"}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"model="* ]]
+}
+
+@test "system init event without model field: no output" {
+  local event='{"type":"system","subtype":"init"}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"model="* ]]
+}

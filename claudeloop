@@ -20,6 +20,7 @@ _CL_SIMPLE_MODE="${SIMPLE_MODE:-}"
 _CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
 _CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
 _CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
+_CL_STREAM_TRUNCATE_LEN="${STREAM_TRUNCATE_LEN:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -44,6 +45,8 @@ PHASE_PROMPT_FILE=""
 SIMPLE_MODE=false
 VERBOSE_MODE=false
 SKIP_PERMISSIONS=false
+STREAM_TRUNCATE_LEN=300
+HOOKS_ENABLED=false
 
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
@@ -81,6 +84,8 @@ load_config() {
       MAX_DELAY)              MAX_DELAY="$value" ;;
       QUOTA_RETRY_INTERVAL)   QUOTA_RETRY_INTERVAL="$value" ;;
       SKIP_PERMISSIONS)       SKIP_PERMISSIONS="$value" ;;
+      STREAM_TRUNCATE_LEN)    STREAM_TRUNCATE_LEN="$value" ;;
+      HOOKS_ENABLED)          HOOKS_ENABLED="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -118,6 +123,7 @@ write_config() {
       printf 'SKIP_PERMISSIONS=%s\n' "$SKIP_PERMISSIONS"
       printf 'BASE_DELAY=%s\n'       "$BASE_DELAY"
       printf 'MAX_DELAY=%s\n'        "$MAX_DELAY"
+      printf 'STREAM_TRUNCATE_LEN=%s\n' "$STREAM_TRUNCATE_LEN"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -643,7 +649,7 @@ Implement the above phase completely. Make sure to:
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | process_stream_json "$log_file" "$raw_log"
+  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED"
 
   local claude_exit=1
   if [ -f "$_exit_tmp" ]; then
@@ -839,6 +845,7 @@ main() {
   [ -n "$_CL_PHASE_PROMPT_FILE" ]       && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
   [ -n "$_CL_QUOTA_RETRY_INTERVAL" ]    && QUOTA_RETRY_INTERVAL="$_CL_QUOTA_RETRY_INTERVAL"
   [ -n "$_CL_SKIP_PERMISSIONS" ]        && SKIP_PERMISSIONS="$_CL_SKIP_PERMISSIONS"
+  [ -n "$_CL_STREAM_TRUNCATE_LEN" ]     && STREAM_TRUNCATE_LEN="$_CL_STREAM_TRUNCATE_LEN"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
