@@ -40,6 +40,6 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          gh release create "$TAG" "$TARBALL" --generate-notes --title "$TAG"
+          gh release create "$TAG" "$TARBALL" --notes-file release_notes.md --title "$TAG"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

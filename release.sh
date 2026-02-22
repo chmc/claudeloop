@@ -3,6 +3,10 @@
 # Usage: ./release.sh [major|minor|patch]   (optional override)
 set -eu
 
+# ── libraries ─────────────────────────────────────────────────────────────────
+
+. "$(dirname "$0")/lib/release_notes.sh"
+
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 die() { printf 'Error: %s\n' "$1" >&2; exit 1; }
@@ -115,5 +119,9 @@ sed "s|^VERSION=.*|VERSION=\"${next}\"|" ./claudeloop > "$tmp" && mv "$tmp" ./cl
 git add claudeloop
 git commit -m "chore: release v${next}"
 git tag -a "v${next}" -m "chore: release v${next}"
+
+repo_url=$(git remote get-url origin | sed 's|\.git$||' | sed 's|git@github.com:|https://github.com/|')
+format_release_notes "$log" "$last_tag" "v${next}" "$repo_url" > release_notes.md
+printf 'Release notes written to release_notes.md\n'
 
 printf 'Released v%s. In CI: push and gh release create follow automatically.\n' "$next"
