@@ -752,3 +752,79 @@ PROGRESS
   [ "$status" -eq 0 ]
   [ "$(_completed_count)" -eq 2 ]
 }
+
+# =============================================================================
+# create_lock: --force tests
+# =============================================================================
+
+@test "create_lock: --force kills live lock and succeeds" {
+  sh -c 'sleep 99' &
+  fake_pid=$!
+  mkdir -p "$TEST_DIR/.claudeloop"
+  echo "$fake_pid" > "$TEST_DIR/.claudeloop/lock"
+
+  _cl --plan PLAN.md --force --simple
+  kill "$fake_pid" 2>/dev/null || true
+
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "killing"
+  echo "$output" | grep -q "$fake_pid"
+}
+
+@test "create_lock: --force does not break stale lock cleanup" {
+  # Stale lock: process already dead — --force should still succeed (same as today)
+  sh -c 'sleep 99' &
+  dead_pid=$!
+  kill "$dead_pid" 2>/dev/null || true
+  wait "$dead_pid" 2>/dev/null || true
+  mkdir -p "$TEST_DIR/.claudeloop"
+  echo "$dead_pid" > "$TEST_DIR/.claudeloop/lock"
+
+  _cl --plan PLAN.md --force
+  [ "$status" -eq 0 ]
+}
+
+@test "create_lock: error message contains --force hint when no flag given" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  echo $$ > "$TEST_DIR/.claudeloop/lock"   # own PID = definitely alive
+
+  _cl --plan PLAN.md --simple
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q -- "--force"
+}
+
+@test "create_lock: --force re-reads progress (completed phases not re-run)" {
+  # Write a progress file with phase 1 already completed
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROG'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 1
+- In progress: 0
+- Pending: 1
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+
+### ⏳ Phase 2: Build
+Status: pending
+PROG
+
+  # Simulate a running instance with a live lock
+  sh -c 'sleep 99' &
+  fake_pid=$!
+  echo "$fake_pid" > "$TEST_DIR/.claudeloop/lock"
+
+  _cl --plan PLAN.md --force
+  kill "$fake_pid" 2>/dev/null || true
+
+  [ "$status" -eq 0 ]
+  # Only phase 2 should have been executed (not phase 1 again)
+  [ "$(_call_count)" -eq 1 ]
+}

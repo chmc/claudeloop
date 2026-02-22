@@ -40,6 +40,8 @@ RESET_PROGRESS=false
 START_PHASE=""
 DRY_RUN=false
 INTERRUPTED=false
+FORCE_MODE=false
+FORCE_KILLED=false
 CURRENT_PHASE=""
 PHASE_PROMPT_FILE=""
 SIMPLE_MODE=false
@@ -307,8 +309,21 @@ create_lock() {
     local pid
     pid=$(cat "$LOCK_FILE" 2>/dev/null)
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-      print_error "Another instance is running (PID: $pid)"
-      exit 1
+      if [ "$FORCE_MODE" = "true" ]; then
+        print_warning "Killing existing instance (PID: $pid) — progress is preserved"
+        kill "$pid" 2>/dev/null || true
+        local _wait=0
+        while [ "$_wait" -lt 10 ] && kill -0 "$pid" 2>/dev/null; do
+          sleep 1
+          _wait=$((_wait + 1))
+        done
+        kill -9 "$pid" 2>/dev/null || true
+        rm -f "$LOCK_FILE"
+        FORCE_KILLED=true
+      else
+        print_error "Another instance is running (PID: $pid). Use --force to kill it, or run 'kill $pid' to stop it manually."
+        exit 1
+      fi
     else
       print_warning "Removing stale lock file"
       rm -f "$LOCK_FILE"
@@ -392,6 +407,7 @@ Options:
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
+  --force                Kill any running instance and take over (preserves progress)
   --yes, -y              Non-interactive mode: auto-answer all prompts
                          (enabled automatically when running inside Claude Code)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
@@ -457,6 +473,10 @@ parse_args() {
         ;;
       --verbose)
         VERBOSE_MODE=true
+        shift
+        ;;
+      --force)
+        FORCE_MODE=true
         shift
         ;;
       --yes|-y)
@@ -1030,6 +1050,19 @@ main() {
     detect_plan_changes "$PROGRESS_FILE"
   fi
 
+  # Create lock file (before --phase/--mark-complete so re-init after force-kill is correct)
+  if ! $DRY_RUN; then
+    create_lock
+
+    # If we force-killed an existing instance, re-read progress to get its final state
+    if [ "$FORCE_KILLED" = "true" ]; then
+      init_progress "$PROGRESS_FILE"
+      if ! $RESET_PROGRESS; then
+        detect_plan_changes "$PROGRESS_FILE"
+      fi
+    fi
+  fi
+
   # Apply --phase N: mark phases before START_PHASE as completed (skip them)
   if [ -n "$START_PHASE" ]; then
     for _p in $PHASE_NUMBERS; do
@@ -1064,9 +1097,6 @@ main() {
     print_success "Dry run complete - plan is valid"
     exit 0
   fi
-
-  # Create lock file to prevent concurrent runs
-  create_lock
 
   print_warning "Press Ctrl+C at any time to stop (state will be saved)"
   echo ""

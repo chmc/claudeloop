@@ -59,6 +59,7 @@ See `examples/PLAN.md.example` for a complete example.
 --continue           Resume from last checkpoint
 --phase <n>          Start from specific phase number
 --mark-complete <n>  Mark a phase as completed (use when a phase succeeded but was logged as failed)
+--force              Kill any running instance and take over (preserves progress)
 --dry-run            Validate plan without executing
 --max-retries <n>    Max retry attempts per phase (default: 3)
 --simple             Plain output (no colors)
