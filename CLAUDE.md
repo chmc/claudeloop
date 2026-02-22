@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Use conventional commits
 
+## Documentation
+
+Update documentation README.md QUICKSTART.md when implementation is changed
+
 ## Commands
 
 ```sh
