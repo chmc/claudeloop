@@ -61,7 +61,9 @@ See `examples/PLAN.md.example` for a complete example.
 --mark-complete <n>  Mark a phase as completed (use when a phase succeeded but was logged as failed)
 --force              Kill any running instance and take over (preserves progress)
 --dry-run            Validate plan without executing
---max-retries <n>    Max retry attempts per phase (default: 3)
+--max-retries <n>    Max retry attempts per phase (default: 5)
+--quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
+--max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
@@ -84,13 +86,14 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 |---|---|---|
 | `PLAN_FILE` | `--plan` | `PLAN.md` |
 | `PROGRESS_FILE` | `--progress` | `.claudeloop/PROGRESS.md` |
-| `MAX_RETRIES` | `--max-retries` | `3` |
+| `MAX_RETRIES` | `--max-retries` | `5` |
 | `SIMPLE_MODE` | `--simple` | `false` |
 | `SKIP_PERMISSIONS` | `--dangerously-skip-permissions` | `false` |
 | `BASE_DELAY` | — | `5` |
 | `MAX_DELAY` | — | `60` |
 | `PHASE_PROMPT_FILE` | `--phase-prompt` | _(empty)_ |
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
+| `MAX_PHASE_TIME` | `--max-phase-time` | `1800` |
 
 Example `.claudeloop/.claudeloop.conf`:
 

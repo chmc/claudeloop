@@ -52,7 +52,7 @@ STREAM_TRUNCATE_LEN=300
 HOOKS_ENABLED=false
 LIVE_LOG=""
 MONITOR_MODE=false
-MAX_PHASE_TIME=0            # 0 = disabled; kill claude after N seconds per phase
+MAX_PHASE_TIME=1800          # 30 min; kill claude after N seconds per phase (0=disabled)
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
 
@@ -420,9 +420,9 @@ Options:
   --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
-  --max-retries <n>      Maximum retry attempts per phase (default: 3)
+  --max-retries <n>      Maximum retry attempts per phase (default: 5)
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
-  --max-phase-time <s>   Kill claude after N seconds per phase, then retry (0=disabled, default 0)
+  --max-phase-time <s>   Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
   --force                Kill any running instance and take over (preserves progress)
