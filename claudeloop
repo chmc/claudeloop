@@ -794,7 +794,7 @@ Learn from the above. Do not repeat the same mistakes. Address any errors shown 
   _pl_pid="$CURRENT_PIPELINE_PID"
   _pl_pgid="$CURRENT_PIPELINE_PGID"
   if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null; then
-    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null ) &
+    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
     _timer_pid=$!
   fi
 
