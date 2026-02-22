@@ -793,6 +793,139 @@ PROGRESS
   echo "$output" | grep -q -- "--force"
 }
 
+# =============================================================================
+# Item 0: MAX_RETRIES default is 5
+# =============================================================================
+@test "default MAX_RETRIES is 5 (not 3)" {
+  # Source retry.sh in a clean env (no MAX_RETRIES set) and verify the default
+  result=$(unset MAX_RETRIES; sh -c ". '$CLAUDELOOP_DIR/lib/parser.sh'; . '$CLAUDELOOP_DIR/lib/retry.sh'; printf '%s' \"\$MAX_RETRIES\"")
+  [ "$result" = "5" ]
+}
+
+# =============================================================================
+# Item 1: --max-phase-time flag
+# =============================================================================
+@test "parse_args: --max-phase-time flag is accepted" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-phase-time 60 --dry-run"
+  [ "$status" -eq 0 ]
+}
+
+@test "timeout: phase killed after MAX_PHASE_TIME seconds and retried" {
+  # Stub: first call writes output in a loop (simulates stuck agent writing)
+  # Writing in a loop ensures SIGPIPE is delivered when the downstream pipe breaks.
+  cat > "$TEST_DIR/bin/claude" << EOF
+#!/bin/sh
+count_file="$TEST_DIR/claude_call_count"
+count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+count=\$((count + 1))
+printf '%s\n' "\$count" > "\$count_file"
+if [ "\$count" -eq 1 ]; then
+  # Write output every 0.5s so SIGPIPE kills us when the awk pipe breaks
+  i=0
+  while [ \$i -lt 60 ]; do
+    printf 'still running iteration %s\n' "\$i"
+    sleep 1
+    i=\$((i + 1))
+  done
+  exit 1
+fi
+printf 'stub output for call %s\n' "\$count"
+exit 0
+EOF
+  chmod +x "$TEST_DIR/bin/claude"
+
+  _start=$(date '+%s')
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --max-retries 2 --max-phase-time 2"
+  _end=$(date '+%s')
+  _elapsed=$((_end - _start))
+
+  [ "$status" -eq 0 ]
+  # Must finish well before the 30s sleep would have ended
+  [ "$_elapsed" -lt 15 ]
+  # 3 calls: phase1-attempt1 (timeout), phase1-attempt2 (success), phase2 (success)
+  [ "$(_call_count)" -eq 3 ]
+}
+
+# =============================================================================
+# Item 2: Retry context — archive log + prompt injection
+# =============================================================================
+@test "retry context: archive log created for failed attempt" {
+  # Call 1 fails (phase 1 attempt 1), call 2 succeeds (phase 1 attempt 2), call 3 succeeds (phase 2)
+  printf '1\n0\n0\n' > "$TEST_DIR/claude_exit_codes"
+
+  _cl --plan PLAN.md --max-retries 2
+  [ "$status" -eq 0 ]
+
+  # Archive log for phase 1 attempt 1 must exist
+  [ -f "$TEST_DIR/.claudeloop/logs/phase-1.attempt-1.log" ]
+}
+
+@test "retry context: previous failure output injected into retry prompt" {
+  # Stub: captures stdin (the prompt) to a per-call file, first call outputs error+fails
+  cat > "$TEST_DIR/bin/claude" << EOF
+#!/bin/sh
+count_file="$TEST_DIR/claude_call_count"
+count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+count=\$((count + 1))
+printf '%s\n' "\$count" > "\$count_file"
+cat > "$TEST_DIR/claude_prompt_\${count}.txt"
+if [ "\$count" -eq 1 ]; then
+  printf 'UNIQUE_ERROR_MARKER_XYZ123\n'
+  exit 1
+fi
+printf 'stub output for call %s\n' "\$count"
+exit 0
+EOF
+  chmod +x "$TEST_DIR/bin/claude"
+
+  _cl --plan PLAN.md --max-retries 2
+  [ "$status" -eq 0 ]
+
+  # Prompt for call 2 (phase 1 retry) must reference the previous attempt's output
+  grep -q "UNIQUE_ERROR_MARKER_XYZ123" "$TEST_DIR/claude_prompt_2.txt"
+  # Prompt for call 1 must NOT mention "Previous Attempt Failed"
+  ! grep -q "Previous Attempt Failed" "$TEST_DIR/claude_prompt_1.txt"
+}
+
+@test "retry context: no archive created on first attempt" {
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  # No attempt-1 archive: phase succeeded on first try
+  [ ! -f "$TEST_DIR/.claudeloop/logs/phase-1.attempt-1.log" ]
+}
+
+# =============================================================================
+# Item 3: live.log rotation
+# =============================================================================
+@test "live.log rotation: second run creates timestamped archive" {
+  # First run
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  [ -s "$TEST_DIR/.claudeloop/live.log" ]
+
+  # Second run (reset to re-run all phases)
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+
+  # A rotated log file must exist
+  rotated_count=$(ls "$TEST_DIR/.claudeloop/live-"*.log 2>/dev/null | wc -l | tr -d ' ')
+  [ "$rotated_count" -gt 0 ]
+}
+
+@test "live.log rotation: rotated log contains content from first run" {
+  # First run: phase 1 output goes into live.log
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+
+  # Second run: first run's live.log gets archived
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+
+  rotated=$(ls "$TEST_DIR/.claudeloop/live-"*.log 2>/dev/null | head -1)
+  [ -n "$rotated" ]
+  [ -s "$rotated" ]
+}
+
 @test "create_lock: --force re-reads progress (completed phases not re-run)" {
   # Write a progress file with phase 1 already completed
   mkdir -p "$TEST_DIR/.claudeloop"

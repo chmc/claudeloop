@@ -21,6 +21,7 @@ _CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
 _CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
 _CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
 _CL_STREAM_TRUNCATE_LEN="${STREAM_TRUNCATE_LEN:-}"
+_CL_MAX_PHASE_TIME="${MAX_PHASE_TIME:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -51,10 +52,14 @@ STREAM_TRUNCATE_LEN=300
 HOOKS_ENABLED=false
 LIVE_LOG=""
 MONITOR_MODE=false
+MAX_PHASE_TIME=0            # 0 = disabled; kill claude after N seconds per phase
+CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
+CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
 
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
+_CLI_MAX_PHASE_TIME=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
@@ -95,6 +100,7 @@ load_config() {
       SKIP_PERMISSIONS)       SKIP_PERMISSIONS="$value" ;;
       STREAM_TRUNCATE_LEN)    STREAM_TRUNCATE_LEN="$value" ;;
       HOOKS_ENABLED)          HOOKS_ENABLED="$value" ;;
+      MAX_PHASE_TIME)         MAX_PHASE_TIME="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -133,6 +139,7 @@ write_config() {
       printf 'BASE_DELAY=%s\n'       "$BASE_DELAY"
       printf 'MAX_DELAY=%s\n'        "$MAX_DELAY"
       printf 'STREAM_TRUNCATE_LEN=%s\n' "$STREAM_TRUNCATE_LEN"
+      printf 'MAX_PHASE_TIME=%s\n'      "$MAX_PHASE_TIME"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -148,6 +155,7 @@ write_config() {
   [ -n "$_CLI_PHASE_PROMPT_FILE" ]    && update_conf_key "$conf_file" PHASE_PROMPT_FILE "$PHASE_PROMPT_FILE"
   [ -n "$_CLI_QUOTA_RETRY_INTERVAL" ] && update_conf_key "$conf_file" QUOTA_RETRY_INTERVAL "$QUOTA_RETRY_INTERVAL"
   [ -n "$_CLI_SKIP_PERMISSIONS" ]     && update_conf_key "$conf_file" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
+  [ -n "$_CLI_MAX_PHASE_TIME" ]       && update_conf_key "$conf_file" MAX_PHASE_TIME "$MAX_PHASE_TIME"
   return 0
 }
 
@@ -340,6 +348,15 @@ remove_lock() {
 
 # Signal handler for graceful shutdown
 handle_interrupt() {
+  # Kill running claude pipeline immediately (don't wait for it to clean up)
+  if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
+    kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+    if [ -n "${CURRENT_PIPELINE_PGID:-}" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
+      kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
+    fi
+    CURRENT_PIPELINE_PID=""
+    CURRENT_PIPELINE_PGID=""
+  fi
   INTERRUPTED=true
   echo ""
   print_warning "Interrupt received (Ctrl+C)"
@@ -405,6 +422,7 @@ Options:
   --phase-prompt <file>  Custom prompt template for phase execution
   --max-retries <n>      Maximum retry attempts per phase (default: 3)
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
+  --max-phase-time <s>   Kill claude after N seconds per phase, then retry (0=disabled, default 0)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
   --force                Kill any running instance and take over (preserves progress)
@@ -465,6 +483,10 @@ parse_args() {
         ;;
       --quota-retry-interval)
         QUOTA_RETRY_INTERVAL="$2"; _CLI_QUOTA_RETRY_INTERVAL=1
+        shift 2
+        ;;
+      --max-phase-time)
+        MAX_PHASE_TIME="$2"; _CLI_MAX_PHASE_TIME=1
         shift 2
         ;;
       --simple)
@@ -690,6 +712,35 @@ Implement the above phase completely. Make sure to:
 4. Commit your changes when complete"
   fi
 
+  # Archive previous attempt log and inject context into prompt on retry
+  if [ "$attempt" -gt 1 ] && [ -f "$log_file" ]; then
+    local _prev_attempt_log
+    _prev_attempt_log="${log_file%.log}.attempt-$((attempt - 1)).log"
+    cp "$log_file" "$_prev_attempt_log"
+
+    # Extract response section from archived log for context injection
+    local _prev_context
+    _prev_context=$(awk '
+      /^=== RESPONSE ===$/ { found=1; next }
+      /^=== EXECUTION END/ { exit }
+      found { print }
+    ' "$_prev_attempt_log" | tail -n 80)
+
+    if [ -n "$_prev_context" ]; then
+      prompt="${prompt}
+
+## Previous Attempt Failed (attempt $((attempt - 1)))
+
+The previous attempt exited without completing the phase. Here is the tail of what happened:
+
+\`\`\`
+${_prev_context}
+\`\`\`
+
+Learn from the above. Do not repeat the same mistakes. Address any errors shown before proceeding."
+    fi
+  fi
+
   # Write metadata + prompt header to log (overwrite previous content)
   {
     printf '=== EXECUTION START phase=%s attempt=%s time=%s ===\n' \
@@ -699,7 +750,8 @@ Implement the above phase completely. Make sure to:
     printf '=== RESPONSE ===\n'
   } > "$log_file"
 
-  # Execute claude with stream-json output, pipe through stream processor
+  # Execute claude with stream-json output, pipe through stream processor (backgrounded for
+  # interruptibility and timeout support)
   local _exit_tmp _claude_debug_flag
   _exit_tmp=$(mktemp)
   _claude_debug_flag=""
@@ -708,6 +760,13 @@ Implement the above phase completely. Make sure to:
   fi
   echo "Executing Claude CLI..."
   [ -n "${LIVE_LOG:-}" ] && echo "Executing Claude CLI..." >> "$LIVE_LOG" || true
+  CURRENT_PIPELINE_PID=""
+  CURRENT_PIPELINE_PGID=""
+  # Use job control (set -m) so the background pipeline gets its own process group.
+  # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
+  # not just the last process. Without set -m, kill -TERM $! only kills the last
+  # process; with set -m, kill -TERM -- -$PGID kills every process in the job.
+  set -m
   {
     _rc=0
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
@@ -723,7 +782,32 @@ Implement the above phase completely. Make sure to:
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}"
+  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" &
+  CURRENT_PIPELINE_PID=$!
+  # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
+  CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
+  set +m
+
+  # Phase timeout: kill entire pipeline PGID after MAX_PHASE_TIME seconds (0 = disabled)
+  local _timer_pid _pl_pid _pl_pgid
+  _timer_pid=""
+  _pl_pid="$CURRENT_PIPELINE_PID"
+  _pl_pgid="$CURRENT_PIPELINE_PGID"
+  if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null; then
+    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null ) &
+    _timer_pid=$!
+  fi
+
+  wait "$CURRENT_PIPELINE_PID" || true   # || true required: set -eu is active
+  CURRENT_PIPELINE_PID=""
+  CURRENT_PIPELINE_PGID=""
+
+  # Cancel timer if phase completed before timeout
+  if [ -n "$_timer_pid" ]; then
+    kill "$_timer_pid" 2>/dev/null || true
+    wait "$_timer_pid" 2>/dev/null || true
+    _timer_pid=""
+  fi
 
   local claude_exit=1
   if [ -f "$_exit_tmp" ]; then
@@ -975,6 +1059,7 @@ main() {
   [ -n "$_CL_QUOTA_RETRY_INTERVAL" ]    && QUOTA_RETRY_INTERVAL="$_CL_QUOTA_RETRY_INTERVAL"
   [ -n "$_CL_SKIP_PERMISSIONS" ]        && SKIP_PERMISSIONS="$_CL_SKIP_PERMISSIONS"
   [ -n "$_CL_STREAM_TRUNCATE_LEN" ]     && STREAM_TRUNCATE_LEN="$_CL_STREAM_TRUNCATE_LEN"
+  [ -n "$_CL_MAX_PHASE_TIME" ]          && MAX_PHASE_TIME="$_CL_MAX_PHASE_TIME"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
@@ -1028,9 +1113,13 @@ main() {
     fi
     validate_environment
     setup_project
-    # Initialize live log for this run (truncate previous content)
+    # Rotate previous live log (preserves history for debugging)
     LIVE_LOG=".claudeloop/live.log"
-    > "$LIVE_LOG"
+    if [ -f "$LIVE_LOG" ]; then
+      _ts=$(date '+%Y%m%d-%H%M%S')
+      mv "$LIVE_LOG" ".claudeloop/live-${_ts}.log"
+    fi
+    : > "$LIVE_LOG"
   fi
 
   # Check for interrupted session (skip in dry-run and reset)

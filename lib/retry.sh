@@ -4,7 +4,7 @@
 # Handles retry attempts and exponential backoff
 
 # Configuration
-MAX_RETRIES="${MAX_RETRIES:-3}"
+MAX_RETRIES="${MAX_RETRIES:-5}"
 BASE_DELAY="${BASE_DELAY:-5}"
 MAX_DELAY="${MAX_DELAY:-60}"
 QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
