@@ -371,6 +371,7 @@ cleanup() {
 
 # Usage information
 usage() {
+  print_logo
   cat << EOF
 ClaudeLoop - Phase-by-Phase Execution Tool
 
@@ -954,13 +955,13 @@ main() {
     YES_MODE=true
   fi
 
+  print_logo
+
   # Monitor mode: follow live output of a running instance (never runs setup/execution)
   if [ "$MONITOR_MODE" = "true" ]; then
     run_monitor
     exit 0
   fi
-
-  print_logo
 
   # Run setup wizard on first launch (no conf, interactive stdin, not dry-run)
   run_setup_wizard
