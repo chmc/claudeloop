@@ -661,6 +661,86 @@ PROGRESS
   [ "$(_call_count)" -eq 1 ]
 }
 
+# =============================================================================
+# Fix 1: Resume mode — dirty repo with prior completed phase bypasses gate
+# =============================================================================
+
+@test "resume_mode: dirty repo with prior completed phase continues non-interactively" {
+  # Commit .gitignore so setup_project has nothing to do
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  # PROGRESS.md shows Phase 1 already completed
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 1
+- In progress: 0
+- Pending: 1
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+
+### ⏳ Phase 2: Build
+Status: pending
+PROGRESS
+
+  # Make a tracked file dirty — simulates prior session leaving uncommitted changes
+  printf '\n# prior session change\n' >> "$TEST_DIR/PLAN.md"
+
+  # Non-interactive, no --yes, no CLAUDECODE: resume mode should bypass the gate
+  run sh -c "exec </dev/null; unset CLAUDECODE; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -eq 0 ]
+  # Only phase 2 ran (phase 1 was already completed)
+  [ "$(_call_count)" -eq 1 ]
+}
+
+@test "resume_mode: fresh run without completed phases still exits non-zero when dirty" {
+  # No PROGRESS.md — fresh run, RESUME_MODE must remain false
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  printf '\n# extra line\n' >> "$TEST_DIR/PLAN.md"
+
+  run sh -c "exec </dev/null; unset CLAUDECODE; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qi "uncommitted"
+}
+
+# =============================================================================
+# Fix 2: --mark-complete flag
+# =============================================================================
+
+@test "--mark-complete: marks phase as completed, skips it, runs remaining phases" {
+  # Clean repo: no uncommitted changes; stdin closed to prevent any prompts
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --mark-complete 1"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "marked phase 1"
+  # Only phase 2 ran (phase 1 was marked complete before main_loop)
+  [ "$(_call_count)" -eq 1 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+@test "--mark-complete: exits non-zero for phase not in plan" {
+  _cl --plan PLAN.md --mark-complete 99
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -qi "not found"
+}
+
 @test "yes_mode: CLAUDECODE=1 enables yes-mode automatically" {
   printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
   git -C "$TEST_DIR" add .gitignore

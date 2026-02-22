@@ -59,6 +59,8 @@ _WIZARD_FORCE="${_WIZARD_FORCE:-}"
 
 # Session-level non-interactive mode: auto-answer all prompts (NOT persisted to conf)
 YES_MODE="${YES_MODE:-false}"
+RESUME_MODE=false
+MARK_COMPLETE_PHASE=""
 
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
@@ -383,6 +385,7 @@ Options:
   --reset                Reset progress and start from beginning
   --continue             Continue from last checkpoint (default)
   --phase <n>            Start from specific phase number
+  --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
   --max-retries <n>      Maximum retry attempts per phase (default: 3)
@@ -426,6 +429,10 @@ parse_args() {
         ;;
       --phase)
         START_PHASE="$2"
+        shift 2
+        ;;
+      --mark-complete)
+        MARK_COMPLETE_PHASE="$2"
         shift 2
         ;;
       --dry-run)
@@ -506,8 +513,11 @@ validate_environment() {
 
   # Check for uncommitted changes
   if ! git diff-index --quiet HEAD -- 2>/dev/null; then
-    print_warning "Uncommitted changes detected. Consider committing before starting."
-    if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
+    if [ "$RESUME_MODE" = "true" ]; then
+      print_warning "Uncommitted changes detected (resuming existing session)."
+      # Continue without prompting — changes are from prior session
+    elif [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
+      print_warning "Uncommitted changes detected. Consider committing before starting."
       printf 'Continue anyway? (y/N) '
       read -r response
       case "$response" in
@@ -992,6 +1002,10 @@ main() {
 
   # Validate environment (skip in dry-run)
   if ! $DRY_RUN; then
+    # Infer resume mode from existing progress
+    if [ -f "$PROGRESS_FILE" ] && grep -q "Status: completed" "$PROGRESS_FILE" 2>/dev/null; then
+      RESUME_MODE=true
+    fi
     validate_environment
     setup_project
     # Initialize live log for this run (truncate previous content)
@@ -1023,6 +1037,19 @@ main() {
       eval "PHASE_STATUS_$(phase_to_var "$_p")='completed'"
     done
     log_verbose "main: skipped phases before $START_PHASE (marked completed)"
+  fi
+
+  # Apply --mark-complete N: override status of a specific phase to completed
+  if [ -n "$MARK_COMPLETE_PHASE" ]; then
+    _mc_var=$(phase_to_var "$MARK_COMPLETE_PHASE")
+    _mc_title=$(eval "echo \"\${PHASE_TITLE_${_mc_var}:-}\"")
+    if [ -z "$_mc_title" ]; then
+      print_error "Phase $MARK_COMPLETE_PHASE not found in plan"
+      exit 1
+    fi
+    update_phase_status "$MARK_COMPLETE_PHASE" "completed"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    print_success "Marked phase $MARK_COMPLETE_PHASE as completed"
   fi
 
   # Print header (after init_progress/detect_plan_changes so completed count is correct)

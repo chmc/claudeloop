@@ -58,6 +58,7 @@ See `examples/PLAN.md.example` for a complete example.
 --reset              Reset progress and start from beginning
 --continue           Resume from last checkpoint
 --phase <n>          Start from specific phase number
+--mark-complete <n>  Mark a phase as completed (use when a phase succeeded but was logged as failed)
 --dry-run            Validate plan without executing
 --max-retries <n>    Max retry attempts per phase (default: 3)
 --simple             Plain output (no colors)
@@ -98,7 +99,7 @@ MAX_RETRIES=5
 SKIP_PERMISSIONS=true
 ```
 
-The conf file is plain text — edit or delete it freely. One-time flags (`--reset`, `--phase`, `--dry-run`, `--verbose`, `--continue`) are never persisted.
+The conf file is plain text — edit or delete it freely. One-time flags (`--reset`, `--phase`, `--mark-complete`, `--dry-run`, `--verbose`, `--continue`) are never persisted.
 
 ## Custom phase prompts
 
@@ -185,6 +186,12 @@ Or to tail the raw log directly:
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`, break complex phases into smaller ones
 
 **Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings.
+
+**Phase marked as failed but the work was done** — The Claude subprocess exited non-zero despite completing its task (e.g. tests pass, commit made). Use `--mark-complete <n>` to override the status and resume from the next phase:
+
+    claudeloop --mark-complete 1
+
+If the repo has uncommitted changes from the prior session, ClaudeLoop detects the existing progress and skips the uncommitted-changes gate automatically.
 
 ## Testing
 
