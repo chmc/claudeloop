@@ -86,6 +86,7 @@ process_stream_json() {
     spinner_idx = 0
     spinner_start = 0
     last_rate_limit_pct = 0
+    prev_total_cost = 0
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
@@ -261,20 +262,46 @@ process_stream_json() {
         at_line_start = 1
       }
       spinner_start = 0
-      cost = extract(line, "cost_usd")
+      total_cost = extract(line, "total_cost_usd") + 0
+      session_cost = total_cost - prev_total_cost
+      prev_total_cost = total_cost
       duration_ms = extract(line, "duration_ms")
       num_turns = extract(line, "num_turns")
       input_tokens = extract(line, "input_tokens")
       output_tokens = extract(line, "output_tokens")
-      model = extract(line, "model")
+      model = ""
+      mu_idx = index(line, "\"modelUsage\":{\"")
+      if (mu_idx > 0) {
+        rest = substr(line, mu_idx + length("\"modelUsage\":{\""))
+        mend = index(rest, "\"")
+        if (mend > 0) model = substr(rest, 1, mend - 1)
+      }
+      cache_read    = extract(line, "cache_read_input_tokens") + 0
+      cache_created = extract(line, "cache_creation_input_tokens") + 0
+      wsearch = extract(line, "web_search_requests") + 0
+      wfetch  = extract(line, "web_fetch_requests") + 0
+      pd_idx    = index(line, "\"permission_denials\":[")
+      n_denials = 0
+      if (pd_idx > 0) {
+        pd_rest = substr(line, pd_idx + length("\"permission_denials\":["))
+        pd_end  = index(pd_rest, "]")
+        pd_arr  = substr(pd_rest, 1, pd_end - 1)
+        gsub(/ /, "", pd_arr)
+        if (pd_arr != "") n_denials = split(pd_arr, _pd, ",")
+      }
       summary = "[Session:"
-      if (model != "")      summary = summary " model=" model
-      if (cost != "") summary = summary " cost=$" sprintf("%.4f", cost+0)
-      if (duration_ms != "") summary = summary " duration=" sprintf("%.1f", (duration_ms+0)/1000) "s"
-      if (num_turns != "") summary = summary " turns=" num_turns
+      if (model != "")         summary = summary " model=" model
+      if (session_cost > 0)    summary = summary " cost=$" sprintf("%.4f", session_cost)
+      if (duration_ms != "")   summary = summary " duration=" sprintf("%.1f", (duration_ms+0)/1000) "s"
+      if (num_turns != "")     summary = summary " turns=" num_turns
       if (input_tokens != "" || output_tokens != "") {
         summary = summary " tokens=" input_tokens "in/" output_tokens "out"
       }
+      if (cache_read > 0 || cache_created > 0)
+        summary = summary " cache=" cache_read "r/" cache_created "w"
+      if (wsearch > 0 || wfetch > 0)
+        summary = summary " web=" wsearch "s/" wfetch "f"
+      if (n_denials > 0) summary = summary " denials=" n_denials
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
@@ -296,7 +323,10 @@ process_stream_json() {
       subtype_val = extract(line, "subtype")
       if (subtype_val == "init") {
         model_s = extract(line, "model")
-        if (model_s != "") printf "[%s] model=%s\n", get_time(), model_s > "/dev/stderr"
+        if (model_s != "") {
+          printf "[%s] model=%s\n", get_time(), model_s > "/dev/stderr"
+          printf "[%s] model=%s\n", get_time(), model_s >> log_file
+        }
         if (model_s != "" && live_log != "") { printf "[%s] model=%s\n", get_time(), model_s >> live_log; fflush(live_log) }
       }
 

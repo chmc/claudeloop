@@ -110,20 +110,20 @@ run_processor() {
 # --- result event ---
 
 @test "result event: session summary appended to log" {
-  local event='{"type":"result","cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
+  local event='{"type":"result","total_cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
   run_processor "$event" > /dev/null 2>&1
   grep -q '\[Session:' "$_log"
 }
 
 @test "result event: summary printed to stderr" {
-  local event='{"type":"result","cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
+  local event='{"type":"result","total_cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
   run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Session:"* ]]
 }
 
 @test "result event: contains cost, duration, turns, tokens" {
-  local event='{"type":"result","cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
+  local event='{"type":"result","total_cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"usage":{"input_tokens":4200,"output_tokens":380}}'
   run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"cost="* ]]
@@ -462,8 +462,8 @@ JSON"
 
 # --- Phase B: model in session summary (§4) ---
 
-@test "result event with model: model shown in summary" {
-  local event='{"type":"result","cost_usd":0.0041,"duration_ms":18300,"num_turns":4,"model":"claude-sonnet-4-6","usage":{"input_tokens":4200,"output_tokens":380}}'
+@test "result event with modelUsage: model shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":18300,"num_turns":4,"modelUsage":{"claude-sonnet-4-6":{"inputTokens":100,"outputTokens":10,"costUSD":0.001}},"usage":{"input_tokens":4200,"output_tokens":380}}'
   run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"model=claude-sonnet-4-6"* ]]
@@ -510,4 +510,92 @@ JSON"
   echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
   grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Tool result:' "$_live"
   rm -f "$_live"
+}
+
+# --- Cost delta tracking ---
+
+@test "result event: first event shows full cost as delta from zero" {
+  local event='{"type":"result","total_cost_usd":0.0100,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cost=\$0.0100"* ]]
+}
+
+@test "result event: two sequential events second shows delta cost not cumulative" {
+  local event1='{"type":"result","total_cost_usd":0.0100,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10}}'
+  local event2='{"type":"result","total_cost_usd":0.0160,"duration_ms":500,"num_turns":1,"usage":{"input_tokens":50,"output_tokens":5}}'
+  run bash -c "printf '%s\n%s\n' '$event1' '$event2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cost=\$0.0060"* ]]
+  [[ "$output" != *"cost=\$0.0160"* ]]
+}
+
+# --- Cache stats ---
+
+@test "result event with non-zero cache_read tokens: cache= shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":500,"cache_creation_input_tokens":0}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cache=500r/0w"* ]]
+}
+
+@test "result event with non-zero cache_creation tokens: cache= shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":0,"cache_creation_input_tokens":200}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cache=0r/200w"* ]]
+}
+
+@test "result event with zero cache tokens: no cache= in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"cache="* ]]
+}
+
+# --- Web tool counts ---
+
+@test "result event with non-zero web_search_requests: web= shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"server_tool_use":{"web_search_requests":3,"web_fetch_requests":0}}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"web=3s/0f"* ]]
+}
+
+@test "result event with non-zero web_fetch_requests: web= shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":2}}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"web=0s/2f"* ]]
+}
+
+@test "result event with zero web tool requests: no web= in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0}}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"web="* ]]
+}
+
+# --- Permission denials ---
+
+@test "result event with non-empty permission_denials: denials= shown in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10},"permission_denials":["Bash","Read"]}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"denials=2"* ]]
+}
+
+@test "result event with empty permission_denials: no denials= in summary" {
+  local event='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10},"permission_denials":[]}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"denials="* ]]
+}
+
+# --- system:init writes model to log_file ---
+
+@test "system init event: model written to log_file" {
+  local event='{"type":"system","subtype":"init","model":"claude-sonnet-4-6"}'
+  echo "$event" | process_stream_json "$_log" "$_raw"
+  grep -q "model=claude-sonnet-4-6" "$_log"
 }
