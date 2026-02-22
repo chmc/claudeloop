@@ -60,3 +60,27 @@ feat: add feature three"
   [[ "$output" == *"- feat: add feature two"* ]]
   [[ "$output" == *"- feat: add feature three"* ]]
 }
+
+@test "download badge is included when repo_url and next_tag are provided" {
+  run format_release_notes "feat: something" "v0.6.0" "v0.7.0" "https://github.com/chmc/claudeloop"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"![Downloads](https://img.shields.io/github/downloads/chmc/claudeloop/v0.7.0/total)"* ]]
+}
+
+@test "download badge is omitted when repo_url is empty" {
+  run format_release_notes "feat: something" "v0.6.0" "v0.7.0" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"img.shields.io"* ]]
+}
+
+@test "download badge is omitted when next_tag is empty" {
+  run format_release_notes "feat: something" "v0.6.0" "" "https://github.com/chmc/claudeloop"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"img.shields.io"* ]]
+}
+
+@test "download badge URL contains correct owner/repo and tag" {
+  run format_release_notes "feat: something" "" "v1.2.3" "https://github.com/myorg/myrepo"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"img.shields.io/github/downloads/myorg/myrepo/v1.2.3/total"* ]]
+}

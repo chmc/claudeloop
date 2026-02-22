@@ -22,7 +22,7 @@ For full setup instructions see **[QUICKSTART.md](QUICKSTART.md)**.
 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
 ```
 
-Releases and changelogs: [GitHub Releases](https://github.com/chmc/claudeloop/releases) — each release includes a structured changelog grouped by features, bug fixes, and other changes.
+Releases and changelogs: [GitHub Releases](https://github.com/chmc/claudeloop/releases) — each release includes a download count badge and a structured changelog grouped by features, bug fixes, and other changes.
 
 ## Why ClaudeLoop?
 

@@ -7,6 +7,12 @@
 format_release_notes() {
   log="$1"; prev_tag="${2:-}"; next_tag="${3:-}"; repo_url="${4:-}"
 
+  if [ -n "$repo_url" ] && [ -n "$next_tag" ]; then
+    owner_repo=$(printf '%s' "$repo_url" | sed 's|https://github.com/||')
+    printf '![Downloads](https://img.shields.io/github/downloads/%s/%s/total)\n\n' \
+      "$owner_repo" "$next_tag"
+  fi
+
   feats=$(printf '%s\n' "$log" | grep '^feat' || true)
   fixes=$(printf '%s\n' "$log" | grep '^fix'  || true)
   other=$(printf '%s\n' "$log" | grep -vE '^feat|^fix|^chore: release' | grep -v '^$' || true)
