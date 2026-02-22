@@ -342,6 +342,7 @@ handle_interrupt() {
       local _attempts
       _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_cpv}\"")
       eval "PHASE_ATTEMPTS_${_cpv}=$((_attempts - 1))"
+      eval "PHASE_ATTEMPT_TIME_${_cpv}_${_attempts}=''"
     fi
   fi
 
@@ -821,6 +822,7 @@ main_loop() {
         local _cur_attempts
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
         log_verbose "main_loop: quota error on phase $next_phase, attempts restored to $((_cur_attempts - 1))"
         # Reset to pending so find_next_phase picks it up after the wait
         eval "PHASE_STATUS_${_npv}=pending"
@@ -839,6 +841,7 @@ main_loop() {
         fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
         eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
@@ -854,6 +857,7 @@ main_loop() {
         fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
         eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
         eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue

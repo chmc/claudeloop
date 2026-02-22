@@ -60,6 +60,11 @@ read_progress() {
           attempts_value=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
           eval "PHASE_ATTEMPTS_${_cv}=$attempts_value"
           ;;
+        "Attempt "[0-9]*)
+          _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
+          _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          eval "PHASE_ATTEMPT_TIME_${_cv}_${_anum}='$_atime'"
+          ;;
       esac
     fi
   done < "$progress_file"
@@ -159,6 +164,15 @@ generate_phase_details() {
     attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_pv}\"")
     if [ "$attempts" -gt 0 ]; then
       echo "Attempts: $attempts"
+      if [ "$attempts" -gt 1 ]; then
+        local _i=1
+        while [ "$_i" -le "$attempts" ]; do
+          local _at
+          _at=$(eval "echo \"\${PHASE_ATTEMPT_TIME_${_pv}_${_i}:-}\"")
+          [ -n "$_at" ] && echo "Attempt $_i Started: $_at"
+          _i=$((_i + 1))
+        done
+      fi
     fi
 
     local deps
@@ -241,6 +255,11 @@ read_old_phase_list() {
           av=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
           eval "_OLD_PHASE_ATTEMPTS_${_ov2}=${av}"
           ;;
+        "Attempt "[0-9]*)
+          _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
+          _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          eval "_OLD_PHASE_ATTEMPT_TIME_${_ov2}_${_anum}='$_atime'"
+          ;;
         "Depends on:"*)
           local dv
           dv=$(echo "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
@@ -309,6 +328,14 @@ detect_plan_changes() {
       eval "PHASE_ATTEMPTS_${new_iv}=${old_attempts}"
       eval "PHASE_START_TIME_${new_iv}='${old_start}'"
       eval "PHASE_END_TIME_${new_iv}='${old_end}'"
+
+      local _ti=1
+      while [ "$_ti" -le "$old_attempts" ]; do
+        local _old_at
+        _old_at=$(eval "echo \"\${_OLD_PHASE_ATTEMPT_TIME_${old_mnv}_${_ti}:-}\"")
+        eval "PHASE_ATTEMPT_TIME_${new_iv}_${_ti}='${_old_at}'"
+        _ti=$((_ti + 1))
+      done
 
       # Report renumbering (string comparison to support decimal numbers)
       if [ "$matched_old_num" != "$new_i" ]; then
@@ -390,10 +417,14 @@ update_phase_status() {
 
   case "$new_status" in
     in_progress)
-      eval "PHASE_START_TIME_${phase_var}='$(date '+%Y-%m-%d %H:%M:%S')'"
+      local _now
+      _now=$(date '+%Y-%m-%d %H:%M:%S')
+      eval "PHASE_START_TIME_${phase_var}='${_now}'"
       local attempts
       attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${phase_var}\"")
       eval "PHASE_ATTEMPTS_${phase_var}=$((attempts + 1))"
+      local _new_attempt=$((attempts + 1))
+      eval "PHASE_ATTEMPT_TIME_${phase_var}_${_new_attempt}='${_now}'"
       ;;
     completed|failed)
       eval "PHASE_END_TIME_${phase_var}='$(date '+%Y-%m-%d %H:%M:%S')'"

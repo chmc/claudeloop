@@ -539,3 +539,77 @@ EOF
   [ "$PHASE_STATUS_2_5" = "completed" ]
   [ "$PHASE_ATTEMPTS_2_5" = "2" ]
 }
+
+# --- Per-attempt start times ---
+
+@test "update_phase_status: records attempt 1 start time in attempt_time_1" {
+  PHASE_ATTEMPTS_1=0
+  update_phase_status 1 "in_progress"
+  [ -n "$PHASE_ATTEMPT_TIME_1_1" ]
+}
+
+@test "update_phase_status: records attempt 2 start time in attempt_time_2 on retry" {
+  PHASE_ATTEMPTS_1=1
+  update_phase_status 1 "in_progress"
+  [ -n "$PHASE_ATTEMPT_TIME_1_2" ]
+}
+
+@test "update_phase_status: clears stale attempt_time on decrement (simulate interrupt)" {
+  # Simulate: 2 attempts recorded, but attempt_time_2 was cleared (interrupt during attempt 2).
+  # generate_phase_details must emit "Attempt 1 Started" but skip the empty attempt 2 time.
+  PHASE_STATUS_1="failed"     PHASE_ATTEMPTS_1=2    PHASE_START_TIME_1="2026-02-22 10:00:00" PHASE_END_TIME_1="2026-02-22 10:10:00"
+  PHASE_STATUS_2="pending"    PHASE_ATTEMPTS_2=0    PHASE_START_TIME_2=""                    PHASE_END_TIME_2=""
+  PHASE_STATUS_3="pending"    PHASE_ATTEMPTS_3=0    PHASE_START_TIME_3=""                    PHASE_END_TIME_3=""
+  PHASE_ATTEMPT_TIME_1_1="2026-02-22 10:00:00"
+  PHASE_ATTEMPT_TIME_1_2=""  # cleared by decrement
+  result=$(generate_phase_details)
+  echo "$result" | grep -q "Attempt 1 Started: 2026-02-22 10:00:00"
+  ! echo "$result" | grep -q "Attempt 2 Started"
+}
+
+@test "generate_phase_details: includes Attempt N Started lines when attempts > 1" {
+  PHASE_STATUS_1="failed"     PHASE_ATTEMPTS_1=2    PHASE_START_TIME_1="2026-02-22 10:00:00" PHASE_END_TIME_1="2026-02-22 10:10:00"
+  PHASE_STATUS_2="pending"    PHASE_ATTEMPTS_2=0    PHASE_START_TIME_2=""                    PHASE_END_TIME_2=""
+  PHASE_STATUS_3="pending"    PHASE_ATTEMPTS_3=0    PHASE_START_TIME_3=""                    PHASE_END_TIME_3=""
+  PHASE_ATTEMPT_TIME_1_1="2026-02-22 10:00:00"
+  PHASE_ATTEMPT_TIME_1_2="2026-02-22 10:05:00"
+  result=$(generate_phase_details)
+  echo "$result" | grep -q "Attempt 1 Started: 2026-02-22 10:00:00"
+  echo "$result" | grep -q "Attempt 2 Started: 2026-02-22 10:05:00"
+}
+
+@test "read_progress: restores per-attempt start times" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Phase One
+Status: failed
+Started: 2026-02-22 10:00:00
+Attempts: 2
+Attempt 1 Started: 2026-02-22 10:00:00
+Attempt 2 Started: 2026-02-22 10:05:00
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_ATTEMPT_TIME_1_1" = "2026-02-22 10:00:00" ]
+  [ "$PHASE_ATTEMPT_TIME_1_2" = "2026-02-22 10:05:00" ]
+}
+
+@test "detect_plan_changes: transfers per-attempt times to matched phase" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Phase One
+Status: failed
+Started: 2026-02-22 10:00:00
+Attempts: 2
+Attempt 1 Started: 2026-02-22 10:00:00
+Attempt 2 Started: 2026-02-22 10:05:00
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_ATTEMPT_TIME_1_1" = "2026-02-22 10:00:00" ]
+  [ "$PHASE_ATTEMPT_TIME_1_2" = "2026-02-22 10:05:00" ]
+}

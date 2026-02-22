@@ -129,6 +129,13 @@ print_phase_exec_header() {
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
     log_live "Attempt $attempt/$MAX_RETRIES"
+    local _pi=1
+    while [ "$_pi" -lt "$attempt" ]; do
+      local _pt
+      _pt=$(eval "echo \"\${PHASE_ATTEMPT_TIME_${phase_var}_${_pi}:-}\"")
+      [ -n "$_pt" ] && printf '%b\n' "${COLOR_YELLOW}  Attempt $_pi started: $_pt${COLOR_RESET}"
+      _pi=$((_pi + 1))
+    done
   fi
   echo "───────────────────────────────────────────────────────────"
   log_live "───────────────────────────────────────────────────────────"
