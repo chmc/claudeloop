@@ -700,6 +700,7 @@ $description
 ## Context
 - This is a fresh Claude instance dedicated to this phase only
 - Previous phases have been completed and committed to git
+- Even if prior work for this phase exists in git, you MUST complete every subtask listed in the description above — do not assume the phase is done
 - Review recent git history and existing code before implementing
 - When done, ensure all changes are tested and working
 - Commit your changes when complete
@@ -737,7 +738,8 @@ The previous attempt exited without completing the phase. Here is the tail of wh
 ${_prev_context}
 \`\`\`
 
-Learn from the above. Do not repeat the same mistakes. Address any errors shown before proceeding."
+Learn from the above. Do not repeat the same mistakes. Address any errors shown before proceeding.
+You MUST still complete every subtask listed in the phase description — do not skip steps because prior work exists."
     fi
   fi
 
@@ -794,8 +796,14 @@ Learn from the above. Do not repeat the same mistakes. Address any errors shown 
   _pl_pid="$CURRENT_PIPELINE_PID"
   _pl_pgid="$CURRENT_PIPELINE_PGID"
   if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null; then
+    # Use set -m so the timer subshell gets its own process group (PGID=PID).
+    # This lets us kill -TERM -- -$_timer_pid to kill both the subshell and
+    # its `sleep` child, preventing orphaned sleep processes from holding open
+    # bats (or other tool) internal file descriptors.
+    set -m
     ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
     _timer_pid=$!
+    set +m
   fi
 
   wait "$CURRENT_PIPELINE_PID" || true   # || true required: set -eu is active
@@ -804,7 +812,7 @@ Learn from the above. Do not repeat the same mistakes. Address any errors shown 
 
   # Cancel timer if phase completed before timeout
   if [ -n "$_timer_pid" ]; then
-    kill "$_timer_pid" 2>/dev/null || true
+    kill -- "-$_timer_pid" 2>/dev/null || true  # kill whole process group (subshell + sleep child)
     wait "$_timer_pid" 2>/dev/null || true
     _timer_pid=""
   fi
