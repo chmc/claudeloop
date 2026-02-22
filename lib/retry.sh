@@ -93,6 +93,20 @@ is_empty_log() {
   return 1
 }
 
+# Check if the most recent execution block in a phase log contains a [Session:] line
+# with turns > 0 (real work was done). Scoped to the last execution block to avoid
+# cross-attempt contamination in multi-attempt logs.
+# Multiple [Session:] lines per phase are normal (background sub-invocations each emit one).
+# Args: $1 - path to log file
+# Returns: 0 if successful session found in current attempt, 1 otherwise
+has_successful_session() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+  awk '/^=== EXECUTION START /{found=0; next}
+       /\[Session:/ && /turns=[1-9]/{found=1}
+       END{exit (found ? 0 : 1)}' "$log_file"
+}
+
 # Check if phase should be retried
 # Args: $1 - phase number
 # Returns: 0 if should retry, 1 if max retries exceeded

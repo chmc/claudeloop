@@ -192,7 +192,7 @@ Or to tail the raw log directly:
 
 **Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings.
 
-**Phase marked as failed but the work was done** — The Claude subprocess exited non-zero despite completing its task (e.g. tests pass, commit made). Use `--mark-complete <n>` to override the status and resume from the next phase:
+**Phase marked as failed but the work was done** — ClaudeLoop automatically detects this: if a background sub-invocation caused the Claude process to exit non-zero but the main session completed real work (turns > 0 in the log), the phase is marked completed with a warning. If auto-detection misses a case, use `--mark-complete <n>` to override the status manually:
 
     claudeloop --mark-complete 1
 

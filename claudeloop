@@ -868,6 +868,14 @@ Learn from the above. Do not repeat the same mistakes. Address any errors shown 
     CURRENT_PHASE=""
     return 0
   else
+    if has_successful_session "$log_file"; then
+      log_verbose "execute_phase: phase $phase_num exited non-zero ($claude_exit) but successful session detected"
+      print_warning "Phase $phase_num: Claude exited with code $claude_exit but a successful session was detected — treating as completed."
+      update_phase_status "$phase_num" "completed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 0
+    fi
     log_verbose "execute_phase: phase $phase_num failed"
     print_error "Phase $phase_num failed"
     update_phase_status "$phase_num" "failed"

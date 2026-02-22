@@ -238,3 +238,56 @@ teardown() { rm -f "$_log"; }
   run is_empty_log "$_log"
   [ "$status" -eq 1 ]
 }
+
+# --- has_successful_session() ---
+
+@test "has_successful_session: returns false when log missing" {
+  run has_successful_session "/nonexistent/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns false when log has no session lines" {
+  printf 'Some output without any session lines.\n' > "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns false when only turns=0 session" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns true when session has turns > 0" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=12.3s turns=71 tokens=500in/200out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_successful_session: returns true when good session followed by zero-turn session (bug scenario)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=45.2s turns=71 tokens=5000in/2000out]\n' >> "$_log"
+  printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_successful_session: returns true when multiple sessions all turns > 0 (normal multi-subagent case)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=30.1s turns=57 tokens=4000in/1500out]\n' >> "$_log"
+  printf '[Session: duration=5.2s turns=1 tokens=200in/100out]\n' >> "$_log"
+  printf '[Session: duration=4.8s turns=1 tokens=180in/90out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_successful_session: returns false when current attempt has turns=0 even if prior attempt had turns > 0 (cross-attempt scoping)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=20.0s turns=10 tokens=1000in/500out]\n' >> "$_log"
+  printf '=== EXECUTION START phase=1 attempt=2 time=2026-01-01T00:01:00 ===\n' >> "$_log"
+  printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
