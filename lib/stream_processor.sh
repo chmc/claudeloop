@@ -98,7 +98,7 @@ process_stream_json() {
     if (substr(line, 1, 1) != "{") {
       print line
       print line >> log_file
-      if (live_log != "") { print line >> live_log; fflush(live_log) }
+      if (live_log != "") { printf "[%s] %s\n", get_time(), line >> live_log; fflush(live_log) }
       next
     }
 
@@ -154,10 +154,10 @@ process_stream_json() {
           if (hooks_enabled != "true") {
             if (preview != "") {
               printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
-              if (live_log != "") printf "  [Tool: %s] %s\n", name, preview >> live_log
+              if (live_log != "") printf "  [%s] [Tool: %s] %s\n", get_time(), name, preview >> live_log
             } else {
               printf "  [Tool: %s]\n", name > "/dev/stderr"
-              if (live_log != "") printf "  [Tool: %s]\n", name >> live_log
+              if (live_log != "") printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log
             }
           }
         }
@@ -177,7 +177,7 @@ process_stream_json() {
       if (stop == "max_tokens") {
         if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
         printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" > "/dev/stderr"
-        if (live_log != "") { printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" >> live_log; fflush(live_log) }
+        if (live_log != "") { printf "  [%s] [Warning: max_tokens \342\200\224 output was truncated]\n", get_time() >> live_log; fflush(live_log) }
       }
 
     } else if (etype == "tool_use") {
@@ -207,10 +207,10 @@ process_stream_json() {
       if (hooks_enabled != "true") {
         if (preview != "") {
           printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
-          if (live_log != "") { printf "  [Tool: %s] %s\n", name, preview >> live_log; fflush(live_log) }
+          if (live_log != "") { printf "  [%s] [Tool: %s] %s\n", get_time(), name, preview >> live_log; fflush(live_log) }
         } else {
           printf "  [Tool: %s]\n", name > "/dev/stderr"
-          if (live_log != "") { printf "  [Tool: %s]\n", name >> live_log; fflush(live_log) }
+          if (live_log != "") { printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log; fflush(live_log) }
         }
       }
 
@@ -242,7 +242,7 @@ process_stream_json() {
         }
       }
       printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) > "/dev/stderr"
-      if (live_log != "") { printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) >> live_log; fflush(live_log) }
+      if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
 
     } else if (etype == "user") {
       tool_result = extract(line, "tool_use_result")
@@ -251,7 +251,7 @@ process_stream_json() {
         spinner_start = 0
         is_err = (index(line, "\"is_error\":true") > 0) ? " [error]" : ""
         printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) > "/dev/stderr"
-        if (live_log != "") { printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
+        if (live_log != "") { printf "  [%s] [Result%s: %d chars] %s\n", get_time(), is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
       }
 
     } else if (etype == "result") {
@@ -278,7 +278,7 @@ process_stream_json() {
       summary = summary "]"
       print summary > "/dev/stderr"
       print summary >> log_file
-      if (live_log != "") { print summary >> live_log; fflush(live_log) }
+      if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
     } else if (etype == "rate_limit_event") {
       util = extract(line, "utilization")
@@ -287,7 +287,7 @@ process_stream_json() {
         if (pct > last_rate_limit_pct) {
           if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
           printf "  [Rate limit: %d%% of 7-day quota used]\n", pct > "/dev/stderr"
-          if (live_log != "") { printf "  [Rate limit: %d%% of 7-day quota used]\n", pct >> live_log; fflush(live_log) }
+          if (live_log != "") { printf "  [%s] [Rate limit: %d%% of 7-day quota used]\n", get_time(), pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
         }
       }

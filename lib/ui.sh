@@ -14,7 +14,15 @@ COLOR_RESET='\033[0m'
 SIMPLE_MODE="${SIMPLE_MODE:-false}"
 
 # Write a line to the live log (no-op when LIVE_LOG is unset)
-log_live() { [ -n "${LIVE_LOG:-}" ] && printf '%b\n' "$@" >> "$LIVE_LOG" || true; }
+# Empty string writes a bare newline; any other string gets a [HH:MM:SS] prefix.
+log_live() {
+  [ -n "${LIVE_LOG:-}" ] || return 0
+  if [ -z "$1" ]; then
+    printf '\n' >> "$LIVE_LOG"
+  else
+    printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$1" >> "$LIVE_LOG"
+  fi
+}
 
 # Print startup logo (space ghost)
 print_logo() {
@@ -125,7 +133,7 @@ print_phase_exec_header() {
   echo "───────────────────────────────────────────────────────────"
   log_live "───────────────────────────────────────────────────────────"
   printf '%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title${COLOR_RESET}"
-  log_live "[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title"
+  log_live "▶ Executing Phase $phase_num/$PHASE_COUNT: $title"
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
     log_live "Attempt $attempt/$MAX_RETRIES"

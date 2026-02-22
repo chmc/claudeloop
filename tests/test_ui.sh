@@ -176,3 +176,24 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"⚠ Caution ahead"* ]]
 }
+
+# --- log_live() ---
+
+@test "log_live writes timestamped entry to LIVE_LOG" {
+  local tmplog
+  tmplog=$(mktemp)
+  LIVE_LOG="$tmplog"
+  log_live "hello"
+  [[ "$(cat "$tmplog")" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\ hello ]]
+  rm -f "$tmplog"
+}
+
+@test "log_live writes blank line for empty string" {
+  local tmplog
+  tmplog=$(mktemp)
+  LIVE_LOG="$tmplog"
+  log_live ""
+  # empty string: should write a bare newline, no timestamp
+  ! grep -q '\[' "$tmplog"
+  rm -f "$tmplog"
+}

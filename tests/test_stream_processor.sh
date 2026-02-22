@@ -491,3 +491,23 @@ JSON"
   [ "$status" -eq 0 ]
   [[ "$output" != *"model="* ]]
 }
+
+# --- live_log timestamp tests ---
+
+@test "tool_use event: live log line has timestamp" {
+  local _live
+  _live=$(mktemp)
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Tool: Bash\]' "$_live"
+  rm -f "$_live"
+}
+
+@test "tool_result event: live log line has timestamp" {
+  local _live
+  _live=$(mktemp)
+  local event='{"type":"tool_result","content":"some output"}'
+  echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Tool result:' "$_live"
+  rm -f "$_live"
+}

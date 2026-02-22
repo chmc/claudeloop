@@ -761,7 +761,7 @@ You MUST still complete every subtask listed in the phase description — do not
     _claude_debug_flag="--debug-file .claudeloop/logs/phase-$phase_num.claude.debug"
   fi
   echo "Executing Claude CLI..."
-  [ -n "${LIVE_LOG:-}" ] && echo "Executing Claude CLI..." >> "$LIVE_LOG" || true
+  [ -n "${LIVE_LOG:-}" ] && printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')" >> "$LIVE_LOG" || true
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
   # Use job control (set -m) so the background pipeline gets its own process group.
