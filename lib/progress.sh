@@ -156,7 +156,7 @@ generate_phase_details() {
 
     local end_time
     end_time=$(eval "echo \"\$PHASE_END_TIME_${_pv}\"")
-    if [ -n "$end_time" ]; then
+    if [ -n "$end_time" ] && { [ "$status" = "completed" ] || [ "$status" = "failed" ]; }; then
       echo "Completed: $end_time"
     fi
 
@@ -420,6 +420,7 @@ update_phase_status() {
       local _now
       _now=$(date '+%Y-%m-%d %H:%M:%S')
       eval "PHASE_START_TIME_${phase_var}='${_now}'"
+      eval "PHASE_END_TIME_${phase_var}=''"
       local attempts
       attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${phase_var}\"")
       eval "PHASE_ATTEMPTS_${phase_var}=$((attempts + 1))"

@@ -169,6 +169,21 @@ EOF
   [ "$PHASE_ATTEMPTS_1" = "2" ]
 }
 
+@test "update_phase_status: clears PHASE_END_TIME when transitioning to in_progress" {
+  PHASE_ATTEMPTS_1=1
+  PHASE_END_TIME_1="2026-02-23 10:09:03"
+  update_phase_status 1 "in_progress"
+  [ -z "$PHASE_END_TIME_1" ]
+}
+
+@test "generate_phase_details: does not show Completed line for in_progress status" {
+  PHASE_STATUS_1="in_progress" PHASE_ATTEMPTS_1=2 PHASE_START_TIME_1="2026-02-23 10:09:08" PHASE_END_TIME_1="2026-02-23 10:09:03"
+  PHASE_STATUS_2="pending"     PHASE_ATTEMPTS_2=0 PHASE_START_TIME_2=""                    PHASE_END_TIME_2=""
+  PHASE_STATUS_3="pending"     PHASE_ATTEMPTS_3=0 PHASE_START_TIME_3=""                    PHASE_END_TIME_3=""
+  result=$(generate_phase_details)
+  ! echo "$result" | grep -q "^Completed:"
+}
+
 # --- read_old_phase_list() ---
 
 @test "read_old_phase_list: sets _OLD_PHASE_COUNT=0 when file absent" {
