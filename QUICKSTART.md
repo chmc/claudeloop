@@ -116,7 +116,7 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - Each phase should commit its changes so the next phase starts clean
 - Check `.claudeloop/logs/phase-N.log` if a phase fails
 - Claude output streams live to the terminal. Logs are saved to `.claudeloop/logs/phase-N.log`
-- Phase runs longer than `MAX_PHASE_TIME` seconds are automatically killed and retried
+- Phase runs longer than `MAX_PHASE_TIME` seconds are automatically killed and retried (disabled by default; set `--max-phase-time <s>` to enable)
 - On retry, the previous attempt's output is injected into the prompt so Claude can learn from it
 - Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run
 
