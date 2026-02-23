@@ -65,14 +65,6 @@ parse_plan() {
       local phase_var
       phase_var=$(phase_to_var "$phase_num")
 
-      # Check for duplicate phase numbers
-      local existing_title
-      existing_title=$(eval "echo \"\${PHASE_TITLE_${phase_var}:-}\"")
-      if [ -n "$existing_title" ]; then
-        echo "Error: Duplicate phase number $phase_num at line $line_num" >&2
-        return 1
-      fi
-
       # Store phase title (escape single quotes for eval safety)
       local phase_title_escaped
       phase_title_escaped=$(printf '%s' "$phase_title" | sed "s/'/'\\\\''/g")

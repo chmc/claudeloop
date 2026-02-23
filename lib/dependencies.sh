@@ -87,21 +87,27 @@ _dfs_cycle_check() {
 
   # Check all dependencies
   local deps
+  local _cycle_found=false
   deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$(phase_to_var "$phase")\"")
   for dep in $deps; do
     if ! _dfs_cycle_check "$dep"; then
-      return 1
+      _cycle_found=true
+      break
     fi
   done
 
-  # Remove from recursion stack, add to visited
+  # Remove from recursion stack
   local new_stack=""
   for item in $rec_stack; do
     [ "$item" != "$phase" ] && new_stack="$new_stack $item"
   done
   rec_stack="$new_stack"
-  visited="$visited $phase"
 
+  if $_cycle_found; then
+    return 1
+  fi
+
+  visited="$visited $phase"
   return 0
 }
 
