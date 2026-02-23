@@ -1072,7 +1072,7 @@ run_monitor() {
     return 0
   fi
 
-  tail -f "$_live_log" | awk "$_colorizer"
+  tail -F "$_live_log" 2>/dev/null | awk "$_colorizer"
 }
 
 # Main function

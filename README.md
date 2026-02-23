@@ -180,7 +180,7 @@ To watch progress live from a second terminal, use:
 
 Or to tail the raw log directly:
 
-    tail -f .claudeloop/live.log
+    tail -F .claudeloop/live.log
 
 ## Troubleshooting
 

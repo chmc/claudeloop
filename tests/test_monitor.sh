@@ -105,6 +105,36 @@ teardown() {
   printf '%s' "$output" | grep -qv $'\033\['
 }
 
+@test "--monitor follows log rotation with tail -F" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  LIVE_LOG="$TEST_DIR/.claudeloop/live.log"
+  CAPTURE="$TEST_DIR/capture.txt"
+
+  : > "$LIVE_LOG"
+
+  # Start tail -F in background (same as run_monitor uses)
+  tail -F "$LIVE_LOG" 2>/dev/null > "$CAPTURE" &
+  TAIL_PID=$!
+
+  sleep 0.5
+  echo "before rotation" >> "$LIVE_LOG"
+  sleep 0.5
+
+  # Simulate log rotation (same as claudeloop does on new run)
+  mv "$LIVE_LOG" "$LIVE_LOG.old"
+  : > "$LIVE_LOG"
+
+  sleep 1.5
+  echo "after rotation" >> "$LIVE_LOG"
+  sleep 1.5
+
+  kill "$TAIL_PID" 2>/dev/null || true
+  wait "$TAIL_PID" 2>/dev/null || true
+
+  # Must contain post-rotation content
+  grep -q "after rotation" "$CAPTURE"
+}
+
 @test "--monitor live.log stays plain text after run" {
   mkdir -p "$TEST_DIR/.claudeloop"
   printf '[12:00:00] \xe2\x9c\x93 Phase 1 completed\n' > "$TEST_DIR/.claudeloop/live.log"
