@@ -662,6 +662,56 @@ JSON"
   [[ "$output" =~ [0-9]+s ]]
 }
 
+# --- Color output tests ---
+
+@test "tool_use event: ANSI color codes present in stderr output by default" {
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # Check for ESC[0;36m (cyan) around [Tool: Bash]
+  [[ "$output" == *$'\033[0;36m'* ]]
+  [[ "$output" == *$'\033[0m'* ]]
+}
+
+@test "tool_use event: no ANSI escape codes when simple_mode=true" {
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: Bash]"* ]]
+  [[ "$output" != *$'\033['* ]]
+}
+
+@test "rate_limit_event: yellow color in stderr output" {
+  local event='{"type":"rate_limit_event","utilization":0.91}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # Check for ESC[1;33m (yellow)
+  [[ "$output" == *$'\033[1;33m'* ]]
+}
+
+@test "user event with is_error:true: red color in stderr output" {
+  local event='{"type":"user","message":{},"tool_use_result":"error text","is_error":true}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # Check for ESC[0;31m (red)
+  [[ "$output" == *$'\033[0;31m'* ]]
+}
+
+@test "tool_use event: live_log does not contain ANSI escape codes" {
+  local _live
+  _live=$(mktemp)
+  local event='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
+  # live_log should NOT contain escape codes
+  if grep -qP '\033\[' "$_live" 2>/dev/null || grep -q $'\033\[' "$_live"; then
+    echo "Found ANSI codes in live_log"
+    cat "$_live"
+    rm -f "$_live"
+    false
+  fi
+  rm -f "$_live"
+}
+
 @test "heartbeat after real event: text then heartbeat handled cleanly" {
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
   local hb='{"type":"heartbeat"}'

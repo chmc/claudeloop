@@ -6,15 +6,18 @@
 
 # process_stream_json: parse stream-json from stdin
 # Args: $1 - log_file path, $2 - raw_log path, $3 - hooks_enabled (true|false, default false)
+#       $4 - live_log path, $5 - simple_mode (true|false, default false)
 process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
   local hooks_enabled="${3:-false}"
   local live_log="${4:-}"
+  local simple_mode="${5:-false}"
   awk -v log_file="$log_file" -v raw_log="$raw_log" \
       -v trunc_len="${STREAM_TRUNCATE_LEN:-300}" \
       -v hooks_enabled="$hooks_enabled" \
-      -v live_log="$live_log" '
+      -v live_log="$live_log" \
+      -v simple_mode="$simple_mode" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -98,6 +101,12 @@ process_stream_json() {
   }
 
   BEGIN {
+    if (simple_mode != "true") {
+      C_CYAN = "\033[0;36m"; C_RED = "\033[0;31m"
+      C_YELLOW = "\033[1;33m"; C_RESET = "\033[0m"
+    } else {
+      C_CYAN = ""; C_RED = ""; C_YELLOW = ""; C_RESET = ""
+    }
     at_line_start = 1
     live_at_line_start = 1
     spinner = "|/-\\"
@@ -170,10 +179,10 @@ process_stream_json() {
           else if (desc != "")             preview = trunc(desc, 80)
           if (hooks_enabled != "true") {
             if (preview != "") {
-              printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+              printf "  %s[Tool: %s] %s%s\n", C_CYAN, name, preview, C_RESET > "/dev/stderr"
               if (live_log != "") printf "  [%s] [Tool: %s] %s\n", get_time(), name, preview >> live_log
             } else {
-              printf "  [Tool: %s]\n", name > "/dev/stderr"
+              printf "  %s[Tool: %s]%s\n", C_CYAN, name, C_RESET > "/dev/stderr"
               if (live_log != "") printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log
             }
           }
@@ -193,7 +202,7 @@ process_stream_json() {
       stop = extract(line, "stop_reason")
       if (stop == "max_tokens") {
         clear_line()
-        printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" > "/dev/stderr"
+        printf "  %s[Warning: max_tokens \342\200\224 output was truncated]%s\n", C_YELLOW, C_RESET > "/dev/stderr"
         if (live_log != "") { printf "  [%s] [Warning: max_tokens \342\200\224 output was truncated]\n", get_time() >> live_log; fflush(live_log) }
       }
 
@@ -219,10 +228,10 @@ process_stream_json() {
       else                   preview = ""
       if (hooks_enabled != "true") {
         if (preview != "") {
-          printf "  [Tool: %s] %s\n", name, preview > "/dev/stderr"
+          printf "  %s[Tool: %s] %s%s\n", C_CYAN, name, preview, C_RESET > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Tool: %s] %s\n", get_time(), name, preview >> live_log; fflush(live_log) }
         } else {
-          printf "  [Tool: %s]\n", name > "/dev/stderr"
+          printf "  %s[Tool: %s]%s\n", C_CYAN, name, C_RESET > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log; fflush(live_log) }
         }
       }
@@ -250,7 +259,7 @@ process_stream_json() {
           }
         }
       }
-      printf "  [Tool result: %d chars] %s\n", total, trunc(preview, 200) > "/dev/stderr"
+      printf "  %s[Tool result: %d chars] %s%s\n", C_CYAN, total, trunc(preview, 200), C_RESET > "/dev/stderr"
       if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
 
     } else if (etype == "user") {
@@ -259,7 +268,8 @@ process_stream_json() {
         clear_line()
         spinner_start = 0
         is_err = (index(line, "\"is_error\":true") > 0) ? " [error]" : ""
-        printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) > "/dev/stderr"
+        _c = (is_err != "") ? C_RED : C_CYAN
+        printf "  %s[Result%s: %d chars] %s%s\n", _c, is_err, length(tool_result), trunc(tool_result, 200), C_RESET > "/dev/stderr"
         if (live_log != "") { printf "  [%s] [Result%s: %d chars] %s\n", get_time(), is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
       }
 
@@ -317,7 +327,7 @@ process_stream_json() {
         pct = int((util + 0) * 100)
         if (pct > last_rate_limit_pct) {
           clear_line()
-          printf "  [Rate limit: %d%% of 7-day quota used]\n", pct > "/dev/stderr"
+          printf "  %s[Rate limit: %d%% of 7-day quota used]%s\n", C_YELLOW, pct, C_RESET > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Rate limit: %d%% of 7-day quota used]\n", get_time(), pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
         }
@@ -351,6 +361,6 @@ process_stream_json() {
 
 _self="${0##*/}"
 if [ "$_self" = "stream_processor.sh" ]; then
-  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log]\n' >&2; exit 1; }
-  process_stream_json "$1" "$2" "${3:-false}" "${4:-}"
+  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log] [simple_mode]\n' >&2; exit 1; }
+  process_stream_json "$1" "$2" "${3:-false}" "${4:-}" "${5:-false}"
 fi
