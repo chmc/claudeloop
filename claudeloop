@@ -1047,12 +1047,32 @@ run_monitor() {
   fi
   printf 'Following .claudeloop/live.log — Ctrl+C to stop\n\n'
 
+  _colorizer='
+    {
+      line = $0
+      if      (line ~ /✗/)                { print "\033[0;31m" line "\033[0m" }
+      else if (line ~ /✓/)                { print "\033[0;32m" line "\033[0m" }
+      else if (line ~ /[⚠⏸]/)            { print "\033[1;33m" line "\033[0m" }
+      else if (line ~ /▶ Executing Phase/) { print "\033[0;34m" line "\033[0m" }
+      else if (line ~ /─/)                { print "\033[0;34m" line "\033[0m" }
+      else if (line ~ /Attempt [0-9]/)    { print "\033[1;33m" line "\033[0m" }
+      else {
+        gsub(/\[Tool: [^]]*\]/, "\033[0;36m&\033[0m", line)
+        gsub(/\[Result \[error\][^]]*\]/, "\033[0;31m&\033[0m", line)
+        gsub(/\[Rate limit: [^]]*\]/, "\033[1;33m&\033[0m", line)
+        gsub(/\[Warning: [^]]*\]/, "\033[1;33m&\033[0m", line)
+        print line
+      }
+      fflush()
+    }
+  '
+
   if [ -n "${_MONITOR_NO_FOLLOW:-}" ]; then
-    tail -n 20 "$_live_log" 2>/dev/null || true
+    tail -n 20 "$_live_log" 2>/dev/null | awk "$_colorizer" || true
     return 0
   fi
 
-  tail -f "$_live_log"
+  tail -f "$_live_log" | awk "$_colorizer"
 }
 
 # Main function

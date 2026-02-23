@@ -56,3 +56,61 @@ teardown() {
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "hello from claudeloop"
 }
+
+@test "--monitor colorizes checkmark lines green" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] \xe2\x9c\x93 Phase 1 completed\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -q $'\033\[0;32m'
+}
+
+@test "--monitor colorizes failure lines red" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] \xe2\x9c\x97 Phase 1 failed\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -q $'\033\[0;31m'
+}
+
+@test "--monitor colorizes executing phase lines blue" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] \xe2\x96\xb6 Executing Phase 1/1: Setup\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -q $'\033\[0;34m'
+}
+
+@test "--monitor colorizes Attempt lines yellow" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] Attempt 2/3\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -q $'\033\[1;33m'
+}
+
+@test "--monitor colorizes [Tool: X] tag inline cyan" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '  [12:00:00] [Tool: Bash] npm test\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -q $'\033\[0;36m'
+}
+
+@test "--monitor does not add color to plain text lines" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] I see the issue with the code\n' > "$TEST_DIR/.claudeloop/live.log"
+  run sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor"
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | grep -qv $'\033\['
+}
+
+@test "--monitor live.log stays plain text after run" {
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf '[12:00:00] \xe2\x9c\x93 Phase 1 completed\n' > "$TEST_DIR/.claudeloop/live.log"
+  sh -c "cd '$TEST_DIR' && _MONITOR_NO_FOLLOW=1 '$CLAUDELOOP' --monitor" >/dev/null
+  # live.log itself must contain no ANSI escape sequences
+  if grep -qP '\x1b' "$TEST_DIR/.claudeloop/live.log" 2>/dev/null; then
+    false
+  fi
+}
