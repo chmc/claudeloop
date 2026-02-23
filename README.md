@@ -204,7 +204,11 @@ If the repo has uncommitted changes from the prior session, ClaudeLoop detects t
 ./tests/run_all_tests.sh        # run all tests
 bats tests/test_parser.sh       # run one test file
 shellcheck -s sh lib/retry.sh   # lint
+./tests/mutate.sh               # mutation testing (all lib files)
+./tests/mutate.sh lib/retry.sh  # mutation testing (single file)
 ```
+
+Mutation testing applies small faults to source code one at a time, runs the corresponding tests, and reports which mutations survived undetected. Use `--with-deletions` to include line-deletion mutations and `--with-integration` to re-test survivors against the integration test suite.
 
 ## Credits
 

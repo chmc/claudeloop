@@ -18,6 +18,8 @@ bats tests/test_parser.sh             # run one test file
 shellcheck -s sh lib/retry.sh         # lint (SC3043 local warnings are acceptable)
 ./claudeloop --plan examples/PLAN.md.example --dry-run
 claudeloop --monitor  # watch live output from a second terminal
+./tests/mutate.sh                     # mutation testing (all lib files)
+./tests/mutate.sh lib/retry.sh        # mutation testing (single file)
 ```
 
 ## Architecture

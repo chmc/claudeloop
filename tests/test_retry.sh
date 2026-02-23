@@ -199,6 +199,25 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 0 ]
 }
 
+# --- is_permission_error() ---
+
+@test "is_permission_error: nonexistent file returns 1" {
+  run is_permission_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_permission_error: clean output returns 1" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_permission_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_permission_error: detects 'write permissions haven't been granted'" {
+  printf "Error: write permissions haven't been granted for this file\n" > "$_log"
+  run is_permission_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
 # --- is_empty_log() ---
 
 @test "is_empty_log: missing file returns 0 (empty)" {

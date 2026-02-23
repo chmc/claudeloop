@@ -95,6 +95,21 @@ EOF
   [ "$PHASE_ATTEMPTS_1" = "3" ]
 }
 
+@test "read_progress: normalizes in_progress to pending" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### 🔄 Phase 1: Phase One
+Status: in_progress
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "pending" ]
+}
+
 @test "read_progress: returns 0 when file does not exist" {
   run read_progress "$TEST_DIR/nonexistent.md"
   [ "$status" -eq 0 ]
@@ -176,6 +191,14 @@ EOF
   [ -z "$PHASE_END_TIME_1" ]
 }
 
+@test "generate_phase_details: shows Completed line for completed status" {
+  PHASE_STATUS_1="completed"  PHASE_ATTEMPTS_1=1 PHASE_START_TIME_1="2026-02-23 10:00:00" PHASE_END_TIME_1="2026-02-23 10:05:00"
+  PHASE_STATUS_2="pending"    PHASE_ATTEMPTS_2=0 PHASE_START_TIME_2=""                    PHASE_END_TIME_2=""
+  PHASE_STATUS_3="pending"    PHASE_ATTEMPTS_3=0 PHASE_START_TIME_3=""                    PHASE_END_TIME_3=""
+  result=$(generate_phase_details)
+  echo "$result" | grep -q "Completed: 2026-02-23 10:05:00"
+}
+
 @test "generate_phase_details: does not show Completed line for in_progress status" {
   PHASE_STATUS_1="in_progress" PHASE_ATTEMPTS_1=2 PHASE_START_TIME_1="2026-02-23 10:09:08" PHASE_END_TIME_1="2026-02-23 10:09:03"
   PHASE_STATUS_2="pending"     PHASE_ATTEMPTS_2=0 PHASE_START_TIME_2=""                    PHASE_END_TIME_2=""
@@ -240,6 +263,18 @@ Depends on: Phase 1 ✅ Phase 2 ✅
 EOF
   read_old_phase_list "$TEST_DIR/PROGRESS.md"
   [ "$_OLD_PHASE_DEPS_3" = "1 2" ]
+}
+
+@test "read_old_phase_list: normalizes in_progress to pending" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### 🔄 Phase 1: Phase One
+Status: in_progress
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_STATUS_1" = "pending" ]
 }
 
 @test "read_old_phase_list: sets count=0 for empty file" {

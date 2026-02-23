@@ -651,6 +651,23 @@ EOF
   [ "$output" = "Phase 6" ]
 }
 
+@test "parse_plan: returns error for missing file" {
+  run parse_plan "$TEST_DIR/nonexistent.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not found"* ]]
+}
+
+@test "parse_plan: returns error for file with no phases" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+# Just a title
+Some random content with no phase headers.
+EOF
+
+  run parse_plan "$TEST_DIR/PLAN.md"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"No phases found"* ]]
+}
+
 @test "phase_to_var: converts dot to underscore" {
   run phase_to_var "2.5"
   [ "$status" -eq 0 ]

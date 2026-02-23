@@ -21,6 +21,22 @@ setup() {
   MAX_RETRIES=3
 }
 
+# --- print_logo() ---
+
+@test "print_logo: outputs logo art when SIMPLE_MODE is false" {
+  SIMPLE_MODE="false"
+  run print_logo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claudeloop"* ]]
+}
+
+@test "print_logo: suppresses logo when SIMPLE_MODE is true" {
+  SIMPLE_MODE="true"
+  run print_logo
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"claudeloop"* ]]
+}
+
 # --- print_header() ---
 
 @test "print_header: shows plan file name" {
@@ -152,6 +168,16 @@ setup() {
   run print_phase_exec_header 2
   [ "$status" -eq 0 ]
   [[ "$output" == *"Attempt 2"* ]]
+}
+
+@test "print_phase_exec_header: shows previous attempt times when attempt > 1" {
+  PHASE_ATTEMPTS_2=3
+  PHASE_ATTEMPT_TIME_2_1="2026-02-23 10:00:00"
+  PHASE_ATTEMPT_TIME_2_2="2026-02-23 10:05:00"
+  run print_phase_exec_header 2
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Attempt 1 started: 2026-02-23 10:00:00"* ]]
+  [[ "$output" == *"Attempt 2 started: 2026-02-23 10:05:00"* ]]
 }
 
 # --- print_success() ---
