@@ -512,6 +512,29 @@ JSON"
   rm -f "$_live"
 }
 
+@test "text without newline followed by tool_use: tool entry on its own line in live log" {
+  local _live
+  _live=$(mktemp)
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me start"}]}}'
+  local tool='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  printf '%s\n%s\n' "$text" "$tool" | process_stream_json "$_log" "$_raw" false "$_live"
+  # Tool line must begin at column 0 (not appended after text)
+  grep -qE '^  \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] \[Tool: Bash\]' "$_live"
+  rm -f "$_live"
+}
+
+@test "text without newline followed by tool_use: tool entry not appended to text line" {
+  local _live
+  _live=$(mktemp)
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me start"}]}}'
+  local tool='{"type":"tool_use","name":"Bash","input":{"command":"ls /"}}'
+  printf '%s\n%s\n' "$text" "$tool" | process_stream_json "$_log" "$_raw" false "$_live"
+  # The text "Let me start" must NOT appear on the same line as [Tool: Bash]
+  run grep 'Let me start.*\[Tool: Bash\]' "$_live"
+  [ "$status" -eq 1 ]
+  rm -f "$_live"
+}
+
 # --- Cost delta tracking ---
 
 @test "result event: first event shows full cost as delta from zero" {
