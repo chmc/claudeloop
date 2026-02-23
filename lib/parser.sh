@@ -38,11 +38,11 @@ parse_plan() {
     line_num=$((line_num + 1))
 
     # Check if this is a phase header (flexible: 1-3 hashes or bare, case-insensitive, separator optional)
-    if echo "$line" | grep -qE '^#{1,3}[[:space:]]+[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]+[^-[:space:]]|[[:space:]]*$)|^[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]*$)'; then
+    if echo "$line" | grep -iqE '^#{1,3}[[:space:]]+[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]+[^-[:space:]]|[[:space:]]*$)|^[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]*$)'; then
       local phase_num
-      phase_num=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp]hase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\).*/\1/p')
+      phase_num=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\).*/\1/p')
       local phase_title
-      phase_title=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp]hase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p')
+      phase_title=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p')
       if [ -z "$phase_title" ]; then
         phase_title="Phase $phase_num"
       fi

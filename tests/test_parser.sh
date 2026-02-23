@@ -468,6 +468,26 @@ EOF
   [ "$output" = "Setup" ]
 }
 
+@test "flexible_headers: uppercase '## PHASE 1: SETUP' parsed correctly" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## PHASE 1: SETUP
+Create setup.
+
+## PHASE 2: BUILD
+Build it.
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_count
+  [ "$status" -eq 0 ]
+  [ "$output" = "2" ]
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "SETUP" ]
+}
+
 @test "flexible_headers: bare colon 'Phase 1: Setup' parsed correctly" {
   cat > "$TEST_DIR/PLAN.md" << 'EOF'
 Phase 1: Setup
@@ -624,13 +644,16 @@ Content 5.
 
 Phase 6
 Content 6.
+
+## PHASE 7: Zeta
+Content 7.
 EOF
 
   parse_plan "$TEST_DIR/PLAN.md"
 
   run get_phase_count
   [ "$status" -eq 0 ]
-  [ "$output" = "6" ]
+  [ "$output" = "7" ]
 
   run get_phase_title 1
   [ "$output" = "Alpha" ]
@@ -649,6 +672,9 @@ EOF
 
   run get_phase_title 6
   [ "$output" = "Phase 6" ]
+
+  run get_phase_title 7
+  [ "$output" = "Zeta" ]
 }
 
 @test "parse_plan: returns error for missing file" {
