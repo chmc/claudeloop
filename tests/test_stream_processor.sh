@@ -492,6 +492,36 @@ JSON"
   [[ "$output" != *"model="* ]]
 }
 
+# --- blank line fix: spinner clearing ---
+
+@test "spinner between tool events: no extra newline in stdout" {
+  local tool1='{"type":"tool_use","name":"Read","input":{"file_path":"/a"}}'
+  local spinner='{"type":"unknown_event"}'
+  local tool2='{"type":"tool_use","name":"Read","input":{"file_path":"/b"}}'
+  local outfile
+  outfile=$(mktemp)
+  printf '%s\n%s\n%s\n' "$tool1" "$spinner" "$tool2" \
+    | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>/dev/null > "$outfile"
+  # Count newlines: should be exactly 1 (from BEGIN timestamp line)
+  # With the bug, spinner clear adds an extra \n making it 2
+  newline_count=$(tr -cd '\n' < "$outfile" | wc -c | tr -d ' ')
+  [ "$newline_count" -eq 1 ]
+  rm -f "$outfile"
+}
+
+@test "partial text without newline followed by tool_use: text gets its own line" {
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}'
+  local tool='{"type":"tool_use","name":"Bash","input":{"command":"ls"}}'
+  local outfile
+  outfile=$(mktemp)
+  printf '%s\n%s\n' "$text" "$tool" \
+    | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>/dev/null > "$outfile"
+  # Should have 2 newlines: timestamp line + text line (clear_line adds \n for non-spinner)
+  newline_count=$(tr -cd '\n' < "$outfile" | wc -c | tr -d ' ')
+  [ "$newline_count" -eq 2 ]
+  rm -f "$outfile"
+}
+
 # --- live_log timestamp tests ---
 
 @test "tool_use event: live log line has timestamp" {

@@ -80,6 +80,23 @@ process_stream_json() {
     return ep + 0
   }
 
+  function clear_line() {
+    if (!at_line_start) {
+      if (spinner_start > 0) {
+        printf "\r%-12s\r", ""
+      } else {
+        printf "\n"
+      }
+      fflush()
+      if (live_log != "" && !live_at_line_start) {
+        printf "\n" >> live_log
+        fflush(live_log)
+        live_at_line_start = 1
+      }
+      at_line_start = 1
+    }
+  }
+
   BEGIN {
     at_line_start = 1
     live_at_line_start = 1
@@ -109,12 +126,7 @@ process_stream_json() {
     if (etype == "assistant") {
       text = extract(line, "text")
       if (text != "") {
-        if (!at_line_start) {
-          printf "\r%-12s\r\n", ""
-          fflush()
-          if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }
-          at_line_start = 1
-        }
+        clear_line()
         spinner_start = 0
         if (at_line_start) printf "[%s] ", get_time()
         if (live_log != "") {
@@ -134,7 +146,7 @@ process_stream_json() {
           tool_id = extract(seg, "id")
           if (tool_id != "" && (tool_id in shown_tools)) continue
           if (tool_id != "") shown_tools[tool_id] = 1
-          if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }; at_line_start = 1 }
+          clear_line()
           spinner_start = 0
           name = extract(seg, "name")
           cmd = ""; fp = ""; pat = ""; url = ""; query = ""; npath = ""; stype = ""
@@ -180,18 +192,13 @@ process_stream_json() {
       }
       stop = extract(line, "stop_reason")
       if (stop == "max_tokens") {
-        if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); at_line_start = 1 }
+        clear_line()
         printf "  [Warning: max_tokens \342\200\224 output was truncated]\n" > "/dev/stderr"
         if (live_log != "") { printf "  [%s] [Warning: max_tokens \342\200\224 output was truncated]\n", get_time() >> live_log; fflush(live_log) }
       }
 
     } else if (etype == "tool_use") {
-      if (!at_line_start) {
-        printf "\r%-12s\r\n", ""
-        fflush()
-        if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }
-        at_line_start = 1
-      }
+      clear_line()
       spinner_start = 0
       name = extract(line, "name")
       cmd = ""; fp = ""; pat = ""; url = ""; query = ""; npath = ""; stype = ""
@@ -221,12 +228,7 @@ process_stream_json() {
       }
 
     } else if (etype == "tool_result") {
-      if (!at_line_start) {
-        printf "\r%-12s\r\n", ""
-        fflush()
-        if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }
-        at_line_start = 1
-      }
+      clear_line()
       spinner_start = 0
       content = extract(line, "content")
       preview = ""
@@ -254,7 +256,7 @@ process_stream_json() {
     } else if (etype == "user") {
       tool_result = extract(line, "tool_use_result")
       if (tool_result != "") {
-        if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }; at_line_start = 1 }
+        clear_line()
         spinner_start = 0
         is_err = (index(line, "\"is_error\":true") > 0) ? " [error]" : ""
         printf "  [Result%s: %d chars] %s\n", is_err, length(tool_result), trunc(tool_result, 200) > "/dev/stderr"
@@ -262,12 +264,7 @@ process_stream_json() {
       }
 
     } else if (etype == "result") {
-      if (!at_line_start) {
-        printf "\r%-12s\r\n", ""
-        fflush()
-        if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }
-        at_line_start = 1
-      }
+      clear_line()
       spinner_start = 0
       total_cost = extract(line, "total_cost_usd") + 0
       session_cost = total_cost - prev_total_cost
@@ -319,7 +316,7 @@ process_stream_json() {
       if (util != "") {
         pct = int((util + 0) * 100)
         if (pct > last_rate_limit_pct) {
-          if (!at_line_start) { printf "\r%-12s\r\n", ""; fflush(); if (live_log != "" && !live_at_line_start) { printf "\n" >> live_log; fflush(live_log); live_at_line_start = 1 }; at_line_start = 1 }
+          clear_line()
           printf "  [Rate limit: %d%% of 7-day quota used]\n", pct > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Rate limit: %d%% of 7-day quota used]\n", get_time(), pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
