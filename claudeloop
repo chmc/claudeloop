@@ -652,6 +652,21 @@ _add_platform_gitignore() {
   esac
 }
 
+# Inject heartbeat events during idle periods to keep the spinner alive.
+# Reads lines from stdin with a 1-second timeout; on timeout, emits a
+# {"type":"heartbeat"} event so the stream processor can update the spinner.
+inject_heartbeats() {
+  while true; do
+    if IFS= read -t 1 -r line; then
+      printf '%s\n' "$line"
+    else
+      # exit code <= 128 means EOF; > 128 means timeout
+      [ $? -le 128 ] && break
+      printf '{"type":"heartbeat"}\n'
+    fi
+  done
+}
+
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"
@@ -784,7 +799,7 @@ You MUST still complete every subtask listed in the phase description — do not
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" &
+  } | inject_heartbeats | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" &
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')

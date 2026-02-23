@@ -652,3 +652,23 @@ JSON"
   echo "$event" | process_stream_json "$_log" "$_raw"
   grep -q "model=claude-sonnet-4-6" "$_log"
 }
+
+# --- heartbeat events ---
+
+@test "heartbeat event: spinner updates with elapsed time" {
+  run bash -c "yes '{\"type\":\"heartbeat\"}' | head -5 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  # Heartbeat falls into the catch-all else block which shows spinner with elapsed time
+  [[ "$output" =~ [0-9]+s ]]
+}
+
+@test "heartbeat after real event: text then heartbeat handled cleanly" {
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
+  local hb='{"type":"heartbeat"}'
+  run bash -c "printf '%s\n%s\n' '$text' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  # Text should appear
+  [[ "$output" == *"hello"* ]]
+  # Spinner carriage return from heartbeat
+  [[ "$output" == *$'\r'* ]]
+}
