@@ -278,6 +278,42 @@ PROGRESS
   [ "$status" -ne 0 ]
 }
 
+@test "parse_args: --plan without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --plan 2>&1"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"requires"* ]] || [[ "$output" == *"argument"* ]]
+}
+
+@test "parse_args: --max-retries without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --max-retries 2>&1"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_args: --phase without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --phase 2>&1"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_args: --mark-complete without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --mark-complete 2>&1"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_args: --max-phase-time without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --max-phase-time 2>&1"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_args: --quota-retry-interval without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --quota-retry-interval 2>&1"
+  [ "$status" -ne 0 ]
+}
+
+@test "parse_args: --phase-prompt without value exits non-zero" {
+  run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' --phase-prompt 2>&1"
+  [ "$status" -ne 0 ]
+}
+
 # =============================================================================
 # create_lock / remove_lock tests (via subprocess)
 # =============================================================================

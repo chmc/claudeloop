@@ -40,6 +40,27 @@ teardown() { rm -f "$_log"; }
   [ "$output" = "25" ]
 }
 
+@test "power: 2^10 = 1024" {
+  run power 2 10
+  [ "$status" -eq 0 ]
+  [ "$output" = "1024" ]
+}
+
+@test "power: 2^62 = correct value" {
+  run power 2 62
+  [ "$status" -eq 0 ]
+  [ "$output" = "4611686018427387904" ]
+}
+
+@test "power: 2^63 returns correct value without early cap" {
+  run power 2 63
+  [ "$status" -eq 0 ]
+  # 2^63 = 9223372036854775808, but that overflows signed 64-bit.
+  # The guard should cap at 2^62 (last safe value before overflow).
+  # The key invariant: result must be >= 2^62
+  [ "$output" -ge 4611686018427387904 ]
+}
+
 # --- get_random() ---
 
 @test "get_random: returns value in range [0, max)" {

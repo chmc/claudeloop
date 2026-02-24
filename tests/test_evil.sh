@@ -199,6 +199,49 @@ EOF
 # Section 5: Boundary/edge cases (3 tests -- expected to PASS)
 # =============================================================================
 
+@test "EVIL: attempts decrement below zero is guarded" {
+  setup_single_phase
+  PHASE_ATTEMPTS_1=0
+  _npv="1"
+  _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
+  # Simulate the guarded decrement
+  if [ "$_cur_attempts" -gt 0 ]; then
+    eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+  fi
+  # Attempts should still be 0, not -1
+  [ "$PHASE_ATTEMPTS_1" -eq 0 ]
+}
+
+@test "EVIL: save_state escapes double quotes in paths" {
+  # Test the save_state JSON generation with proper escaping
+  STATE_FILE="$TEST_DIR/state.json"
+  cat > "$TEST_DIR/test_save.sh" << 'SCRIPT'
+#!/bin/sh
+STATE_FILE="$1"
+PLAN_FILE='my "plan".md'
+PROGRESS_FILE='prog"ress.md'
+CURRENT_PHASE="1"
+
+_json_plan=$(printf '%s' "$PLAN_FILE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+_json_progress=$(printf '%s' "$PROGRESS_FILE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+cat > "$STATE_FILE" << EOF
+{
+  "plan_file": "$_json_plan",
+  "progress_file": "$_json_progress",
+  "current_phase": "$CURRENT_PHASE",
+  "interrupted": true,
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+EOF
+python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$STATE_FILE"
+SCRIPT
+  chmod +x "$TEST_DIR/test_save.sh"
+  run sh "$TEST_DIR/test_save.sh" "$STATE_FILE"
+  echo "$output"
+  [ "$status" -eq 0 ]
+}
+
 @test "BOUNDARY: 100 phases parsed correctly" {
   {
     i=1

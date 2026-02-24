@@ -42,7 +42,7 @@ parse_plan() {
       local phase_num
       phase_num=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\).*/\1/p')
       local phase_title
-      phase_title=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p')
+      phase_title=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p' | sed 's/[[:space:]]*$//')
       if [ -z "$phase_title" ]; then
         phase_title="Phase $phase_num"
       fi
@@ -86,7 +86,7 @@ parse_plan() {
           local deps_line
           deps_line=$(echo "$line" | sed 's/^\*\*Depends[[:space:]]*on:[[:space:]]*\*\*[[:space:]]*//')
           local deps
-          deps=$(echo "$deps_line" | sed 's/Phase //g' | grep -oE '[0-9]+(\.[0-9]+)?' | xargs echo)
+          deps=$(echo "$deps_line" | grep -oE 'Phase [0-9]+(\.[0-9]+)?' | sed 's/Phase //g' | xargs echo)
           local _cur_var
           _cur_var=$(phase_to_var "$current_phase")
           eval "PHASE_DEPENDENCIES_${_cur_var}='$deps'"

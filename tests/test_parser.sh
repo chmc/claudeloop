@@ -721,6 +721,42 @@ EOF
   [ "$status" -eq 1 ]
 }
 
+@test "parse_plan: strips trailing whitespace from phase title" {
+  # Write the plan with explicit trailing spaces on title lines
+  printf '## Phase 1: Setup   \nCreate setup.\n\n## Phase 2: Build   \nBuild it.\n' > "$TEST_DIR/PLAN.md"
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_title 1
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+
+  run get_phase_title 2
+  [ "$status" -eq 0 ]
+  [ "$output" = "Build" ]
+}
+
+@test "parse_plan: dependency line with extra numbers in comment ignores them" {
+  cat > "$TEST_DIR/PLAN.md" << 'EOF'
+## Phase 1: Setup
+First phase
+
+## Phase 2: Build
+**Depends on:** Phase 1 (see section 3 for details)
+
+Second phase
+
+## Phase 3: Deploy
+Third phase
+EOF
+
+  parse_plan "$TEST_DIR/PLAN.md"
+
+  run get_phase_dependencies 2
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
 @test "get_all_phases: returns decimal phases line by line" {
   cat > "$TEST_DIR/PLAN.md" << 'EOF'
 ## Phase 1: Setup

@@ -258,11 +258,16 @@ run_setup_wizard() {
 save_state() {
   mkdir -p "$(dirname "$STATE_FILE")"
 
+  local _json_plan _json_progress _json_phase
+  _json_plan=$(printf '%s' "$PLAN_FILE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  _json_progress=$(printf '%s' "$PROGRESS_FILE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  _json_phase=$(printf '%s' "$CURRENT_PHASE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
   cat > "$STATE_FILE" << EOF
 {
-  "plan_file": "$PLAN_FILE",
-  "progress_file": "$PROGRESS_FILE",
-  "current_phase": "$CURRENT_PHASE",
+  "plan_file": "$_json_plan",
+  "progress_file": "$_json_progress",
+  "current_phase": "$_json_phase",
   "interrupted": true,
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
@@ -375,8 +380,10 @@ handle_interrupt() {
       # Don't count this as an attempt since it was interrupted
       local _attempts
       _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_cpv}\"")
-      eval "PHASE_ATTEMPTS_${_cpv}=$((_attempts - 1))"
-      eval "PHASE_ATTEMPT_TIME_${_cpv}_${_attempts}=''"
+      if [ "$_attempts" -gt 0 ]; then
+        eval "PHASE_ATTEMPTS_${_cpv}=$((_attempts - 1))"
+        eval "PHASE_ATTEMPT_TIME_${_cpv}_${_attempts}=''"
+      fi
     fi
   fi
 
@@ -446,10 +453,12 @@ parse_args() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --plan)
+        if [ $# -lt 2 ]; then echo "Error: --plan requires an argument" >&2; exit 1; fi
         PLAN_FILE="$2"; _CLI_PLAN_FILE=1
         shift 2
         ;;
       --progress)
+        if [ $# -lt 2 ]; then echo "Error: --progress requires an argument" >&2; exit 1; fi
         PROGRESS_FILE="$2"; _CLI_PROGRESS_FILE=1
         shift 2
         ;;
@@ -462,10 +471,12 @@ parse_args() {
         shift
         ;;
       --phase)
+        if [ $# -lt 2 ]; then echo "Error: --phase requires an argument" >&2; exit 1; fi
         START_PHASE="$2"
         shift 2
         ;;
       --mark-complete)
+        if [ $# -lt 2 ]; then echo "Error: --mark-complete requires an argument" >&2; exit 1; fi
         MARK_COMPLETE_PHASE="$2"
         shift 2
         ;;
@@ -474,18 +485,22 @@ parse_args() {
         shift
         ;;
       --phase-prompt)
+        if [ $# -lt 2 ]; then echo "Error: --phase-prompt requires an argument" >&2; exit 1; fi
         PHASE_PROMPT_FILE="$2"; _CLI_PHASE_PROMPT_FILE=1
         shift 2
         ;;
       --max-retries)
+        if [ $# -lt 2 ]; then echo "Error: --max-retries requires an argument" >&2; exit 1; fi
         MAX_RETRIES="$2"; _CLI_MAX_RETRIES=1
         shift 2
         ;;
       --quota-retry-interval)
+        if [ $# -lt 2 ]; then echo "Error: --quota-retry-interval requires an argument" >&2; exit 1; fi
         QUOTA_RETRY_INTERVAL="$2"; _CLI_QUOTA_RETRY_INTERVAL=1
         shift 2
         ;;
       --max-phase-time)
+        if [ $# -lt 2 ]; then echo "Error: --max-phase-time requires an argument" >&2; exit 1; fi
         MAX_PHASE_TIME="$2"; _CLI_MAX_PHASE_TIME=1
         shift 2
         ;;
@@ -656,19 +671,18 @@ _add_platform_gitignore() {
 # Reads lines from stdin with a 2-second timeout; on timeout, emits a
 # {"type":"heartbeat"} event so the stream processor can update the spinner.
 # Note: On macOS /bin/sh (bash 3.2), read -t returns exit code 1 for both
-# timeout and EOF. We use $SECONDS to distinguish: EOF returns instantly,
-# timeout takes ~2s. $SECONDS is a bashism but acceptable since read -t is
-# already non-POSIX and /bin/sh on macOS is bash.
+# timeout and EOF. We use epoch seconds to distinguish: EOF returns instantly,
+# timeout takes ~2s. read -t is non-POSIX but supported by bash and most sh.
 inject_heartbeats() {
   while true; do
     _hb_line=""
-    _hb_before=$SECONDS
+    _hb_before=$(date +%s)
     if IFS= read -t 2 -r _hb_line; then
       printf '%s\n' "$_hb_line"
     elif [ -n "$_hb_line" ]; then
       # Partial line (data without trailing newline)
       printf '%s\n' "$_hb_line"
-    elif [ $((SECONDS - _hb_before)) -lt 1 ]; then
+    elif [ $(($(date +%s) - _hb_before)) -lt 1 ]; then
       # Returned instantly → EOF (timeout would take ~2s)
       break
     else
@@ -799,12 +813,12 @@ You MUST still complete every subtask listed in the phase description — do not
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
     if [ "$SKIP_PERMISSIONS" = "true" ]; then
       # shellcheck disable=SC2086
-      echo "$prompt" | claude --print --dangerously-skip-permissions \
+      printf '%s\n' "$prompt" | claude --print --dangerously-skip-permissions \
         --output-format=stream-json --verbose --include-partial-messages \
         $_claude_debug_flag 2>&1 || _rc=$?
     else
       # shellcheck disable=SC2086
-      echo "$prompt" | claude --print \
+      printf '%s\n' "$prompt" | claude --print \
         --output-format=stream-json --verbose --include-partial-messages \
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
@@ -977,9 +991,11 @@ main_loop() {
         # Quota error: restore attempt counter (same pattern as handle_interrupt)
         local _cur_attempts
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
-        log_verbose "main_loop: quota error on phase $next_phase, attempts restored to $((_cur_attempts - 1))"
+        if [ "$_cur_attempts" -gt 0 ]; then
+          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
+        fi
+        log_verbose "main_loop: quota error on phase $next_phase, attempts restored"
         # Reset to pending so find_next_phase picks it up after the wait
         eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -996,8 +1012,10 @@ main_loop() {
           read -r _dummy 2>/dev/null || return 1
         fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
+        if [ "$_cur_attempts" -gt 0 ]; then
+          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
+        fi
         eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
@@ -1012,8 +1030,10 @@ main_loop() {
           read -r _dummy 2>/dev/null || return 1
         fi
         _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-        eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
+        if [ "$_cur_attempts" -gt 0 ]; then
+          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
+          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
+        fi
         eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
