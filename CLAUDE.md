@@ -107,3 +107,5 @@ Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-cor
 5. **Run full suite** — `./tests/run_all_tests.sh` must pass (excluding pre-existing failures)
 
 When modifying existing behavior, update affected tests before changing implementation code.
+
+When found failing suites that are pre-existing, mandatory rule to fix them.

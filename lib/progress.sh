@@ -46,23 +46,28 @@ read_progress() {
           status_value=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$status_value" = "in_progress" ] && status_value="pending"
+          status_value=$(printf '%s' "$status_value" | sed "s/'/'\\\\''/g")
           eval "PHASE_STATUS_${_cv}='$status_value'"
           ;;
         "Started: "*)
           time_value=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          time_value=$(printf '%s' "$time_value" | sed "s/'/'\\\\''/g")
           eval "PHASE_START_TIME_${_cv}='$time_value'"
           ;;
         "Completed: "*)
           time_value=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          time_value=$(printf '%s' "$time_value" | sed "s/'/'\\\\''/g")
           eval "PHASE_END_TIME_${_cv}='$time_value'"
           ;;
         "Attempts: "*)
           attempts_value=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          printf '%s' "$attempts_value" | grep -qE '^[0-9]+$' || attempts_value=0
           eval "PHASE_ATTEMPTS_${_cv}=$attempts_value"
           ;;
         "Attempt "[0-9]*)
           _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          _atime=$(printf '%s' "$_atime" | sed "s/'/'\\\\''/g")
           eval "PHASE_ATTEMPT_TIME_${_cv}_${_anum}='$_atime'"
           ;;
       esac
@@ -238,26 +243,31 @@ read_old_phase_list() {
           sv=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$sv" = "in_progress" ] && sv="pending"
+          sv=$(printf '%s' "$sv" | sed "s/'/'\\\\''/g")
           eval "_OLD_PHASE_STATUS_${_ov2}='${sv}'"
           ;;
         "Started: "*)
           local tv
           tv=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          tv=$(printf '%s' "$tv" | sed "s/'/'\\\\''/g")
           eval "_OLD_PHASE_START_TIME_${_ov2}='${tv}'"
           ;;
         "Completed: "*)
           local tv
           tv=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          tv=$(printf '%s' "$tv" | sed "s/'/'\\\\''/g")
           eval "_OLD_PHASE_END_TIME_${_ov2}='${tv}'"
           ;;
         "Attempts: "*)
           local av
           av=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          printf '%s' "$av" | grep -qE '^[0-9]+$' || av=0
           eval "_OLD_PHASE_ATTEMPTS_${_ov2}=${av}"
           ;;
         "Attempt "[0-9]*)
           _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          _atime=$(printf '%s' "$_atime" | sed "s/'/'\\\\''/g")
           eval "_OLD_PHASE_ATTEMPT_TIME_${_ov2}_${_anum}='$_atime'"
           ;;
         "Depends on:"*)
@@ -324,6 +334,10 @@ detect_plan_changes() {
       old_start=$(eval "echo \"\$_OLD_PHASE_START_TIME_${old_mnv}\"")
       old_end=$(eval "echo \"\$_OLD_PHASE_END_TIME_${old_mnv}\"")
 
+      old_status=$(printf '%s' "$old_status" | sed "s/'/'\\\\''/g")
+      printf '%s' "$old_attempts" | grep -qE '^[0-9]+$' || old_attempts=0
+      old_start=$(printf '%s' "$old_start" | sed "s/'/'\\\\''/g")
+      old_end=$(printf '%s' "$old_end" | sed "s/'/'\\\\''/g")
       eval "PHASE_STATUS_${new_iv}='${old_status}'"
       eval "PHASE_ATTEMPTS_${new_iv}=${old_attempts}"
       eval "PHASE_START_TIME_${new_iv}='${old_start}'"
@@ -333,6 +347,7 @@ detect_plan_changes() {
       while [ "$_ti" -le "$old_attempts" ]; do
         local _old_at
         _old_at=$(eval "echo \"\${_OLD_PHASE_ATTEMPT_TIME_${old_mnv}_${_ti}:-}\"")
+        _old_at=$(printf '%s' "$_old_at" | sed "s/'/'\\\\''/g")
         eval "PHASE_ATTEMPT_TIME_${new_iv}_${_ti}='${_old_at}'"
         _ti=$((_ti + 1))
       done
@@ -413,6 +428,7 @@ update_phase_status() {
   local phase_var
   phase_var=$(phase_to_var "$phase_num")
 
+  new_status=$(printf '%s' "$new_status" | sed "s/'/'\\\\''/g")
   eval "PHASE_STATUS_${phase_var}='$new_status'"
 
   case "$new_status" in

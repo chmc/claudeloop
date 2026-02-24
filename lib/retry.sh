@@ -11,11 +11,16 @@ QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
 
 # Calculate integer power: base^exp
 power() {
-  base="$1"
-  exp="$2"
-  result=1
-  i=0
+  local base="$1"
+  local exp="$2"
+  local result=1
+  local i=0
   while [ "$i" -lt "$exp" ]; do
+    # Overflow guard: if result > MAX_INT / base, stop early
+    if [ "$base" -gt 0 ] && [ "$result" -gt $((9223372036854775807 / base)) ]; then
+      echo "$result"
+      return 0
+    fi
     result=$((result * base))
     i=$((i + 1))
   done
@@ -24,11 +29,17 @@ power() {
 
 # Get a random integer in [0, max)
 get_random() {
-  max="$1"
+  local max="$1"
+  if [ "$max" -le 0 ]; then
+    echo 0
+    return 0
+  fi
   if [ -r /dev/urandom ]; then
+    local random_bytes
     random_bytes=$(od -An -N2 -tu2 < /dev/urandom | tr -d ' ')
     echo $((random_bytes % max))
   else
+    local seed
     seed=$(($(date +%s) + $$))
     echo $((seed % max))
   fi
@@ -43,7 +54,7 @@ calculate_backoff() {
   exp_value=$(power 2 $((attempt - 1)))
   local delay=$((BASE_DELAY * exp_value))
 
-  if [ "$delay" -gt "$MAX_DELAY" ]; then
+  if [ "$delay" -lt 0 ] || [ "$delay" -gt "$MAX_DELAY" ]; then
     delay=$MAX_DELAY
   fi
 
