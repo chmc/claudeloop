@@ -83,6 +83,65 @@ process_stream_json() {
     return ep + 0
   }
 
+  function print_task_summary() {
+    visible = task_count - task_deleted
+    msg = "[Tasks: " task_completed "/" visible " done]"
+    if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
+  function print_task_completed(id,    subj) {
+    subj = (id in task_subjects) ? task_subjects[id] : "Task " id
+    msg = "[Task completed] \342\234\223 \"" subj "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
+  function handle_task_event(tname, src,    tid, tst, tsubj, taf, i) {
+    if (tname == "TaskCreate") {
+      task_count++
+      tsubj = extract(src, "subject")
+      taf = extract(src, "activeForm")
+      task_subjects[task_count] = tsubj
+      task_active_forms[task_count] = taf
+      task_statuses[task_count] = "pending"
+      if (taf != "") current_active_form = taf
+      print_task_summary()
+    } else if (tname == "TaskUpdate") {
+      tid = extract(src, "taskId") + 0
+      tst = extract(src, "status")
+      tsubj = extract(src, "subject")
+      taf = extract(src, "activeForm")
+      if (tsubj != "" && tid > 0) task_subjects[tid] = tsubj
+      if (taf != "" && tid > 0) task_active_forms[tid] = taf
+      if (tst != "" && tid > 0) {
+        old_st = (tid in task_statuses) ? task_statuses[tid] : ""
+        if (tst == "completed" && old_st != "completed") {
+          task_completed++
+          print_task_completed(tid)
+        } else if (tst == "deleted") {
+          if (old_st == "completed") task_completed--
+          task_deleted++
+        }
+        task_statuses[tid] = tst
+      }
+      # Find last in_progress active form
+      current_active_form = ""
+      for (i = task_count; i >= 1; i--) {
+        if ((i in task_statuses) && task_statuses[i] == "in_progress" && (i in task_active_forms) && task_active_forms[i] != "") {
+          current_active_form = task_active_forms[i]
+          break
+        }
+      }
+      print_task_summary()
+    }
+  }
+
   function clear_line() {
     if (!at_line_start) {
       if (spinner_start > 0) {
@@ -103,10 +162,14 @@ process_stream_json() {
   BEGIN {
     if (simple_mode != "true") {
       C_CYAN = "\033[0;36m"; C_RED = "\033[0;31m"
-      C_YELLOW = "\033[1;33m"; C_RESET = "\033[0m"
+      C_YELLOW = "\033[1;33m"; C_GREEN = "\033[0;32m"; C_RESET = "\033[0m"
     } else {
-      C_CYAN = ""; C_RED = ""; C_YELLOW = ""; C_RESET = ""
+      C_CYAN = ""; C_RED = ""; C_YELLOW = ""; C_GREEN = ""; C_RESET = ""
     }
+    task_count = 0
+    task_completed = 0
+    task_deleted = 0
+    current_active_form = ""
     at_line_start = 1
     live_at_line_start = 1
     spinner = "|/-\\"
@@ -166,17 +229,25 @@ process_stream_json() {
           else if (name == "WebSearch")                                  query = extract(seg, "query")
           else if (name == "NotebookEdit")                               npath = extract(seg, "notebook_path")
           else if (name == "Task")                                       stype = extract(seg, "subagent_type")
-          desc = extract(seg, "description")
-          if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
-          else if (fp    != "")  preview = trunc(fp,    trunc_len)
-          else if (pat   != "")  preview = trunc(pat,   trunc_len)
-          else if (url   != "")  preview = trunc(url,   trunc_len)
-          else if (query != "")  preview = trunc(query, trunc_len)
-          else if (npath != "")  preview = trunc(npath, trunc_len)
-          else if (stype != "")  preview = stype
-          else                   preview = ""
-          if (desc != "" && preview != "") preview = preview " \342\200\224 " trunc(desc, 80)
-          else if (desc != "")             preview = trunc(desc, 80)
+          if (name == "TaskCreate") { preview = trunc(extract(seg, "subject"), trunc_len) }
+          else if (name == "TaskUpdate") {
+            _tu_prev_id = extract(seg, "taskId")
+            _tu_prev_st = extract(seg, "status")
+            preview = "#" _tu_prev_id
+            if (_tu_prev_st != "") preview = preview " \342\206\222 " _tu_prev_st
+          } else {
+            desc = extract(seg, "description")
+            if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
+            else if (fp    != "")  preview = trunc(fp,    trunc_len)
+            else if (pat   != "")  preview = trunc(pat,   trunc_len)
+            else if (url   != "")  preview = trunc(url,   trunc_len)
+            else if (query != "")  preview = trunc(query, trunc_len)
+            else if (npath != "")  preview = trunc(npath, trunc_len)
+            else if (stype != "")  preview = stype
+            else                   preview = ""
+            if (desc != "" && preview != "") preview = preview " \342\200\224 " trunc(desc, 80)
+            else if (desc != "")             preview = trunc(desc, 80)
+          }
           if (hooks_enabled != "true") {
             if (preview != "") {
               printf "  %s[Tool: %s] %s%s\n", C_CYAN, name, preview, C_RESET > "/dev/stderr"
@@ -218,14 +289,22 @@ process_stream_json() {
       else if (name == "WebSearch")                                  query = extract(line, "query")
       else if (name == "NotebookEdit")                               npath = extract(line, "notebook_path")
       else if (name == "Task")                                       stype = extract(line, "subagent_type")
-      if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
-      else if (fp    != "")  preview = trunc(fp,    trunc_len)
-      else if (pat   != "")  preview = trunc(pat,   trunc_len)
-      else if (url   != "")  preview = trunc(url,   trunc_len)
-      else if (query != "")  preview = trunc(query, trunc_len)
-      else if (npath != "")  preview = trunc(npath, trunc_len)
-      else if (stype != "")  preview = stype
-      else                   preview = ""
+      if (name == "TaskCreate") { preview = trunc(extract(line, "subject"), trunc_len) }
+      else if (name == "TaskUpdate") {
+        _tu_prev_id = extract(line, "taskId")
+        _tu_prev_st = extract(line, "status")
+        preview = "#" _tu_prev_id
+        if (_tu_prev_st != "") preview = preview " \342\206\222 " _tu_prev_st
+      } else {
+        if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
+        else if (fp    != "")  preview = trunc(fp,    trunc_len)
+        else if (pat   != "")  preview = trunc(pat,   trunc_len)
+        else if (url   != "")  preview = trunc(url,   trunc_len)
+        else if (query != "")  preview = trunc(query, trunc_len)
+        else if (npath != "")  preview = trunc(npath, trunc_len)
+        else if (stype != "")  preview = stype
+        else                   preview = ""
+      }
       if (hooks_enabled != "true") {
         if (preview != "") {
           printf "  %s[Tool: %s] %s%s\n", C_CYAN, name, preview, C_RESET > "/dev/stderr"
@@ -235,6 +314,7 @@ process_stream_json() {
           if (live_log != "") { printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log; fflush(live_log) }
         }
       }
+      if (name == "TaskCreate" || name == "TaskUpdate") handle_task_event(name, line)
 
     } else if (etype == "tool_result") {
       clear_line()

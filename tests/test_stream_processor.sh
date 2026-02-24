@@ -729,6 +729,132 @@ JSON"
   [[ "$output" == *'{"type":"heartbeat"}'* ]]
 }
 
+# --- Task list display ---
+
+@test "TaskCreate standalone: shows [Tasks: 0/1 done] summary on stderr" {
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tasks: 0/1 done]"* ]]
+}
+
+@test "TaskCreate standalone: shows subject in tool preview" {
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
+}
+
+@test "TaskCreate nested in assistant: shows tool preview but NO [Tasks:] summary" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
+  [[ "$output" != *"[Tasks:"* ]]
+}
+
+@test "Two sequential standalone TaskCreate: second shows [Tasks: 0/2 done]" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task one","description":"d","activeForm":"Doing one"}}'
+  local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task two","description":"d","activeForm":"Doing two"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tasks: 0/1 done]"* ]]
+  [[ "$output" == *"[Tasks: 0/2 done]"* ]]
+}
+
+@test "TaskUpdate status=in_progress: shows activeForm in summary" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Fixing bug"* ]]
+}
+
+@test "TaskUpdate: shows taskId and status in tool preview" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TaskUpdate]"* ]]
+  [[ "$output" == *"#1"* ]]
+  [[ "$output" == *"in_progress"* ]]
+}
+
+@test "TaskUpdate status=completed: shows [Task completed] line" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"d","activeForm":"Fixing auth bug"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Task completed]"* ]]
+  [[ "$output" == *"Fix auth bug"* ]]
+}
+
+@test "TaskUpdate status=completed: updates done count in summary" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d","activeForm":"A"}}'
+  local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task B","description":"d","activeForm":"B"}}'
+  local e3='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
+  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tasks: 1/2 done]"* ]]
+}
+
+@test "TaskList and TaskGet: no [Tasks:] summary printed" {
+  local e1='{"type":"tool_use","name":"TaskList","input":{}}'
+  local e2='{"type":"tool_use","name":"TaskGet","input":{"taskId":"1"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Tasks:"* ]]
+}
+
+@test "Task summary: written to live_log with timestamp prefix" {
+  local _live
+  _live=$(mktemp)
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Tasks: 0/1 done\]' "$_live"
+  rm -f "$_live"
+}
+
+@test "Task summary: suppressed when hooks_enabled=true" {
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Tasks:"* ]]
+}
+
+@test "TaskUpdate without prior TaskCreate: shows fallback subject" {
+  local event='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"5","status":"in_progress"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tasks:"* ]]
+}
+
+@test "Same TaskCreate in assistant and standalone: task counted only once" {
+  local assistant='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}]}}'
+  local standalone='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  run bash -c "printf '%s\n%s\n' '$assistant' '$standalone' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # Only one [Tasks:] summary (from standalone Path A), showing 1 task total
+  count=$(printf '%s' "$output" | grep -c '\[Tasks:')
+  [ "$count" -eq 1 ]
+  [[ "$output" == *"[Tasks: 0/1 done]"* ]]
+}
+
+@test "TaskCreate standalone: green color in summary output" {
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\033[0;32m'* ]]
+}
+
+@test "TaskCreate standalone: no green color when simple_mode=true" {
+  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tasks: 0/1 done]"* ]]
+  [[ "$output" != *$'\033[0;32m'* ]]
+}
+
 @test "heartbeat after real event: text then heartbeat handled cleanly" {
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
   local hb='{"type":"heartbeat"}'

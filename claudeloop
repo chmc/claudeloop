@@ -1081,6 +1081,7 @@ run_monitor() {
       else if (line ~ /▶ Executing Phase/) { print "\033[0;34m" line "\033[0m" }
       else if (line ~ /─/)                { print "\033[0;34m" line "\033[0m" }
       else if (line ~ /Attempt [0-9]/)    { print "\033[1;33m" line "\033[0m" }
+      else if (line ~ /\[Tasks:/)          { print "\033[0;32m" line "\033[0m" }
       else {
         gsub(/\[Tool: [^]]*\]/, "\033[0;36m&\033[0m", line)
         gsub(/\[Result \[error\][^]]*\]/, "\033[0;31m&\033[0m", line)
