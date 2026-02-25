@@ -93,20 +93,69 @@ ai_parse_plan() {
   local plan_content
   plan_content=$(cat "$plan_file")
 
-  # Build granularity instruction
-  local grain_instruction
+  # Build granularity-specific opening instruction
+  local opening_instruction
   case "$granularity" in
-    phases) grain_instruction="Break into 3-8 high-level phases. Each phase is a major milestone." ;;
-    tasks)  grain_instruction="Break into focused tasks. Each should be completable in one AI session. Aim for 5-20 total items." ;;
-    steps)  grain_instruction="Break into atomic steps. Each step is a single action (create one file, write one function, run one test). Aim for 10-40 total items." ;;
-    *)      grain_instruction="Break into focused tasks. Each should be completable in one AI session. Aim for 5-20 total items." ;;
+    phases) opening_instruction="break them into 3-8 high-level phases, where each phase is a major milestone" ;;
+    tasks)  opening_instruction="decompose them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
+    steps)  opening_instruction="decompose them into 10-40 atomic steps, where each step is a single concrete action (create one file, write one function, run one test). IMPORTANT: Do NOT mirror the input's existing section structure — every sub-task becomes its own separate phase" ;;
+    *)      opening_instruction="decompose them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
+  esac
+
+  # Build granularity-specific first CRITICAL RULE
+  local grain_rule
+  case "$granularity" in
+    phases) grain_rule="Produce 3-8 high-level phases. Each phase is a major milestone." ;;
+    tasks)  grain_rule="Produce 5-20 focused tasks. Each task should be completable in one AI session." ;;
+    steps)  grain_rule="Produce 10-40 atomic steps. Each step is a single concrete action." ;;
+    *)      grain_rule="Produce 5-20 focused tasks. Each task should be completable in one AI session." ;;
+  esac
+
+  # Decomposition example for tasks/steps (not phases)
+  local decomp_example=""
+  case "$granularity" in
+    tasks|steps) decomp_example="
+- DECOMPOSITION EXAMPLE: If the input has:
+    \"Phase 1: Setup\" with sub-tasks \"1.1 Init project, 1.2 Design schema, 1.3 Write CRUD\"
+  You must output:
+    ## Phase 1: Initialize project
+    ## Phase 2: Design database schema
+    ## Phase 3: Implement CRUD operations
+  NOT a single \"## Phase 1: Project Setup & Database\" summarizing all three." ;;
+  esac
+
+  # Sub-task flattening rule for tasks/steps
+  local flatten_rule=""
+  case "$granularity" in
+    tasks|steps) flatten_rule="
+- If the input plan already has phases/sections with numbered sub-tasks (e.g. \"1.1\", \"1.2\"),
+  each sub-task should become its OWN separate ## Phase, not grouped under one." ;;
+  esac
+
+  # Execution context: strict for phases, relaxed for tasks/steps
+  local exec_context
+  case "$granularity" in
+    phases) exec_context="- Therefore each phase description must be SELF-CONTAINED: include all necessary context, file paths, and specifications needed to complete the work independently" ;;
+    *) exec_context="- Therefore each phase description must include enough context to execute independently.
+  You may reference what prior phases created (e.g. \"the database schema from Phase 2\")
+  rather than repeating full specifications in every phase." ;;
+  esac
+
+  # Scale timeout with granularity
+  local timeout_secs
+  case "$granularity" in
+    phases) timeout_secs=120 ;;
+    tasks)  timeout_secs=180 ;;
+    steps)  timeout_secs=240 ;;
+    *)      timeout_secs=180 ;;
   esac
 
   local prompt
-  prompt="You are a plan decomposition assistant. Analyze the following plan/requirements and break them into sequential phases.
+  prompt="You are a plan decomposition assistant. Analyze the following plan/requirements and ${opening_instruction}.
 
 CRITICAL RULES:
-- Output ONLY markdown in this exact format, nothing else:
+- ${grain_rule}${flatten_rule}${decomp_example}
+- Output markdown in this exact format:
   ## Phase 1: Title
   Description...
 
@@ -118,13 +167,12 @@ CRITICAL RULES:
 - Use INTEGER numbering only: 1, 2, 3, 4... (NO decimals)
 - Add \"**Depends on:** Phase N, Phase M\" on the first line after header when a phase needs prior phases
 - Do not add ANY text before the first \"## Phase\" or after the last phase description
-- ${grain_instruction}
 
 EXECUTION CONTEXT — each phase will be:
 - Executed by a SEPARATE, FRESH AI coding assistant instance
 - The instance can only see this phase's description and the current git repository state
 - It CANNOT see outputs, logs, or context from other phases
-- Therefore each phase description must be SELF-CONTAINED: include all necessary context, file paths, and specifications needed to complete the work independently
+${exec_context}
 
 PLAN TO DECOMPOSE:
 ---
@@ -134,7 +182,7 @@ ${plan_content}
   print_success "Calling AI to decompose plan (granularity: $granularity)..."
 
   local ai_output
-  ai_output=$(run_claude_print "$prompt" 120) || {
+  ai_output=$(run_claude_print "$prompt" "$timeout_secs") || {
     local rc=$?
     if [ "$rc" -eq 1 ]; then
       return 1
@@ -171,7 +219,7 @@ ${plan_content}
 Your previous output was invalid: ${validation_error}
 Please output ONLY the ## Phase markdown format as specified. No preamble, no commentary."
 
-    ai_output=$(run_claude_print "$retry_prompt" 120) || return 1
+    ai_output=$(run_claude_print "$retry_prompt" "$timeout_secs") || return 1
 
     if [ -z "$ai_output" ]; then
       print_error "AI retry returned empty output"
@@ -201,21 +249,31 @@ Please output ONLY the ## Phase markdown format as specified. No preamble, no co
 }
 
 # Verify an AI-generated plan against the original
-# Args: $1 - parsed plan file, $2 - original plan file
+# Args: $1 - parsed plan file, $2 - original plan file, $3 - granularity (optional)
 # Returns: 0 on pass, 1 on fail
 ai_verify_plan() {
   local parsed_file="$1"
   local original_file="$2"
+  local granularity="${3:-tasks}"
 
   local parsed_content original_content
   parsed_content=$(cat "$parsed_file")
   original_content=$(cat "$original_file")
+
+  local granularity_context
+  granularity_context="The decomposed plan uses \"${granularity}\" granularity.
+- For \"phases\": expect 3-8 high-level phases
+- For \"tasks\": expect 5-20 focused tasks (more phases than original sections is expected)
+- For \"steps\": expect 10-40 atomic steps (many more phases than original sections is expected and correct)
+Do NOT penalize the decomposed plan for having more phases than the original — that is the intended behavior."
 
   local prompt
   prompt="Compare the ORIGINAL requirements with the DECOMPOSED plan. Check:
 1. COMPLETENESS: Every requirement from the original is covered in at least one phase
 2. CORRECTNESS: Dependencies reference valid earlier phases, no circular deps
 3. ORDERING: Phases are in logical execution order
+
+${granularity_context}
 
 Respond with EXACTLY:
 - Line 1: \"PASS\" if correct, or \"FAIL\" if not

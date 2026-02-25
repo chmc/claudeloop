@@ -216,6 +216,43 @@ EOF
   [ "$status" -eq 1 ]
 }
 
+@test "ai_verify_plan: prompt includes granularity context" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt.txt"
+echo "PASS"
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md" "steps"
+  grep -q "steps" "$TEST_DIR/verify_prompt.txt"
+  grep -q "Do NOT penalize" "$TEST_DIR/verify_prompt.txt"
+}
+
+@test "ai_verify_plan: works without granularity (backward compat)" {
+  mock_claude "PASS"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+}
+
 @test "ai_verify_plan: returns 0 with warning on unexpected format" {
   mock_claude "Looks good to me, everything checks out."
 
@@ -272,7 +309,7 @@ EOF
 
 # --- granularity tests ---
 
-@test "ai_parse_plan: prompt includes phases granularity instruction" {
+@test "ai_parse_plan: phases opening line mentions high-level phases" {
   # Mock claude that dumps its stdin to a file for inspection
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
@@ -290,10 +327,13 @@ Build something.
 EOF
 
   ai_parse_plan "$TEST_DIR/plan.md" "phases" "$TEST_DIR/.claudeloop"
+  # Opening line should mention high-level phases
   grep -q "3-8 high-level phases" "$TEST_DIR/received_prompt.txt"
+  # Should NOT contain anti-mirroring instruction for phases
+  ! grep -q "Do NOT mirror" "$TEST_DIR/received_prompt.txt"
 }
 
-@test "ai_parse_plan: prompt includes tasks granularity instruction" {
+@test "ai_parse_plan: tasks opening line mentions decompose and anti-mirroring" {
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
@@ -310,10 +350,13 @@ Build something.
 EOF
 
   ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
-  grep -q "5-20 total items" "$TEST_DIR/received_prompt.txt"
+  # Opening should mention decompose and 5-20
+  grep -q "5-20" "$TEST_DIR/received_prompt.txt"
+  # Must include anti-mirroring instruction
+  grep -q "Do NOT mirror" "$TEST_DIR/received_prompt.txt"
 }
 
-@test "ai_parse_plan: prompt includes steps granularity instruction" {
+@test "ai_parse_plan: steps opening line mentions atomic and anti-mirroring" {
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
@@ -330,7 +373,198 @@ Build something.
 EOF
 
   ai_parse_plan "$TEST_DIR/plan.md" "steps" "$TEST_DIR/.claudeloop"
-  grep -q "10-40 total items" "$TEST_DIR/received_prompt.txt"
+  # Opening should mention atomic and 10-40
+  grep -q "10-40" "$TEST_DIR/received_prompt.txt"
+  # Must include anti-mirroring instruction
+  grep -q "Do NOT mirror" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: steps prompt includes decomposition example" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "steps" "$TEST_DIR/.claudeloop"
+  grep -q "DECOMPOSITION EXAMPLE" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: phases prompt does NOT include decomposition example" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "phases" "$TEST_DIR/.claudeloop"
+  ! grep -q "DECOMPOSITION EXAMPLE" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: steps prompt relaxes self-contained requirement" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "steps" "$TEST_DIR/.claudeloop"
+  # Steps should allow referencing prior phases
+  grep -q "reference what prior phases created" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: phases prompt keeps strict self-contained requirement" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "phases" "$TEST_DIR/.claudeloop"
+  grep -q "SELF-CONTAINED" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: timeout scales with granularity" {
+  # Mock claude that records its timeout by checking the kill timer
+  # We can verify by checking the timeout passed to run_claude_print
+  # Since run_claude_print is called internally, we instrument via the mock
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  # We override run_claude_print to capture the timeout arg
+  _original_run_claude_print=$(type run_claude_print | tail -n +2)
+  run_claude_print() {
+    echo "$2" > "$TEST_DIR/timeout_value.txt"
+    printf '%s\n' "## Phase 1: Setup
+Do stuff."
+  }
+
+  ai_parse_plan "$TEST_DIR/plan.md" "steps" "$TEST_DIR/.claudeloop"
+  local timeout_val
+  timeout_val=$(cat "$TEST_DIR/timeout_value.txt")
+  [ "$timeout_val" = "240" ]
+}
+
+@test "ai_parse_plan: phases timeout is 120" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  run_claude_print() {
+    echo "$2" > "$TEST_DIR/timeout_value.txt"
+    printf '%s\n' "## Phase 1: Setup
+Do stuff."
+  }
+
+  ai_parse_plan "$TEST_DIR/plan.md" "phases" "$TEST_DIR/.claudeloop"
+  local timeout_val
+  timeout_val=$(cat "$TEST_DIR/timeout_value.txt")
+  [ "$timeout_val" = "120" ]
+}
+
+@test "ai_parse_plan: sub-task flattening instruction present for tasks/steps" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -q "sub-task should become its OWN" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: granularity is first CRITICAL RULE for tasks" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  # The first bullet after CRITICAL RULES should be the granularity instruction
+  # Extract the line number of "CRITICAL RULES" and the first bullet after it
+  local rules_line first_bullet
+  rules_line=$(grep -n "CRITICAL RULES" "$TEST_DIR/received_prompt.txt" | head -1 | cut -d: -f1)
+  first_bullet=$(awk -v start="$rules_line" 'NR>start && /^- / {print; exit}' "$TEST_DIR/received_prompt.txt")
+  echo "first_bullet: $first_bullet"
+  echo "$first_bullet" | grep -q "5-20"
 }
 
 @test "ai_parse_plan: prompt includes execution context about separate AI instances" {

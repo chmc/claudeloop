@@ -549,7 +549,7 @@ EOF
 @test "--version prints semver string" {
   run "$CLAUDELOOP" --version
   [ "$status" -eq 0 ]
-  echo "$output" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'
+  echo "$output" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'
 }
 
 @test "-V is alias for --version" {

@@ -1227,7 +1227,7 @@ main() {
         print_error "AI parsing failed"
         exit 1
       fi
-      if ! ai_verify_plan "$ai_plan" "$PLAN_FILE"; then
+      if ! ai_verify_plan "$ai_plan" "$PLAN_FILE" "$GRANULARITY"; then
         print_error "AI verification failed"
         exit 1
       fi
