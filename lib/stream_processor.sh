@@ -4,6 +4,30 @@
 # Can be sourced (defines process_stream_json) or run standalone as:
 #   sh lib/stream_processor.sh <log_file> <raw_log>
 
+# Inject heartbeat events during idle periods to keep the spinner alive.
+# Reads lines from stdin with a 2-second timeout; on timeout, emits a
+# {"type":"heartbeat"} event so the stream processor can update the spinner.
+# Note: On macOS /bin/sh (bash 3.2), read -t returns exit code 1 for both
+# timeout and EOF. We use epoch seconds to distinguish: EOF returns instantly,
+# timeout takes ~2s. read -t is non-POSIX but supported by bash and most sh.
+inject_heartbeats() {
+  while true; do
+    _hb_line=""
+    _hb_before=$(date +%s)
+    if IFS= read -t 2 -r _hb_line; then
+      printf '%s\n' "$_hb_line"
+    elif [ -n "$_hb_line" ]; then
+      # Partial line (data without trailing newline)
+      printf '%s\n' "$_hb_line"
+    elif [ $(($(date +%s) - _hb_before)) -lt 1 ]; then
+      # Returned instantly → EOF (timeout would take ~2s)
+      break
+    else
+      printf '{"type":"heartbeat"}\n'
+    fi
+  done
+}
+
 # process_stream_json: parse stream-json from stdin
 # Args: $1 - log_file path, $2 - raw_log path, $3 - hooks_enabled (true|false, default false)
 #       $4 - live_log path, $5 - simple_mode (true|false, default false)

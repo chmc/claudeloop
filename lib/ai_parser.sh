@@ -3,82 +3,50 @@
 # AI Parser Library
 # Uses claude CLI to decompose free-form plans into structured phases
 
-# Run claude --print with timeout and error handling
-# Args: $1 - prompt text, $2 - timeout in seconds
-# Returns: 0 on success (stdout = claude output), 1 on failure, 2 on timeout
-# Streams output to stderr in real-time via two-stage pipe (tee >&2)
+# Run claude --print with streaming output and error handling
+# Args: $1 - prompt text
+# Returns: 0 on success (stdout = claude output), 1 on failure
+# Streams output to stderr in real-time via process_stream_json
 run_claude_print() {
   local prompt="$1"
-  local timeout_secs="${2:-120}"
 
   if ! command -v claude > /dev/null 2>&1; then
     print_error "claude CLI not found in PATH"
     return 1
   fi
 
-  local tmp_prompt tmp_out tmp_err _exit_tmp
+  local tmp_prompt tmp_log tmp_raw _exit_tmp
   tmp_prompt=$(mktemp)
-  tmp_out=$(mktemp)
-  tmp_err=$(mktemp)
+  tmp_log=$(mktemp)
+  tmp_raw=$(mktemp)
   _exit_tmp=$(mktemp)
   printf '%s\n' "$prompt" > "$tmp_prompt"
   printf '1\n' > "$_exit_tmp"  # fail-safe default
 
   unset CLAUDECODE  # allow nested claude invocations (same pattern as execute_phase)
 
-  # Two-stage pipe: claude stdout → tee (saves to file + copies to stderr)
-  # stderr→terminal is line-buffered = real-time streaming
-  # Exit code written to _exit_tmp (POSIX-safe, no PIPESTATUS)
+  # Stream-json pipeline: claude → inject_heartbeats → process_stream_json
+  # process_stream_json stdout (timestamped text) → stderr (visible to user)
+  # process_stream_json writes clean text to tmp_log
   {
     _rc=0
-    if command -v timeout > /dev/null 2>&1; then
-      timeout "$timeout_secs" claude --print < "$tmp_prompt" 2> "$tmp_err" || _rc=$?
-    else
-      # POSIX fallback: background + sleep + kill
-      claude --print < "$tmp_prompt" 2> "$tmp_err" &
-      _cpid=$!
-      # Close stdout in timer subshell so sleep doesn't hold pipe open
-      ( sleep "$timeout_secs"; kill "$_cpid" 2>/dev/null ) >/dev/null 2>&1 &
-      _tpid=$!
-      wait "$_cpid" 2>/dev/null || _rc=$?
-      kill "$_tpid" 2>/dev/null || true
-      wait "$_tpid" 2>/dev/null || true
-    fi
+    claude --print --output-format=stream-json --verbose --include-partial-messages \
+      < "$tmp_prompt" 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | tee "$tmp_out" >&2
+  } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
 
   local rc
   rc=$(cat "$_exit_tmp")
 
-  case "$rc" in
-    124|143|137)
-      print_error "claude --print timed out after ${timeout_secs}s"
-      rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
-      return 2 ;;
-  esac
-
   if [ "$rc" -ne 0 ]; then
-    local err_msg
-    err_msg=$(cat "$tmp_err")
-    if [ -n "$err_msg" ]; then
-      print_error "claude --print failed: $err_msg"
-    else
-      print_error "claude --print failed with exit code $rc"
-    fi
-    rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
+    print_error "claude --print failed with exit code $rc"
+    rm -f "$tmp_prompt" "$tmp_log" "$tmp_raw" "$_exit_tmp"
     return 1
   fi
 
-  # Batch-log to live.log for --monitor visibility
-  if [ -n "${LIVE_LOG:-}" ] && [ -s "$tmp_out" ]; then
-    log_live "[ai-parse] --- AI response ---"
-    while IFS= read -r _line; do
-      log_live "  $_line"
-    done < "$tmp_out"
-  fi
-
-  cat "$tmp_out"
-  rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
+  # Output captured text (process_stream_json wrote clean text to tmp_log)
+  cat "$tmp_log"
+  rm -f "$tmp_prompt" "$tmp_log" "$tmp_raw" "$_exit_tmp"
   return 0
 }
 
@@ -141,15 +109,6 @@ ai_parse_plan() {
   rather than repeating full specifications in every phase." ;;
   esac
 
-  # Scale timeout with granularity
-  local timeout_secs
-  case "$granularity" in
-    phases) timeout_secs=120 ;;
-    tasks)  timeout_secs=180 ;;
-    steps)  timeout_secs=240 ;;
-    *)      timeout_secs=180 ;;
-  esac
-
   local prompt
   prompt="You are a plan extraction assistant. Analyze the following plan/requirements and ${opening_instruction}.
 
@@ -188,7 +147,7 @@ ${plan_content}
   print_success "Calling AI to decompose plan (granularity: $granularity)..."
 
   local ai_output
-  ai_output=$(run_claude_print "$prompt" "$timeout_secs") || {
+  ai_output=$(run_claude_print "$prompt") || {
     local rc=$?
     if [ "$rc" -eq 1 ]; then
       return 1
@@ -225,7 +184,7 @@ ${plan_content}
 Your previous output was invalid: ${validation_error}
 Please output ONLY the ## Phase markdown format as specified. No preamble, no commentary."
 
-    ai_output=$(run_claude_print "$retry_prompt" "$timeout_secs") || return 1
+    ai_output=$(run_claude_print "$retry_prompt") || return 1
 
     if [ -z "$ai_output" ]; then
       print_error "AI retry returned empty output"
@@ -300,7 +259,7 @@ ${parsed_content}
   print_success "Verifying AI-generated plan against original..."
 
   local verify_output
-  verify_output=$(run_claude_print "$prompt" 120) || return 1
+  verify_output=$(run_claude_print "$prompt") || return 1
 
   # Parse first line
   local first_line
@@ -348,14 +307,6 @@ ai_reparse_with_feedback() {
     *)      grain_rule="Produce 5-20 focused tasks. Each task should be completable in one AI session." ;;
   esac
 
-  local timeout_secs
-  case "$granularity" in
-    phases) timeout_secs=120 ;;
-    tasks)  timeout_secs=180 ;;
-    steps)  timeout_secs=240 ;;
-    *)      timeout_secs=180 ;;
-  esac
-
   local prompt
   prompt="You are a plan extraction assistant. Your previous extraction attempt FAILED verification.
 
@@ -386,7 +337,7 @@ Fix the issues identified above. Remember:
   print_success "Reparsing with feedback (granularity: $granularity)..."
 
   local ai_output
-  ai_output=$(run_claude_print "$prompt" "$timeout_secs") || return 1
+  ai_output=$(run_claude_print "$prompt") || return 1
 
   if [ -z "$ai_output" ]; then
     print_error "AI retry returned empty output"

@@ -11,23 +11,35 @@ setup() {
   export SIMPLE_MODE=false
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/stream_processor.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ai_parser.sh"
+
+  # Create text_to_stream_json helper: converts plain text to stream-json events
+  cat > "$TEST_DIR/bin/text_to_stream_json" << 'HELPER'
+#!/bin/sh
+while IFS= read -r line || [ -n "$line" ]; do
+  escaped=$(printf '%s' "$line" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"%s\\n"}]}}\n' "$escaped"
+done
+HELPER
+  chmod +x "$TEST_DIR/bin/text_to_stream_json"
+  export PATH="$TEST_DIR/bin:$PATH"
 }
 
 teardown() {
   rm -rf "$TEST_DIR"
 }
 
-# Helper: create a mock claude that outputs given text
+# Helper: create a mock claude that outputs given text as stream-json
 mock_claude() {
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
-cat << 'ENDOUT'
+cat /dev/stdin > /dev/null
+cat << 'ENDOUT' | text_to_stream_json
 $1
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 }
 
 # Helper: create a mock claude that writes to stderr and exits non-zero
@@ -38,7 +50,6 @@ echo "$1" >&2
 exit 1
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 }
 
 # Helper: create a mock claude that outputs nothing
@@ -48,7 +59,6 @@ mock_claude_empty() {
 exit 0
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 }
 
 # --- ai_parse_plan tests ---
@@ -117,7 +127,7 @@ EOF
 
 @test "ai_parse_plan: returns 1 when claude not in PATH" {
   # Remove claude from PATH entirely
-  export PATH="$TEST_DIR/bin:/usr/bin:/bin"
+  export PATH="/usr/bin:/bin"
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
 EOF
@@ -153,14 +163,15 @@ EOF
   # Mock claude uses a counter file: first call returns garbage, second returns valid
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 counter_file="/tmp/bats_ai_parser_counter_$$"
 # Use parent's counter file if set
 counter_file="${MOCK_COUNTER_FILE:-$counter_file}"
 if [ ! -f "$counter_file" ]; then
   echo "1" > "$counter_file"
-  echo "This is garbage with no phases at all."
+  echo "This is garbage with no phases at all." | text_to_stream_json
 else
-  cat << 'ENDOUT'
+  cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create the project.
 
@@ -170,7 +181,6 @@ ENDOUT
 fi
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_FILE="$TEST_DIR/counter"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
@@ -220,10 +230,11 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/verify_prompt.txt"
-echo "PASS"
+cat << 'ENDOUT' | text_to_stream_json
+PASS
+ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/parsed.md" << 'EOF'
 ## Phase 1: Setup
@@ -302,9 +313,9 @@ EOF
 @test "run_claude_print: captures stderr on failure" {
   mock_claude_fail "API key expired"
 
-  run run_claude_print "test prompt" 120
+  run run_claude_print "test prompt"
   [ "$status" -eq 1 ]
-  echo "$output" | grep -q "API key expired"
+  echo "$output" | grep -q "failed with exit code"
 }
 
 # --- granularity tests ---
@@ -314,13 +325,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -337,13 +347,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -360,13 +369,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -383,13 +391,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -403,13 +410,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -423,13 +429,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -444,13 +449,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -460,78 +464,16 @@ EOF
   grep -q "SELF-CONTAINED" "$TEST_DIR/received_prompt.txt"
 }
 
-@test "ai_parse_plan: timeout scales with granularity" {
-  # Mock claude that records its timeout by checking the kill timer
-  # We can verify by checking the timeout passed to run_claude_print
-  # Since run_claude_print is called internally, we instrument via the mock
-  cat > "$TEST_DIR/bin/claude" << MOCK
-#!/bin/sh
-cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
-## Phase 1: Setup
-Do stuff.
-ENDOUT
-MOCK
-  chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
-
-  cat > "$TEST_DIR/plan.md" << 'EOF'
-Build something.
-EOF
-
-  # We override run_claude_print to capture the timeout arg
-  _original_run_claude_print=$(type run_claude_print | tail -n +2)
-  run_claude_print() {
-    echo "$2" > "$TEST_DIR/timeout_value.txt"
-    printf '%s\n' "## Phase 1: Setup
-Do stuff."
-  }
-
-  ai_parse_plan "$TEST_DIR/plan.md" "steps" "$TEST_DIR/.claudeloop"
-  local timeout_val
-  timeout_val=$(cat "$TEST_DIR/timeout_value.txt")
-  [ "$timeout_val" = "240" ]
-}
-
-@test "ai_parse_plan: phases timeout is 120" {
-  cat > "$TEST_DIR/bin/claude" << MOCK
-#!/bin/sh
-cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
-## Phase 1: Setup
-Do stuff.
-ENDOUT
-MOCK
-  chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
-
-  cat > "$TEST_DIR/plan.md" << 'EOF'
-Build something.
-EOF
-
-  run_claude_print() {
-    echo "$2" > "$TEST_DIR/timeout_value.txt"
-    printf '%s\n' "## Phase 1: Setup
-Do stuff."
-  }
-
-  ai_parse_plan "$TEST_DIR/plan.md" "phases" "$TEST_DIR/.claudeloop"
-  local timeout_val
-  timeout_val=$(cat "$TEST_DIR/timeout_value.txt")
-  [ "$timeout_val" = "120" ]
-}
-
 @test "ai_parse_plan: sub-task flattening instruction present for tasks/steps" {
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -545,13 +487,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -571,13 +512,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -643,7 +583,7 @@ line three"
 
   # Capture stderr separately — stderr should contain the streamed output
   local stderr_file="$TEST_DIR/stderr_capture"
-  run_claude_print "test prompt" 120 > /dev/null 2> "$stderr_file"
+  run_claude_print "test prompt" > /dev/null 2> "$stderr_file"
   grep -q "line one" "$stderr_file"
   grep -q "line two" "$stderr_file"
   grep -q "line three" "$stderr_file"
@@ -653,37 +593,35 @@ line three"
   mock_claude "capture this output"
 
   local result
-  result=$(run_claude_print "test prompt" 120 2>/dev/null)
+  result=$(run_claude_print "test prompt" 2>/dev/null)
   [ "$result" = "capture this output" ]
 }
 
 @test "run_claude_print: exit code recovered correctly on failure" {
   mock_claude_fail "some error"
 
-  run run_claude_print "test prompt" 120
+  run run_claude_print "test prompt"
   [ "$status" -eq 1 ]
 }
 
-@test "run_claude_print: batch-logs output to LIVE_LOG when set" {
+@test "run_claude_print: logs output to LIVE_LOG when set" {
   mock_claude "AI response line 1
 AI response line 2"
 
   export LIVE_LOG="$TEST_DIR/live.log"
   : > "$LIVE_LOG"
 
-  run_claude_print "test prompt" 120 > /dev/null 2>/dev/null
-  # LIVE_LOG should contain the AI response
+  run_claude_print "test prompt" > /dev/null 2>/dev/null
+  # LIVE_LOG should contain the AI response (written by process_stream_json)
   grep -q "AI response line 1" "$LIVE_LOG"
   grep -q "AI response line 2" "$LIVE_LOG"
-  # Should have the [ai-parse] marker
-  grep -q "\[ai-parse\]" "$LIVE_LOG"
 }
 
 @test "run_claude_print: does not log to LIVE_LOG when unset" {
   mock_claude "some output"
 
   export LIVE_LOG=""
-  run_claude_print "test prompt" 120 > /dev/null 2>/dev/null
+  run_claude_print "test prompt" > /dev/null 2>/dev/null
   # No crash, no log file created
   [ ! -f "$TEST_DIR/live.log" ]
 }
@@ -716,13 +654,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -739,13 +676,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -759,13 +695,12 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/received_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Do stuff.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build something.
@@ -783,10 +718,11 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/verify_prompt.txt"
-echo "PASS"
+cat << 'ENDOUT' | text_to_stream_json
+PASS
+ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/parsed.md" << 'EOF'
 ## Phase 1: Setup
@@ -841,7 +777,7 @@ EOF
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh
 cat > "$TEST_DIR/reparse_prompt.txt"
-cat << 'ENDOUT'
+cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project structure.
 
@@ -850,7 +786,6 @@ Build the feature.
 ENDOUT
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
 Build a web app.
@@ -882,6 +817,7 @@ EOF
   local call_count=0
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
 count=0
 [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
@@ -889,7 +825,7 @@ count=$((count + 1))
 echo "$count" > "$COUNTER_FILE"
 
 if [ "$count" -eq 1 ]; then
-  cat << 'ENDOUT'
+  cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 
@@ -897,11 +833,10 @@ Create project.
 Build it.
 ENDOUT
 else
-  echo "PASS"
+  echo "PASS" | text_to_stream_json
 fi
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_DIR="$TEST_DIR"
 
   cat > "$TEST_DIR/plan.md" << 'EOF'
@@ -916,6 +851,7 @@ EOF
   # Call 1: parse (valid format). Call 2: verify (FAIL). Call 3: reparse. Call 4: verify (PASS)
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
 count=0
 [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
@@ -923,13 +859,13 @@ count=$((count + 1))
 echo "$count" > "$COUNTER_FILE"
 
 case "$count" in
-  1) cat << 'ENDOUT'
+  1) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 ENDOUT
     ;;
-  2) printf 'FAIL\nMissing build phase.\n' ;;
-  3) cat << 'ENDOUT'
+  2) printf 'FAIL\nMissing build phase.\n' | text_to_stream_json ;;
+  3) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 
@@ -937,11 +873,10 @@ Create project.
 Build it.
 ENDOUT
     ;;
-  4) echo "PASS" ;;
+  4) echo "PASS" | text_to_stream_json ;;
 esac
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_DIR="$TEST_DIR"
   export YES_MODE=true
 
@@ -959,6 +894,7 @@ EOF
   # Call 1: parse. Call 2: verify (FAIL)
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
 count=0
 [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
@@ -966,16 +902,15 @@ count=$((count + 1))
 echo "$count" > "$COUNTER_FILE"
 
 case "$count" in
-  1) cat << 'ENDOUT'
+  1) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 ENDOUT
     ;;
-  2) printf 'FAIL\nMissing stuff.\n' ;;
+  2) printf 'FAIL\nMissing stuff.\n' | text_to_stream_json ;;
 esac
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_DIR="$TEST_DIR"
   export YES_MODE=false
 
@@ -992,6 +927,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "n\n" | ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
     '
@@ -1002,6 +938,7 @@ EOF
   # Call 1: parse. Call 2: verify (FAIL). Call 3: reparse. Call 4: verify (PASS)
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
 count=0
 [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
@@ -1009,13 +946,13 @@ count=$((count + 1))
 echo "$count" > "$COUNTER_FILE"
 
 case "$count" in
-  1) cat << 'ENDOUT'
+  1) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 ENDOUT
     ;;
-  2) printf 'FAIL\nMissing build phase.\n' ;;
-  3) cat << 'ENDOUT'
+  2) printf 'FAIL\nMissing build phase.\n' | text_to_stream_json ;;
+  3) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 
@@ -1023,11 +960,10 @@ Create project.
 Build it.
 ENDOUT
     ;;
-  4) echo "PASS" ;;
+  4) echo "PASS" | text_to_stream_json ;;
 esac
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_DIR="$TEST_DIR"
   export YES_MODE=true
 
@@ -1043,6 +979,7 @@ EOF
   # All verify calls return FAIL — should stop after 3 retries
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
+cat /dev/stdin > /dev/null
 COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
 count=0
 [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
@@ -1051,16 +988,15 @@ echo "$count" > "$COUNTER_FILE"
 
 # Odd calls = parse/reparse, even calls = verify (always FAIL)
 case $((count % 2)) in
-  1) cat << 'ENDOUT'
+  1) cat << 'ENDOUT' | text_to_stream_json
 ## Phase 1: Setup
 Create project.
 ENDOUT
     ;;
-  0) printf 'FAIL\nStill missing stuff.\n' ;;
+  0) printf 'FAIL\nStill missing stuff.\n' | text_to_stream_json ;;
 esac
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
-  export PATH="$TEST_DIR/bin:$PATH"
   export MOCK_COUNTER_DIR="$TEST_DIR"
   export YES_MODE=true
 

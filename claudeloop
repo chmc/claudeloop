@@ -712,30 +712,6 @@ _add_platform_gitignore() {
   esac
 }
 
-# Inject heartbeat events during idle periods to keep the spinner alive.
-# Reads lines from stdin with a 2-second timeout; on timeout, emits a
-# {"type":"heartbeat"} event so the stream processor can update the spinner.
-# Note: On macOS /bin/sh (bash 3.2), read -t returns exit code 1 for both
-# timeout and EOF. We use epoch seconds to distinguish: EOF returns instantly,
-# timeout takes ~2s. read -t is non-POSIX but supported by bash and most sh.
-inject_heartbeats() {
-  while true; do
-    _hb_line=""
-    _hb_before=$(date +%s)
-    if IFS= read -t 2 -r _hb_line; then
-      printf '%s\n' "$_hb_line"
-    elif [ -n "$_hb_line" ]; then
-      # Partial line (data without trailing newline)
-      printf '%s\n' "$_hb_line"
-    elif [ $(($(date +%s) - _hb_before)) -lt 1 ]; then
-      # Returned instantly → EOF (timeout would take ~2s)
-      break
-    else
-      printf '{"type":"heartbeat"}\n'
-    fi
-  done
-}
-
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"

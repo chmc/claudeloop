@@ -715,12 +715,11 @@ JSON"
 # --- inject_heartbeats function tests ---
 
 @test "inject_heartbeats: data arriving after delay passes through" {
-  # Source just the inject_heartbeats function from claudeloop
-  eval "$(sed -n '/^inject_heartbeats()/,/^}/p' "${BATS_TEST_DIRNAME}/../claudeloop")"
+  # inject_heartbeats is now available via sourced lib/stream_processor.sh
   # Send a line, wait 3s (longer than the 2s timeout), send another line
   # Both lines must appear in output, plus a heartbeat in between
   run bash -c '
-    eval "$(sed -n "/^inject_heartbeats()/,/^}/p" "'"${BATS_TEST_DIRNAME}"'/../claudeloop")"
+    . "'"${BATS_TEST_DIRNAME}"'/../lib/stream_processor.sh"
     { echo "line1"; sleep 3; echo "line2"; } | inject_heartbeats
   '
   [ "$status" -eq 0 ]
