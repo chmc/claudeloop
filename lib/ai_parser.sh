@@ -44,7 +44,9 @@ run_claude_print() {
     return 1
   fi
 
-  # Output captured text (process_stream_json wrote clean text to tmp_log)
+  # Strip process_stream_json metadata before returning
+  grep -v '^\[.*\] model=' "$tmp_log" | grep -v '^\[Session:' > "${tmp_log}.clean"
+  mv "${tmp_log}.clean" "$tmp_log"
   cat "$tmp_log"
   rm -f "$tmp_prompt" "$tmp_log" "$tmp_raw" "$_exit_tmp"
   return 0
@@ -86,9 +88,19 @@ ai_parse_plan() {
 - DECOMPOSITION EXAMPLE: If the input has:
     \"Phase 1: Setup\" with sub-tasks \"1.1 Init project, 1.2 Design schema, 1.3 Write CRUD\"
   You must output:
-    ## Phase 1: Initialize project
-    ## Phase 2: Design database schema
-    ## Phase 3: Implement CRUD operations
+    ## Phase 1: Init project
+    (Part of: Setup)
+    Description from original...
+
+    ## Phase 2: Design schema
+    (Part of: Setup)
+    Description from original...
+
+    ## Phase 3: Write CRUD
+    (Part of: Setup)
+    Description from original...
+  Use the EXACT sub-task titles from the original — do NOT rephrase them.
+  Add \"(Part of: [parent section name])\" as the first line of description for context.
   NOT a single \"## Phase 1: Project Setup & Database\" summarizing all three." ;;
   esac
 
@@ -97,7 +109,8 @@ ai_parse_plan() {
   case "$granularity" in
     tasks|steps) flatten_rule="
 - If the input plan already has phases/sections with numbered sub-tasks (e.g. \"1.1\", \"1.2\"),
-  each sub-task should become its OWN separate ## Phase, not grouped under one." ;;
+  each sub-task should become its OWN separate ## Phase, not grouped under one.
+- When flattening sub-tasks into phases, add \"(Part of: [parent section name])\" as the FIRST line of each phase description. Include any relevant parent-level context that the sub-task needs to be self-contained." ;;
   esac
 
   # Execution context: strict for phases, relaxed for tasks/steps
@@ -116,8 +129,8 @@ YOUR TASK: Extract and preserve the original plan's content into structured phas
 
 CRITICAL RULES:
 - ${grain_rule}${flatten_rule}${decomp_example}
-- EXTRACT titles from the original headings/descriptions — do not invent new titles
-- PRESERVE the relevant original content as each phase description (no summarizing, no rewriting — copy the relevant section text)
+- EXTRACT titles using the exact original wording from headings or sub-task titles — do not rephrase, shorten, expand, or invent new titles
+- PRESERVE the relevant original content as each phase description — COPY the original bullet points and text. Do NOT summarize or rephrase. When flattening sub-tasks, add \"(Part of: [parent section])\" as the first description line so the executing AI has group context.
 - Do NOT invent phases that do not exist in the original plan (e.g., do not add \"Final Code Review\" if the original lacks it)
 - EXCLUDE non-phase sections — sections like \"Context\", \"Architecture Decision\", \"TDD Rules\", \"Scope Clarification\", \"Performance Criteria\", \"Project Structure\" are informational context, NOT executable phases. Do NOT create phases from them.
 - Output markdown in this exact format:
@@ -210,6 +223,9 @@ Please output ONLY the ## Phase markdown format as specified. No preamble, no co
   phase_count=$(printf '%s\n' "$extracted" | grep -c '^## Phase [0-9]')
   print_success "AI generated $phase_count phases"
 
+  # Warn if AI appears to have rephrased titles
+  validate_ai_titles "$cl_dir/ai-parsed-plan.md" "$plan_file"
+
   return 0
 }
 
@@ -238,7 +254,7 @@ Do NOT penalize the decomposed plan for having more phases than the original —
 1. COMPLETENESS: Every requirement from the original is covered in at least one phase
 2. CORRECTNESS: Dependencies reference valid earlier phases, no circular deps
 3. ORDERING: Phases are in logical execution order
-4. CONTENT PRESERVATION: Phase descriptions contain the original plan's content, not AI-rewritten summaries
+4. CONTENT PRESERVATION: Phase titles must use the exact wording from original headings/sub-task titles (not rephrased). Phase descriptions must contain the original plan's text, not AI-rewritten summaries.
 
 ${granularity_context}
 
@@ -261,9 +277,9 @@ ${parsed_content}
   local verify_output
   verify_output=$(run_claude_print "$prompt") || return 1
 
-  # Parse first line
+  # Parse first line (case-insensitive, strip whitespace and punctuation)
   local first_line
-  first_line=$(printf '%s\n' "$verify_output" | head -1 | tr -d '[:space:]')
+  first_line=$(printf '%s\n' "$verify_output" | head -1 | tr -d '[:space:].:' | tr '[:lower:]' '[:upper:]')
 
   case "$first_line" in
     PASS)
@@ -279,8 +295,8 @@ ${parsed_content}
       return 1
       ;;
     *)
-      print_warning "Unexpected verification format (treating as pass): $first_line"
-      return 0
+      print_warning "Unexpected verification format (treating as fail): $first_line"
+      return 1
       ;;
   esac
 }
@@ -328,6 +344,7 @@ ${plan_content}
 Fix the issues identified above. Remember:
 - ${grain_rule}
 - EXTRACT and preserve the original plan's content — do NOT rewrite or summarize
+- Titles must use the exact original wording from headings/sub-tasks — do NOT rephrase
 - Do NOT invent phases that do not exist in the original plan
 - EXCLUDE non-phase sections (Context, Architecture, TDD Rules, etc.)
 - Output ONLY \"## Phase N: Title\" format, no preamble or commentary
@@ -362,7 +379,41 @@ Fix the issues identified above. Remember:
   local phase_count
   phase_count=$(printf '%s\n' "$extracted" | grep -c '^## Phase [0-9]')
   print_success "AI regenerated $phase_count phases"
+
+  # Warn if AI appears to have rephrased titles
+  validate_ai_titles "$cl_dir/ai-parsed-plan.md" "$plan_file"
+
   return 0
+}
+
+# Validate that AI-generated phase titles appear in the original plan text
+# Args: $1 - parsed plan file, $2 - original plan file
+# Prints a warning if less than half the titles match
+validate_ai_titles() {
+  local parsed_file="$1"
+  local original_file="$2"
+
+  local tmp_titles
+  tmp_titles=$(mktemp)
+  local original_content
+  original_content=$(cat "$original_file")
+
+  grep '^## Phase [0-9]' "$parsed_file" | sed 's/^## Phase [0-9]*:[[:space:]]*//' > "$tmp_titles"
+
+  local match=0 total=0
+  while IFS= read -r title; do
+    total=$((total + 1))
+    # Check if title (or significant words) appear in original
+    if printf '%s\n' "$original_content" | grep -qF "$title"; then
+      match=$((match + 1))
+    fi
+  done < "$tmp_titles"
+
+  rm -f "$tmp_titles"
+
+  if [ "$total" -gt 0 ] && [ "$match" -lt $((total / 2)) ]; then
+    print_warning "Only $match/$total phase titles match original plan text — AI may have rephrased titles"
+  fi
 }
 
 # Orchestrate AI parsing with verification feedback loop

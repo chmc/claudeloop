@@ -42,6 +42,25 @@ MOCK
   chmod +x "$TEST_DIR/bin/claude"
 }
 
+# Helper: create a mock claude that emits system/init + assistant + result events
+# This reproduces the metadata contamination bug where process_stream_json
+# writes [HH:MM:SS] model=... and [Session: ...] lines to the log file
+mock_claude_with_metadata() {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat /dev/stdin > /dev/null
+# Emit system/init event (produces "[HH:MM:SS] model=..." in log)
+printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-20250514"}\n'
+# Emit assistant text events
+cat << 'ENDOUT' | text_to_stream_json
+$1
+ENDOUT
+# Emit result event (produces "[Session: ...]" in log)
+printf '{"type":"result","total_cost_usd":0.01,"duration_ms":1500,"num_turns":"1","input_tokens":"100","output_tokens":"50","modelUsage":{"claude-sonnet-4-20250514":{"input":100,"output":50}}}\n'
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+}
+
 # Helper: create a mock claude that writes to stderr and exits non-zero
 mock_claude_fail() {
   cat > "$TEST_DIR/bin/claude" << MOCK
@@ -264,7 +283,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "ai_verify_plan: returns 0 with warning on unexpected format" {
+@test "ai_verify_plan: returns 1 on unexpected format" {
   mock_claude "Looks good to me, everything checks out."
 
   cat > "$TEST_DIR/parsed.md" << 'EOF'
@@ -276,7 +295,7 @@ Build something.
 EOF
 
   run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
   echo "$output" | grep -qi "warning\|unexpected"
 }
 
@@ -1011,4 +1030,166 @@ EOF
   local call_count
   call_count=$(cat "$TEST_DIR/call_count")
   [ "$call_count" -eq 8 ]
+}
+
+# =============================================================================
+# Metadata stripping tests
+# =============================================================================
+
+@test "run_claude_print: strips metadata lines from output" {
+  mock_claude_with_metadata "PASS"
+
+  local result
+  result=$(run_claude_print "test prompt" 2>/dev/null)
+  # Must NOT contain metadata lines
+  ! printf '%s\n' "$result" | grep -q '^\[.*\] model='
+  ! printf '%s\n' "$result" | grep -q '^\[Session:'
+  # Must contain the actual content
+  printf '%s\n' "$result" | grep -q 'PASS'
+}
+
+@test "ai_verify_plan: correctly parses PASS after metadata lines" {
+  mock_claude_with_metadata "PASS"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_verify_plan: handles case-insensitive Pass/PASS" {
+  mock_claude "Pass"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# Prompt wording tests
+# =============================================================================
+
+@test "ai_parse_plan: prompt contains exact-wording instruction" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -q "exact original wording" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: prompt contains Part-of context instruction" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -q "Part of:" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: decomp example shows verbatim titles not paraphrased" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  # The example should use exact sub-task titles, not paraphrased versions
+  grep -q "Init project" "$TEST_DIR/received_prompt.txt"
+  grep -q "Design schema" "$TEST_DIR/received_prompt.txt"
+  grep -q "Write CRUD" "$TEST_DIR/received_prompt.txt"
+  # Should NOT contain paraphrased titles from old example
+  ! grep -q "Initialize project" "$TEST_DIR/received_prompt.txt"
+  ! grep -q "Design database schema" "$TEST_DIR/received_prompt.txt"
+  ! grep -q "Implement CRUD operations" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_verify_plan: prompt requires exact wording for titles" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt.txt"
+cat << 'ENDOUT' | text_to_stream_json
+PASS
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  grep -q "exact wording" "$TEST_DIR/verify_prompt.txt"
+}
+
+@test "ai_reparse_with_feedback: prompt contains exact wording instruction" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/reparse_prompt.txt"
+cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project structure.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a web app.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-parsed-plan.md" << 'EOF'
+## Phase 1: Everything
+Do it all.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-verify-reason.txt" << 'EOF'
+Titles were rephrased.
+EOF
+
+  ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -q "exact original wording" "$TEST_DIR/reparse_prompt.txt"
 }
