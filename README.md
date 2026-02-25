@@ -17,6 +17,18 @@ claudeloop --version   # verify installation
 For full setup instructions see **[QUICKSTART.md](QUICKSTART.md)**.
 
 
+### Beta versions
+
+To install the latest beta:
+```sh
+BETA=1 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+```
+
+To install a specific version (stable or beta):
+```sh
+VERSION=0.14.0-beta.1 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+```
+
 **Uninstall:**
 ```sh
 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh

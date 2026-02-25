@@ -19,12 +19,23 @@ fi
 # Resolve version (download mode only)
 if [ "$MODE" = "download" ]; then
   if [ -z "${VERSION:-}" ]; then
-    echo "Fetching latest version..."
-    VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-      | grep '"tag_name"' | sed 's/.*"tag_name": *"v\([^"]*\)".*/\1/')
-    if [ -z "$VERSION" ]; then
-      echo "error: could not determine latest version" >&2
-      exit 1
+    if [ "${BETA:-0}" = "1" ]; then
+      echo "Fetching latest beta version..."
+      VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20" \
+        | awk '/"tag_name"/{tag=$0} /"prerelease": true/{print tag; exit}' \
+        | sed 's/.*"v\([^"]*\)".*/\1/')
+      if [ -z "$VERSION" ]; then
+        echo "error: no beta release found" >&2
+        exit 1
+      fi
+    else
+      echo "Fetching latest version..."
+      VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+        | grep '"tag_name"' | sed 's/.*"tag_name": *"v\([^"]*\)".*/\1/')
+      if [ -z "$VERSION" ]; then
+        echo "error: could not determine latest version" >&2
+        exit 1
+      fi
     fi
   fi
   echo "Version: $VERSION"

@@ -1,6 +1,12 @@
 name: Release
 on:
   workflow_dispatch:
+    inputs:
+      beta:
+        description: 'Create a beta (prerelease) version'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write   # required to push commit + tag and create release
@@ -20,7 +26,12 @@ jobs:
           git config user.name "github-actions[bot]"
 
       - name: Run release script
-        run: ./release.sh
+        run: |
+          beta_arg=""
+          if [ "${{ inputs.beta }}" = "true" ]; then
+            beta_arg="--beta"
+          fi
+          ./release.sh $beta_arg
 
       - name: Push commit and tag
         run: |
@@ -40,6 +51,8 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          gh release create "$TAG" "$TARBALL" --notes-file release_notes.md --title "$TAG"
+          prerelease_flag=""
+          case "$TAG" in *-beta*) prerelease_flag="--prerelease" ;; esac
+          gh release create "$TAG" "$TARBALL" --notes-file release_notes.md --title "$TAG" $prerelease_flag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
