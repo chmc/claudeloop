@@ -261,6 +261,30 @@ run_setup_wizard() {
     [ -n "$response" ] && [ "$response" != "none" ] && PHASE_PROMPT_FILE="$response"
   fi
 
+  # AI_PARSE
+  if [ -n "$_CLI_AI_PARSE" ]; then
+    printf 'AI parsing: using --ai-parse\n'
+  else
+    printf 'Use AI to parse free-form plans (true/false) [%s]: ' "$AI_PARSE"
+    read -r response || return 0
+    case "$response" in
+      true|false) AI_PARSE="$response" ;;
+    esac
+  fi
+
+  # GRANULARITY (only ask if AI_PARSE is true)
+  if [ "$AI_PARSE" = "true" ]; then
+    if [ -n "$_CLI_GRANULARITY" ]; then
+      printf 'Granularity: using --granularity %s\n' "$GRANULARITY"
+    else
+      printf 'AI breakdown depth (phases/tasks/steps) [%s]: ' "$GRANULARITY"
+      read -r response || return 0
+      case "$response" in
+        phases|tasks|steps) GRANULARITY="$response" ;;
+      esac
+    fi
+  fi
+
   printf '\n'
 }
 
@@ -1223,12 +1247,8 @@ main() {
       case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan" ;; esac
     fi
     if [ "$PLAN_FILE" != "$ai_plan" ]; then
-      if ! ai_parse_plan "$PLAN_FILE" "$GRANULARITY"; then
+      if ! ai_parse_and_verify "$PLAN_FILE" "$GRANULARITY"; then
         print_error "AI parsing failed"
-        exit 1
-      fi
-      if ! ai_verify_plan "$ai_plan" "$PLAN_FILE" "$GRANULARITY"; then
-        print_error "AI verification failed"
         exit 1
       fi
       if ! confirm_ai_plan "$ai_plan"; then

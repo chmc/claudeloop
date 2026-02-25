@@ -171,9 +171,10 @@ claudeloop --plan ideas.md --ai-parse --dry-run
 
 The AI parser:
 1. Reads any plan format (free text, bullet lists, structured docs)
-2. Calls `claude --print` to break it into `## Phase N:` format
-3. Verifies the result against the original for completeness
-4. Shows you the plan for confirmation before proceeding
+2. Calls `claude --print` to **extract** original content into `## Phase N:` format (preserves descriptions, no rewriting)
+3. Verifies completeness, correctness, ordering, and content preservation against the original
+4. On verification failure, retries with feedback up to 3 times (configurable via `AI_RETRY_MAX`)
+5. Shows you the plan for confirmation before proceeding
 
 The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--continue`.
 

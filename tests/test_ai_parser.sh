@@ -707,3 +707,372 @@ EOF
   grep -q "Phase 1" "$LIVE_LOG"
   grep -q "phases total" "$LIVE_LOG"
 }
+
+# =============================================================================
+# ai_parse_plan: extract-not-rewrite prompt tests
+# =============================================================================
+
+@test "ai_parse_plan: prompt instructs to extract and preserve original content" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  # Must instruct extraction, not rewriting
+  grep -q "extract" "$TEST_DIR/received_prompt.txt"
+  grep -q "preserve" "$TEST_DIR/received_prompt.txt"
+  grep -qi "do not rewrite\|do not summarize\|no summarizing\|no rewriting" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: prompt instructs to exclude non-phase sections" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -qi "context.*not.*phase\|non-phase\|informational" "$TEST_DIR/received_prompt.txt"
+}
+
+@test "ai_parse_plan: prompt instructs not to invent phases" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/received_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Do stuff.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  grep -qi "do not invent\|do NOT invent\|never invent" "$TEST_DIR/received_prompt.txt"
+}
+
+# =============================================================================
+# ai_verify_plan: content preservation check + reason file
+# =============================================================================
+
+@test "ai_verify_plan: prompt includes content preservation check" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt.txt"
+echo "PASS"
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  grep -qi "content preservation\|CONTENT PRESERVATION" "$TEST_DIR/verify_prompt.txt"
+}
+
+@test "ai_verify_plan: writes failure reason to ai-verify-reason.txt on FAIL" {
+  mock_claude "FAIL
+Missing database setup phase."
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something with database.
+EOF
+
+  run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  [ -f "$TEST_DIR/.claudeloop/ai-verify-reason.txt" ]
+  grep -q "Missing database" "$TEST_DIR/.claudeloop/ai-verify-reason.txt"
+}
+
+@test "ai_verify_plan: does not write reason file on PASS" {
+  mock_claude "PASS"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ ! -f "$TEST_DIR/.claudeloop/ai-verify-reason.txt" ]
+}
+
+# =============================================================================
+# ai_reparse_with_feedback tests
+# =============================================================================
+
+@test "ai_reparse_with_feedback: sends original plan + previous output + failure reason" {
+  cat > "$TEST_DIR/bin/claude" << MOCK
+#!/bin/sh
+cat > "$TEST_DIR/reparse_prompt.txt"
+cat << 'ENDOUT'
+## Phase 1: Setup
+Create project structure.
+
+## Phase 2: Build
+Build the feature.
+ENDOUT
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a web app.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-parsed-plan.md" << 'EOF'
+## Phase 1: Everything
+Do it all.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-verify-reason.txt" << 'EOF'
+Missing database setup phase.
+EOF
+
+  run ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+  # Prompt should contain original plan
+  grep -q "Build a web app" "$TEST_DIR/reparse_prompt.txt"
+  # Prompt should contain verification failure reason
+  grep -q "Missing database" "$TEST_DIR/reparse_prompt.txt"
+  # Prompt should contain previous failed output
+  grep -q "Do it all" "$TEST_DIR/reparse_prompt.txt"
+}
+
+# =============================================================================
+# ai_parse_and_verify orchestrator tests
+# =============================================================================
+
+@test "ai_parse_and_verify: passes on first try when verification succeeds" {
+  # Mock claude that returns valid plan for parse, then PASS for verify
+  local call_count=0
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+if [ "$count" -eq 1 ]; then
+  cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+
+## Phase 2: Build
+Build it.
+ENDOUT
+else
+  echo "PASS"
+fi
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_parse_and_verify: retries with feedback when verification fails then passes" {
+  # Call 1: parse (valid format). Call 2: verify (FAIL). Call 3: reparse. Call 4: verify (PASS)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMissing build phase.\n' ;;
+  3) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+
+## Phase 2: Build
+Build it.
+ENDOUT
+    ;;
+  4) echo "PASS" ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing with a build step.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+  # Should have called claude 4 times
+  [ "$(cat "$TEST_DIR/call_count")" = "4" ]
+}
+
+@test "ai_parse_and_verify: exits when user says n" {
+  # Call 1: parse. Call 2: verify (FAIL)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMissing stuff.\n' ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  # Pipe "n" for the retry prompt
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "n\n" | ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
+    '
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_and_verify: auto-retries in YES_MODE" {
+  # Call 1: parse. Call 2: verify (FAIL). Call 3: reparse. Call 4: verify (PASS)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMissing build phase.\n' ;;
+  3) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+
+## Phase 2: Build
+Build it.
+ENDOUT
+    ;;
+  4) echo "PASS" ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_parse_and_verify: respects AI_RETRY_MAX (default 3)" {
+  # All verify calls return FAIL — should stop after 3 retries
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+# Odd calls = parse/reparse, even calls = verify (always FAIL)
+case $((count % 2)) in
+  1) cat << 'ENDOUT'
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  0) printf 'FAIL\nStill missing stuff.\n' ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export PATH="$TEST_DIR/bin:$PATH"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  # 1 initial parse + 3 retries × (reparse + verify) + 1 initial verify = 1 + 1 + 3*2 = 8
+  # Actually: parse(1) + verify(2) + reparse(3) + verify(4) + reparse(5) + verify(6) + reparse(7) + verify(8) = 8
+  local call_count
+  call_count=$(cat "$TEST_DIR/call_count")
+  [ "$call_count" -eq 8 ]
+}

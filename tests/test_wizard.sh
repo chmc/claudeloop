@@ -275,3 +275,42 @@ _reset_gitignore_without_claudeloop() {
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_DIR/.gitignore")" = "$before" ]
 }
+
+# =============================================================================
+# AI parsing wizard questions
+# Prompts in order (no CLI args → all 9 shown):
+#   1. Plan file  2. Progress file  3. Max retries  4. Quota interval
+#   5. Simple mode  6. Skip permissions  7. Phase prompt file
+#   8. AI parse (true/false)  9. Granularity (phases/tasks/steps)
+# =============================================================================
+
+@test "wizard: asks about AI parsing and saves AI_PARSE=true" {
+  # 7 defaults + AI_PARSE=true + GRANULARITY=default
+  # Exit may be non-zero because AI parsing runs (and fails with stub claude)
+  _cl_wizard $'\n\n\n\n\n\n\ntrue\n\n'
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  grep -q "^AI_PARSE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: asks about granularity and saves GRANULARITY=steps" {
+  # 7 defaults + AI_PARSE=true + GRANULARITY=steps
+  _cl_wizard $'\n\n\n\n\n\n\ntrue\nsteps\n'
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  grep -q "^GRANULARITY=steps$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: default AI_PARSE=false saved to conf" {
+  # 8 prompts (AI_PARSE=false, so granularity not asked)
+  _cl_wizard $'\n\n\n\n\n\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^AI_PARSE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: skips AI_PARSE prompt when --ai-parse passed via CLI" {
+  # With --ai-parse: AI_PARSE prompt is skipped, GRANULARITY prompt shown
+  # Exit may be non-zero because AI parsing runs with stub claude
+  _cl_wizard $'\n\n\n\n\n\n\n\n' --ai-parse
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  [[ "$output" == *"AI parsing: using --ai-parse"* ]]
+  grep -q "^AI_PARSE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}

@@ -96,10 +96,10 @@ ai_parse_plan() {
   # Build granularity-specific opening instruction
   local opening_instruction
   case "$granularity" in
-    phases) opening_instruction="break them into 3-8 high-level phases, where each phase is a major milestone" ;;
-    tasks)  opening_instruction="decompose them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
-    steps)  opening_instruction="decompose them into 10-40 atomic steps, where each step is a single concrete action (create one file, write one function, run one test). IMPORTANT: Do NOT mirror the input's existing section structure — every sub-task becomes its own separate phase" ;;
-    *)      opening_instruction="decompose them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
+    phases) opening_instruction="extract and organize them into 3-8 high-level phases, where each phase is a major milestone" ;;
+    tasks)  opening_instruction="extract and organize them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
+    steps)  opening_instruction="extract and organize them into 10-40 atomic steps, where each step is a single concrete action (create one file, write one function, run one test). IMPORTANT: Do NOT mirror the input's existing section structure — every sub-task becomes its own separate phase" ;;
+    *)      opening_instruction="extract and organize them into 5-20 focused, independent tasks, where each task is completable in one AI session. IMPORTANT: Do NOT mirror the input's existing section structure — flatten sub-tasks into their own top-level phases" ;;
   esac
 
   # Build granularity-specific first CRITICAL RULE
@@ -151,10 +151,16 @@ ai_parse_plan() {
   esac
 
   local prompt
-  prompt="You are a plan decomposition assistant. Analyze the following plan/requirements and ${opening_instruction}.
+  prompt="You are a plan extraction assistant. Analyze the following plan/requirements and ${opening_instruction}.
+
+YOUR TASK: Extract and preserve the original plan's content into structured phases. Do NOT rewrite, summarize, or paraphrase — copy the relevant original text as each phase's description.
 
 CRITICAL RULES:
 - ${grain_rule}${flatten_rule}${decomp_example}
+- EXTRACT titles from the original headings/descriptions — do not invent new titles
+- PRESERVE the relevant original content as each phase description (no summarizing, no rewriting — copy the relevant section text)
+- Do NOT invent phases that do not exist in the original plan (e.g., do not add \"Final Code Review\" if the original lacks it)
+- EXCLUDE non-phase sections — sections like \"Context\", \"Architecture Decision\", \"TDD Rules\", \"Scope Clarification\", \"Performance Criteria\", \"Project Structure\" are informational context, NOT executable phases. Do NOT create phases from them.
 - Output markdown in this exact format:
   ## Phase 1: Title
   Description...
@@ -174,7 +180,7 @@ EXECUTION CONTEXT — each phase will be:
 - It CANNOT see outputs, logs, or context from other phases
 ${exec_context}
 
-PLAN TO DECOMPOSE:
+PLAN TO EXTRACT FROM:
 ---
 ${plan_content}
 ---"
@@ -249,12 +255,13 @@ Please output ONLY the ## Phase markdown format as specified. No preamble, no co
 }
 
 # Verify an AI-generated plan against the original
-# Args: $1 - parsed plan file, $2 - original plan file, $3 - granularity (optional)
+# Args: $1 - parsed plan file, $2 - original plan file, $3 - granularity (optional), $4 - claudeloop dir (optional)
 # Returns: 0 on pass, 1 on fail
 ai_verify_plan() {
   local parsed_file="$1"
   local original_file="$2"
   local granularity="${3:-tasks}"
+  local cl_dir="${4:-.claudeloop}"
 
   local parsed_content original_content
   parsed_content=$(cat "$parsed_file")
@@ -272,6 +279,7 @@ Do NOT penalize the decomposed plan for having more phases than the original —
 1. COMPLETENESS: Every requirement from the original is covered in at least one phase
 2. CORRECTNESS: Dependencies reference valid earlier phases, no circular deps
 3. ORDERING: Phases are in logical execution order
+4. CONTENT PRESERVATION: Phase descriptions contain the original plan's content, not AI-rewritten summaries
 
 ${granularity_context}
 
@@ -307,6 +315,8 @@ ${parsed_content}
       local reason
       reason=$(printf '%s\n' "$verify_output" | tail -n +2)
       print_error "Verification failed: $reason"
+      mkdir -p "$cl_dir"
+      printf '%s\n' "$reason" > "$cl_dir/ai-verify-reason.txt"
       return 1
       ;;
     *)
@@ -314,6 +324,145 @@ ${parsed_content}
       return 0
       ;;
   esac
+}
+
+# Reparse plan with feedback from failed verification
+# Args: $1 - original plan file, $2 - granularity, $3 - claudeloop dir (optional)
+# Returns: 0 on success, 1 on failure
+ai_reparse_with_feedback() {
+  local plan_file="$1"
+  local granularity="${2:-tasks}"
+  local cl_dir="${3:-.claudeloop}"
+
+  local plan_content previous_output failure_reason
+  plan_content=$(cat "$plan_file")
+  previous_output=$(cat "$cl_dir/ai-parsed-plan.md")
+  failure_reason=$(cat "$cl_dir/ai-verify-reason.txt")
+
+  # Build granularity-specific rule
+  local grain_rule
+  case "$granularity" in
+    phases) grain_rule="Produce 3-8 high-level phases. Each phase is a major milestone." ;;
+    tasks)  grain_rule="Produce 5-20 focused tasks. Each task should be completable in one AI session." ;;
+    steps)  grain_rule="Produce 10-40 atomic steps. Each step is a single concrete action." ;;
+    *)      grain_rule="Produce 5-20 focused tasks. Each task should be completable in one AI session." ;;
+  esac
+
+  local timeout_secs
+  case "$granularity" in
+    phases) timeout_secs=120 ;;
+    tasks)  timeout_secs=180 ;;
+    steps)  timeout_secs=240 ;;
+    *)      timeout_secs=180 ;;
+  esac
+
+  local prompt
+  prompt="You are a plan extraction assistant. Your previous extraction attempt FAILED verification.
+
+VERIFICATION FAILURE REASON:
+---
+${failure_reason}
+---
+
+YOUR PREVIOUS (FAILED) OUTPUT:
+---
+${previous_output}
+---
+
+ORIGINAL PLAN TO EXTRACT FROM:
+---
+${plan_content}
+---
+
+Fix the issues identified above. Remember:
+- ${grain_rule}
+- EXTRACT and preserve the original plan's content — do NOT rewrite or summarize
+- Do NOT invent phases that do not exist in the original plan
+- EXCLUDE non-phase sections (Context, Architecture, TDD Rules, etc.)
+- Output ONLY \"## Phase N: Title\" format, no preamble or commentary
+- Use INTEGER numbering: 1, 2, 3... (NO decimals)
+- Add \"**Depends on:** Phase N\" when a phase needs prior phases"
+
+  print_success "Reparsing with feedback (granularity: $granularity)..."
+
+  local ai_output
+  ai_output=$(run_claude_print "$prompt" "$timeout_secs") || return 1
+
+  if [ -z "$ai_output" ]; then
+    print_error "AI retry returned empty output"
+    return 1
+  fi
+
+  # Extract ## Phase content
+  local extracted
+  extracted=$(printf '%s\n' "$ai_output" | awk '
+    /^## Phase [0-9]/ { found=1 }
+    found { print }
+  ')
+
+  if ! printf '%s\n' "$extracted" | grep -q '^## Phase [0-9]'; then
+    print_error "AI retry output has no '## Phase N:' headers"
+    return 1
+  fi
+
+  mkdir -p "$cl_dir"
+  printf '%s\n' "$extracted" > "$cl_dir/ai-parsed-plan.md"
+
+  local phase_count
+  phase_count=$(printf '%s\n' "$extracted" | grep -c '^## Phase [0-9]')
+  print_success "AI regenerated $phase_count phases"
+  return 0
+}
+
+# Orchestrate AI parsing with verification feedback loop
+# Args: $1 - plan file, $2 - granularity, $3 - claudeloop dir (optional)
+# Returns: 0 on success, 1 on failure
+ai_parse_and_verify() {
+  local plan_file="$1"
+  local granularity="${2:-tasks}"
+  local cl_dir="${3:-.claudeloop}"
+  local max_retries="${AI_RETRY_MAX:-3}"
+
+  # Initial parse
+  if ! ai_parse_plan "$plan_file" "$granularity" "$cl_dir"; then
+    return 1
+  fi
+
+  local ai_plan="$cl_dir/ai-parsed-plan.md"
+  local retry=0
+
+  while true; do
+    # Verify
+    if ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"; then
+      return 0
+    fi
+
+    retry=$((retry + 1))
+    if [ "$retry" -gt "$max_retries" ]; then
+      print_error "AI verification failed after $max_retries retries"
+      return 1
+    fi
+
+    # Decide whether to retry
+    if [ "${YES_MODE:-false}" = "true" ]; then
+      print_warning "Auto-retrying (YES_MODE, attempt $retry/$max_retries)..."
+    elif [ -n "${_AI_VERIFY_FORCE:-}" ] || [ -t 0 ]; then
+      printf 'Send feedback to AI and retry? (Y/n) '
+      read -r _answer
+      case "$_answer" in
+        [Nn]*) return 1 ;;
+      esac
+    else
+      # Non-interactive, non-YES_MODE
+      return 1
+    fi
+
+    # Reparse with feedback
+    if ! ai_reparse_with_feedback "$plan_file" "$granularity" "$cl_dir"; then
+      print_error "AI reparse failed"
+      return 1
+    fi
+  done
 }
 
 # Display the AI-generated plan
