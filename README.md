@@ -163,6 +163,10 @@ Press **Ctrl+C** at any time — progress is saved and you can resume with `--co
 
 If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it reports added/removed/renumbered phases and carries forward progress by matching phase titles. Phases not found in the new plan are treated as removed; new phases start as pending.
 
+## Architecture decisions
+
+Key design decisions are recorded in [docs/adr/](docs/adr/).
+
 ## Project structure
 
 ```

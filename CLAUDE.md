@@ -10,6 +10,16 @@ Use conventional commits
 
 Update documentation README.md QUICKSTART.md when implementation is changed
 
+### ADR workflow (mandatory)
+
+When making an architectural decision (new pattern, technology choice, significant design change), create an ADR:
+
+1. Assign next sequential number from `docs/adr/`
+2. Create `docs/adr/NNNN-slug.md` using the [ADR template](docs/adr/TEMPLATE.md)
+3. Update `docs/adr/README.md` index
+
+Examples of what warrants an ADR: changing the shell dialect, adding a new dependency, altering the state model, choosing a serialization format, modifying the execution pipeline.
+
 ## Commands
 
 ```sh
