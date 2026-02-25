@@ -1191,6 +1191,16 @@ main() {
   # Persist settings immediately — before plan file check so conf is always written
   write_config
 
+  # Initialize live log early so --monitor and AI parsing can use it
+  if ! $DRY_RUN; then
+    LIVE_LOG=".claudeloop/live.log"
+    if [ -f "$LIVE_LOG" ]; then
+      _ts=$(date '+%Y%m%d-%H%M%S')
+      mv "$LIVE_LOG" ".claudeloop/live-${_ts}.log"
+    fi
+    : > "$LIVE_LOG"
+  fi
+
   # Check if plan file exists
   if [ ! -f "$PLAN_FILE" ]; then
     print_error "Plan file not found: $PLAN_FILE"
@@ -1255,13 +1265,15 @@ main() {
     fi
     validate_environment
     setup_project
-    # Rotate previous live log (preserves history for debugging)
-    LIVE_LOG=".claudeloop/live.log"
-    if [ -f "$LIVE_LOG" ]; then
-      _ts=$(date '+%Y%m%d-%H%M%S')
-      mv "$LIVE_LOG" ".claudeloop/live-${_ts}.log"
+    # LIVE_LOG already initialized above (before AI parsing); guard against double-init
+    if [ -z "${LIVE_LOG:-}" ]; then
+      LIVE_LOG=".claudeloop/live.log"
+      if [ -f "$LIVE_LOG" ]; then
+        _ts=$(date '+%Y%m%d-%H%M%S')
+        mv "$LIVE_LOG" ".claudeloop/live-${_ts}.log"
+      fi
+      : > "$LIVE_LOG"
     fi
-    : > "$LIVE_LOG"
   fi
 
   # Check for interrupted session (skip in dry-run and reset)

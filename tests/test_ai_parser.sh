@@ -399,3 +399,77 @@ MOCK
   # Should show validation error about the edited content
   echo "$output" | grep -qi "invalid\|error\|no phases"
 }
+
+# --- run_claude_print streaming tests ---
+
+@test "run_claude_print: streams output to stderr in real-time" {
+  mock_claude "line one
+line two
+line three"
+
+  # Capture stderr separately — stderr should contain the streamed output
+  local stderr_file="$TEST_DIR/stderr_capture"
+  run_claude_print "test prompt" 120 > /dev/null 2> "$stderr_file"
+  grep -q "line one" "$stderr_file"
+  grep -q "line two" "$stderr_file"
+  grep -q "line three" "$stderr_file"
+}
+
+@test "run_claude_print: stdout still returns full output for capture" {
+  mock_claude "capture this output"
+
+  local result
+  result=$(run_claude_print "test prompt" 120 2>/dev/null)
+  [ "$result" = "capture this output" ]
+}
+
+@test "run_claude_print: exit code recovered correctly on failure" {
+  mock_claude_fail "some error"
+
+  run run_claude_print "test prompt" 120
+  [ "$status" -eq 1 ]
+}
+
+@test "run_claude_print: batch-logs output to LIVE_LOG when set" {
+  mock_claude "AI response line 1
+AI response line 2"
+
+  export LIVE_LOG="$TEST_DIR/live.log"
+  : > "$LIVE_LOG"
+
+  run_claude_print "test prompt" 120 > /dev/null 2>/dev/null
+  # LIVE_LOG should contain the AI response
+  grep -q "AI response line 1" "$LIVE_LOG"
+  grep -q "AI response line 2" "$LIVE_LOG"
+  # Should have the [ai-parse] marker
+  grep -q "\[ai-parse\]" "$LIVE_LOG"
+}
+
+@test "run_claude_print: does not log to LIVE_LOG when unset" {
+  mock_claude "some output"
+
+  export LIVE_LOG=""
+  run_claude_print "test prompt" 120 > /dev/null 2>/dev/null
+  # No crash, no log file created
+  [ ! -f "$TEST_DIR/live.log" ]
+}
+
+# --- show_ai_plan logging tests ---
+
+@test "show_ai_plan: logs to LIVE_LOG when set" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+
+## Phase 2: Build
+Build it.
+EOF
+
+  export LIVE_LOG="$TEST_DIR/live.log"
+  : > "$LIVE_LOG"
+
+  show_ai_plan "$TEST_DIR/parsed.md" > /dev/null
+  # LIVE_LOG should have plan content
+  grep -q "Phase 1" "$LIVE_LOG"
+  grep -q "phases total" "$LIVE_LOG"
+}

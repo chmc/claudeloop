@@ -6,6 +6,7 @@
 # Run claude --print with timeout and error handling
 # Args: $1 - prompt text, $2 - timeout in seconds
 # Returns: 0 on success (stdout = claude output), 1 on failure, 2 on timeout
+# Streams output to stderr in real-time via two-stage pipe (tee >&2)
 run_claude_print() {
   local prompt="$1"
   local timeout_secs="${2:-120}"
@@ -15,40 +16,46 @@ run_claude_print() {
     return 1
   fi
 
-  local tmp_prompt tmp_out tmp_err
+  local tmp_prompt tmp_out tmp_err _exit_tmp
   tmp_prompt=$(mktemp)
   tmp_out=$(mktemp)
   tmp_err=$(mktemp)
-
+  _exit_tmp=$(mktemp)
   printf '%s\n' "$prompt" > "$tmp_prompt"
+  printf '1\n' > "$_exit_tmp"  # fail-safe default
 
-  local rc=0
   unset CLAUDECODE  # allow nested claude invocations (same pattern as execute_phase)
-  if command -v timeout > /dev/null 2>&1; then
-    timeout "$timeout_secs" claude --print < "$tmp_prompt" > "$tmp_out" 2> "$tmp_err" || rc=$?
-    if [ "$rc" -eq 124 ]; then
-      print_error "claude --print timed out after ${timeout_secs}s"
-      rm -f "$tmp_prompt" "$tmp_out" "$tmp_err"
-      return 2
+
+  # Two-stage pipe: claude stdout → tee (saves to file + copies to stderr)
+  # stderr→terminal is line-buffered = real-time streaming
+  # Exit code written to _exit_tmp (POSIX-safe, no PIPESTATUS)
+  {
+    _rc=0
+    if command -v timeout > /dev/null 2>&1; then
+      timeout "$timeout_secs" claude --print < "$tmp_prompt" 2> "$tmp_err" || _rc=$?
+    else
+      # POSIX fallback: background + sleep + kill
+      claude --print < "$tmp_prompt" 2> "$tmp_err" &
+      _cpid=$!
+      # Close stdout in timer subshell so sleep doesn't hold pipe open
+      ( sleep "$timeout_secs"; kill "$_cpid" 2>/dev/null ) >/dev/null 2>&1 &
+      _tpid=$!
+      wait "$_cpid" 2>/dev/null || _rc=$?
+      kill "$_tpid" 2>/dev/null || true
+      wait "$_tpid" 2>/dev/null || true
     fi
-  else
-    # POSIX fallback: background + sleep + kill
-    claude --print < "$tmp_prompt" > "$tmp_out" 2> "$tmp_err" &
-    local claude_pid=$!
-    (
-      sleep "$timeout_secs"
-      kill "$claude_pid" 2>/dev/null
-    ) &
-    local timer_pid=$!
-    wait "$claude_pid" 2>/dev/null || rc=$?
-    kill "$timer_pid" 2>/dev/null || true
-    wait "$timer_pid" 2>/dev/null || true
-    if [ "$rc" -eq 143 ] || [ "$rc" -eq 137 ]; then
+    printf '%s\n' "$_rc" > "$_exit_tmp"
+  } | tee "$tmp_out" >&2
+
+  local rc
+  rc=$(cat "$_exit_tmp")
+
+  case "$rc" in
+    124|143|137)
       print_error "claude --print timed out after ${timeout_secs}s"
-      rm -f "$tmp_prompt" "$tmp_out" "$tmp_err"
-      return 2
-    fi
-  fi
+      rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
+      return 2 ;;
+  esac
 
   if [ "$rc" -ne 0 ]; then
     local err_msg
@@ -58,12 +65,20 @@ run_claude_print() {
     else
       print_error "claude --print failed with exit code $rc"
     fi
-    rm -f "$tmp_prompt" "$tmp_out" "$tmp_err"
+    rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
     return 1
   fi
 
+  # Batch-log to live.log for --monitor visibility
+  if [ -n "${LIVE_LOG:-}" ] && [ -s "$tmp_out" ]; then
+    log_live "[ai-parse] --- AI response ---"
+    while IFS= read -r _line; do
+      log_live "  $_line"
+    done < "$tmp_out"
+  fi
+
   cat "$tmp_out"
-  rm -f "$tmp_prompt" "$tmp_out" "$tmp_err"
+  rm -f "$tmp_prompt" "$tmp_out" "$tmp_err" "$_exit_tmp"
   return 0
 }
 
@@ -250,17 +265,29 @@ show_ai_plan() {
 
   echo ""
   echo "═══════════════════════════════════════════════════════════"
+  log_live "═══════════════════════════════════════════════════════════"
   echo "AI-generated plan:"
+  log_live "AI-generated plan:"
   echo "═══════════════════════════════════════════════════════════"
+  log_live "═══════════════════════════════════════════════════════════"
   echo ""
   cat "$parsed_file"
+  # Log plan content to live.log for --monitor visibility
+  if [ -n "${LIVE_LOG:-}" ]; then
+    while IFS= read -r _line; do
+      log_live "  $_line"
+    done < "$parsed_file"
+  fi
   echo ""
 
   local phase_count
   phase_count=$(grep -c '^## Phase [0-9]' "$parsed_file")
   echo "───────────────────────────────────────────────────────────"
+  log_live "───────────────────────────────────────────────────────────"
   echo "$phase_count phases total"
+  log_live "$phase_count phases total"
   echo "───────────────────────────────────────────────────────────"
+  log_live "───────────────────────────────────────────────────────────"
 }
 
 # Confirm AI-generated plan with the user
