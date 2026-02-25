@@ -18,3 +18,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0010](0010-heartbeat-injection.md) | Heartbeat injection for spinner keepalive | 2026-02-23 | Accepted |
 | [0011](0011-lock-file-concurrency.md) | Lock file with PID-based concurrency | 2026-02-18 | Accepted |
 | [0012](0012-beta-release-pipeline.md) | Beta/prerelease support in release pipeline | 2026-02-25 | Accepted |
+| [0013](0013-ai-powered-plan-parser.md) | AI-powered plan parser | 2026-02-25 | Accepted |

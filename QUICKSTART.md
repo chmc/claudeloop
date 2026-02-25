@@ -86,6 +86,8 @@ claudeloop --phase-prompt prompts/template.md  # use a custom prompt template
 claudeloop --force             # kill any running instance and take over (preserves progress)
 claudeloop --monitor           # watch live output from a second terminal
 claudeloop --max-phase-time 1800  # kill and retry phases that run longer than 30 min
+claudeloop --plan ideas.md --ai-parse  # AI-decompose a free-form plan into phases
+claudeloop --plan ideas.md --ai-parse --granularity steps  # finer breakdown
 ```
 
 ## Full examples
@@ -105,6 +107,9 @@ claudeloop --continue --dangerously-skip-permissions
 
 # Reset progress and re-run from scratch
 claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
+
+# AI-decompose a free-form plan and execute
+claudeloop --plan ideas.md --ai-parse --dangerously-skip-permissions
 ```
 
 ## Config file

@@ -76,6 +76,8 @@ See `examples/PLAN.md.example` for a complete example.
 --max-retries <n>    Max retry attempts per phase (default: 5)
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
 --max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
+--ai-parse             Use AI to decompose plan into granular phases
+--granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
@@ -106,6 +108,8 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `PHASE_PROMPT_FILE` | `--phase-prompt` | _(empty)_ |
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
+| `AI_PARSE` | `--ai-parse` | `false` |
+| `GRANULARITY` | `--granularity` | `tasks` |
 
 Example `.claudeloop/.claudeloop.conf`:
 
@@ -150,6 +154,29 @@ You can also set the template path in `.claudeloop/.claudeloop.conf`:
 PHASE_PROMPT_FILE=prompts/my-template.md
 ```
 
+## AI plan decomposition
+
+Instead of writing a structured plan manually, use `--ai-parse` to let AI decompose any plan file into phases:
+
+```bash
+# Decompose a free-form plan into tasks (default granularity)
+claudeloop --plan ideas.md --ai-parse
+
+# Use finer granularity for smaller steps
+claudeloop --plan ideas.md --ai-parse --granularity steps
+
+# Preview without executing
+claudeloop --plan ideas.md --ai-parse --dry-run
+```
+
+The AI parser:
+1. Reads any plan format (free text, bullet lists, structured docs)
+2. Calls `claude --print` to break it into `## Phase N:` format
+3. Verifies the result against the original for completeness
+4. Shows you the plan for confirmation before proceeding
+
+The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--continue`.
+
 ## How it works
 
 1. Parse `PLAN.md` — extract phases and dependencies
@@ -178,6 +205,7 @@ claudeloop/
 │   ├── progress.sh        # progress tracking
 │   ├── retry.sh           # retry + backoff
 │   ├── ui.sh              # terminal output
+│   ├── ai_parser.sh       # AI plan decomposition
 │   └── release_notes.sh   # release changelog formatter
 ├── tests/
 │   ├── run_all_tests.sh
