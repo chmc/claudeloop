@@ -24,13 +24,13 @@ cd claudeloop-src
 **Install latest beta:**
 
 ```sh
-BETA=1 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | BETA=1 sh
 ```
 
 **Install a specific version (stable or beta):**
 
 ```sh
-VERSION=0.14.0-beta.1 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | VERSION=0.14.0-beta.1 sh
 ```
 
 **Verify installation:**

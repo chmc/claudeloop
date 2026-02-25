@@ -12,7 +12,7 @@ New features and significant changes need testing before stable release. Without
 Add beta/prerelease support to the existing release pipeline and installer:
 
 - **Version format:** follows semver with prerelease suffix: `0.14.0-beta.1`
-- **Installation:** `BETA=1` environment variable fetches the latest beta; `VERSION=x.y.z-beta.n` fetches a specific prerelease
+- **Installation:** `curl ... | BETA=1 sh` fetches the latest beta; `curl ... | VERSION=x.y.z-beta.n sh` fetches a specific prerelease
 - **Default behavior unchanged:** plain `curl ... | sh` always installs the latest stable release
 - **GitHub Releases:** beta versions are marked as pre-releases, keeping them off the "latest" endpoint
 
