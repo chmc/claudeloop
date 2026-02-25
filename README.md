@@ -190,10 +190,11 @@ claudeloop/
 
 Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`. ClaudeLoop also writes a combined live log to `.claudeloop/live.log`.
 
-When Claude uses task lists to track its progress, a compact summary is shown:
+When Claude uses task lists or todo lists to track its progress, a compact summary is shown:
 
     [Tasks: 1/3 done] ▸ "Implementing auth flow"
     [Task completed] ✓ "Fix authentication bug"
+    [Todos: 3/11 done] ▸ "Implementing..."
 
 To watch progress live from a second terminal, use:
 

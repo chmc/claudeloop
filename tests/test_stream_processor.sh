@@ -745,12 +745,12 @@ JSON"
   [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
 }
 
-@test "TaskCreate nested in assistant: shows tool preview but NO [Tasks:] summary" {
+@test "TaskCreate nested in assistant: shows tool preview AND [Tasks:] summary" {
   local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}]}}'
   run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
-  [[ "$output" != *"[Tasks:"* ]]
+  [[ "$output" == *"[Tasks: 0/1 done]"* ]]
 }
 
 @test "Two sequential standalone TaskCreate: second shows [Tasks: 0/2 done]" {
@@ -829,14 +829,14 @@ JSON"
   [[ "$output" == *"[Tasks:"* ]]
 }
 
-@test "Same TaskCreate in assistant and standalone: task counted only once" {
+@test "Same TaskCreate in assistant and standalone: both paths call handler" {
   local assistant='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}]}}'
   local standalone='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
   run bash -c "printf '%s\n%s\n' '$assistant' '$standalone' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
-  # Only one [Tasks:] summary (from standalone Path A), showing 1 task total
+  # Both paths fire handler (in production only one path fires per tool call)
   count=$(printf '%s' "$output" | grep -c '\[Tasks:')
-  [ "$count" -eq 1 ]
+  [ "$count" -eq 2 ]
   [[ "$output" == *"[Tasks: 0/1 done]"* ]]
 }
 
@@ -853,6 +853,95 @@ JSON"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tasks: 0/1 done]"* ]]
   [[ "$output" != *$'\033[0;32m'* ]]
+}
+
+# --- TodoWrite display ---
+
+@test "TodoWrite standalone: shows [Todos: 0/3 done] summary on stderr" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"},{"content":"Task C","status":"pending"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Todos: 0/3 done]"* ]]
+}
+
+@test "TodoWrite standalone: shows item count in tool preview" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"},{"content":"Task C","status":"pending"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TodoWrite] 3 items"* ]]
+}
+
+@test "TodoWrite with completed items: shows correct done count" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed"},{"content":"Task B","status":"completed"},{"content":"Task C","status":"pending"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Todos: 2/3 done]"* ]]
+}
+
+@test "TodoWrite nested in assistant: shows [Todos:] summary AND preview" {
+  local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tw1","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"completed"}]}}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TodoWrite] 2 items"* ]]
+  [[ "$output" == *"[Todos: 1/2 done]"* ]]
+}
+
+@test "TodoWrite: active form of in_progress item shown in summary" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed","activeForm":"Doing A"},{"content":"Task B","status":"in_progress","activeForm":"Doing B"},{"content":"Task C","status":"pending","activeForm":"Doing C"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'[Todos: 1/3 done]'* ]]
+  [[ "$output" == *'"Doing B"'* ]]
+}
+
+@test "TodoWrite: no active form when all items pending" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Todos: 0/2 done]"* ]]
+  [[ "$output" != *"Doing"* ]]
+}
+
+@test "TodoWrite: empty todos shows [Todos: empty]" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Todos: empty]"* ]]
+}
+
+@test "TodoWrite: summary written to live_log with timestamp" {
+  local _live
+  _live=$(mktemp)
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"}]}}'
+  echo "$event" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Todos: 0/1 done\]' "$_live"
+  rm -f "$_live"
+}
+
+@test "TodoWrite: suppressed when hooks_enabled=true" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"}]}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Todos:"* ]]
+}
+
+@test "Two sequential TodoWrite: second replaces counts (not additive)" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'
+  local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"completed"},{"content":"B","status":"pending"},{"content":"C","status":"pending"}]}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Todos: 0/2 done]"* ]]
+  [[ "$output" == *"[Todos: 1/3 done]"* ]]
+}
+
+# --- TaskStop display ---
+
+@test "TaskStop: shows task_id in preview" {
+  local event='{"type":"tool_use","name":"TaskStop","input":{"task_id":"bg_123"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Tool: TaskStop]"* ]]
+  [[ "$output" == *"bg_123"* ]]
 }
 
 @test "heartbeat after real event: text then heartbeat handled cleanly" {

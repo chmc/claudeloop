@@ -142,6 +142,45 @@ process_stream_json() {
     }
   }
 
+  function print_todo_summary() {
+    if (todo_count == 0) {
+      msg = "[Todos: empty]"
+    } else {
+      msg = "[Todos: " todo_completed "/" todo_count " done]"
+    }
+    if (todo_active_form != "") msg = msg " \342\226\270 \"" todo_active_form "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
+  function handle_todo_event(src,    _nt, _nd, af, pos, chunk, p, i, c, nxt) {
+    _nt = split(src, _tmp, "\"content\":\"") - 1
+    _nd = split(src, _tmp, "\"status\":\"completed\"") - 1
+    todo_count = _nt
+    todo_completed = _nd
+    todo_active_form = ""
+    pos = index(src, "\"status\":\"in_progress\"")
+    if (pos > 0) {
+      chunk = substr(src, pos + length("\"status\":\"in_progress\""))
+      nxt = index(chunk, "\"status\":\"")
+      if (nxt > 0) chunk = substr(chunk, 1, nxt - 1)
+      p = index(chunk, "\"activeForm\":\"")
+      if (p > 0) {
+        chunk = substr(chunk, p + length("\"activeForm\":\""))
+        af = ""
+        for (i = 1; i <= length(chunk); i++) {
+          c = substr(chunk, i, 1)
+          if (c == "\"") break
+          af = af c
+        }
+        todo_active_form = af
+      }
+    }
+    print_todo_summary()
+  }
+
   function clear_line() {
     if (!at_line_start) {
       if (spinner_start > 0) {
@@ -235,6 +274,11 @@ process_stream_json() {
             _tu_prev_st = extract(seg, "status")
             preview = "#" _tu_prev_id
             if (_tu_prev_st != "") preview = preview " \342\206\222 " _tu_prev_st
+          } else if (name == "TodoWrite") {
+            _n = split(seg, _tmp, "\"content\":\"") - 1
+            preview = _n " items"
+          } else if (name == "TaskStop") {
+            preview = extract(seg, "task_id")
           } else {
             desc = extract(seg, "description")
             if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
@@ -257,6 +301,8 @@ process_stream_json() {
               if (live_log != "") printf "  [%s] [Tool: %s]\n", get_time(), name >> live_log
             }
           }
+          if (name == "TaskCreate" || name == "TaskUpdate") handle_task_event(name, seg)
+          else if (name == "TodoWrite") handle_todo_event(seg)
         }
         if (live_log != "") fflush(live_log)
       } else {
@@ -295,6 +341,11 @@ process_stream_json() {
         _tu_prev_st = extract(line, "status")
         preview = "#" _tu_prev_id
         if (_tu_prev_st != "") preview = preview " \342\206\222 " _tu_prev_st
+      } else if (name == "TodoWrite") {
+        _n = split(line, _tmp, "\"content\":\"") - 1
+        preview = _n " items"
+      } else if (name == "TaskStop") {
+        preview = extract(line, "task_id")
       } else {
         if      (cmd   != "")  preview = trunc(cmd,   trunc_len)
         else if (fp    != "")  preview = trunc(fp,    trunc_len)
@@ -315,6 +366,7 @@ process_stream_json() {
         }
       }
       if (name == "TaskCreate" || name == "TaskUpdate") handle_task_event(name, line)
+      else if (name == "TodoWrite") handle_todo_event(line)
 
     } else if (etype == "tool_result") {
       clear_line()
