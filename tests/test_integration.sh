@@ -997,3 +997,98 @@ PROG
   # Only phase 2 should have been executed (not phase 1 again)
   [ "$(_call_count)" -eq 1 ]
 }
+
+# =============================================================================
+# Scenario: --verify flag
+# =============================================================================
+
+# Helper: write a verify-aware claude stub that distinguishes execution calls
+# (has --output-format) from verification calls (has --verbose but no --output-format).
+# Verification calls emit tool-call evidence so anti-skip passes.
+_write_verify_claude_stub() {
+  local dir="$1"
+  mkdir -p "$dir/bin"
+  cat > "$dir/bin/claude" << EOF
+#!/bin/sh
+count_file="${dir}/claude_call_count"
+count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+count=\$((count + 1))
+printf '%s\n' "\$count" > "\$count_file"
+
+# Save stdin for prompt assertions
+cat > "${dir}/claude_stdin_\${count}" 2>/dev/null || true
+
+exit_codes_file="${dir}/claude_exit_codes"
+exit_code=0
+if [ -f "\$exit_codes_file" ]; then
+    exit_code=\$(sed -n "\${count}p" "\$exit_codes_file" 2>/dev/null || echo "")
+    [ -z "\$exit_code" ] && exit_code=0
+fi
+
+# Detect verification calls: --verbose present but no --output-format
+is_verify=false
+has_verbose=false
+has_output_format=false
+for arg in "\$@"; do
+  case "\$arg" in
+    --verbose) has_verbose=true ;;
+    --output-format*) has_output_format=true ;;
+  esac
+done
+if \$has_verbose && ! \$has_output_format; then
+  is_verify=true
+fi
+
+if \$is_verify; then
+  # Verification call: emit tool-call evidence
+  printf 'Running checks...\n'
+  printf 'ToolUse: Bash\n'
+  printf 'All tests passed.\n'
+else
+  # Execution call: normal stub output
+  printf 'stub output for call %s\n' "\$count"
+fi
+
+exit "\$exit_code"
+EOF
+  chmod +x "$dir/bin/claude"
+}
+
+@test "integration: --verify runs verification after each phase" {
+  _write_verify_claude_stub "$TEST_DIR"
+  _cl --plan PLAN.md --verify
+  [ "$status" -eq 0 ]
+  # 2 phases × 2 calls each (execute + verify) = 4 total
+  [ "$(_call_count)" -eq 4 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+@test "integration: --verify fails phase when verification fails" {
+  _write_verify_claude_stub "$TEST_DIR"
+  # Call 1: execute phase 1 (exit 0)
+  # Call 2: verify phase 1 (exit 1 → verification failure)
+  # Call 3: retry execute phase 1 (exit 0)
+  # Call 4: verify phase 1 (exit 0 → pass)
+  # Call 5: execute phase 2 (exit 0)
+  # Call 6: verify phase 2 (exit 0)
+  printf '0\n1\n0\n0\n0\n0\n' > "$TEST_DIR/claude_exit_codes"
+  _cl --plan PLAN.md --verify --max-retries 2
+  [ "$status" -eq 0 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+@test "integration: --verify retry includes verification failure context" {
+  _write_verify_claude_stub "$TEST_DIR"
+  # Call 1: execute phase 1 (exit 0)
+  # Call 2: verify phase 1 (exit 1)
+  # Call 3: retry execute phase 1 — prompt should contain verify context
+  # Call 4: verify phase 1 (exit 0)
+  # Call 5: execute phase 2 (exit 0)
+  # Call 6: verify phase 2 (exit 0)
+  printf '0\n1\n0\n0\n0\n0\n' > "$TEST_DIR/claude_exit_codes"
+  _cl --plan PLAN.md --verify --max-retries 2
+  [ "$status" -eq 0 ]
+  # The retry prompt (call 3) must mention verification failure
+  [ -f "$TEST_DIR/claude_stdin_3" ]
+  grep -q "Verification Failed" "$TEST_DIR/claude_stdin_3"
+}

@@ -32,6 +32,7 @@ _CL_MAX_PHASE_TIME="${MAX_PHASE_TIME:-}"
 . "$SCRIPT_DIR/lib/prompt.sh"
 . "$SCRIPT_DIR/lib/stream_processor.sh"
 . "$SCRIPT_DIR/lib/ai_parser.sh"
+. "$SCRIPT_DIR/lib/verify.sh"
 
 # Default configuration
 PLAN_FILE="PLAN.md"
@@ -56,6 +57,7 @@ MONITOR_MODE=false
 MAX_PHASE_TIME=0             # kill claude after N seconds per phase (0=disabled, default)
 AI_PARSE=false
 GRANULARITY="tasks"
+VERIFY_PHASES=false
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
 
@@ -64,6 +66,7 @@ _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
 _CLI_MAX_PHASE_TIME=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
+_CLI_VERIFY_PHASES=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
@@ -107,6 +110,7 @@ load_config() {
       MAX_PHASE_TIME)         MAX_PHASE_TIME="$value" ;;
       AI_PARSE)              AI_PARSE="$value" ;;
       GRANULARITY)           GRANULARITY="$value" ;;
+      VERIFY_PHASES)         VERIFY_PHASES="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -148,6 +152,7 @@ write_config() {
       printf 'MAX_PHASE_TIME=%s\n'      "$MAX_PHASE_TIME"
       printf 'AI_PARSE=%s\n'          "$AI_PARSE"
       printf 'GRANULARITY=%s\n'       "$GRANULARITY"
+      printf 'VERIFY_PHASES=%s\n'   "$VERIFY_PHASES"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -166,6 +171,7 @@ write_config() {
   [ -n "$_CLI_MAX_PHASE_TIME" ]       && update_conf_key "$conf_file" MAX_PHASE_TIME "$MAX_PHASE_TIME"
   [ -n "$_CLI_AI_PARSE" ]            && update_conf_key "$conf_file" AI_PARSE "$AI_PARSE"
   [ -n "$_CLI_GRANULARITY" ]         && update_conf_key "$conf_file" GRANULARITY "$GRANULARITY"
+  [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"
   return 0
 }
 
@@ -283,6 +289,17 @@ run_setup_wizard() {
         phases|tasks|steps) GRANULARITY="$response" ;;
       esac
     fi
+  fi
+
+  # VERIFY_PHASES
+  if [ -n "$_CLI_VERIFY_PHASES" ]; then
+    printf 'Verify phases: using --verify\n'
+  else
+    printf 'Verify completed phases with a fresh Claude instance (true/false) [%s]: ' "$VERIFY_PHASES"
+    read -r response || return 0
+    case "$response" in
+      true|false) VERIFY_PHASES="$response" ;;
+    esac
   fi
 
   printf '\n'
@@ -471,6 +488,8 @@ Options:
                          (enabled automatically when running inside Claude Code)
   --ai-parse             Use AI to decompose plan into granular phases
   --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
+  --verify               Verify each phase with a fresh read-only Claude instance
+                         (doubles API calls per phase)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
@@ -572,6 +591,10 @@ parse_args() {
         if [ $# -lt 2 ]; then echo "Error: --granularity requires an argument" >&2; exit 1; fi
         GRANULARITY="$2"; _CLI_GRANULARITY=1
         shift 2
+        ;;
+      --verify)
+        VERIFY_PHASES=true; _CLI_VERIFY_PHASES=1
+        shift
         ;;
       --monitor)
         MONITOR_MODE=true
@@ -803,6 +826,25 @@ You MUST still complete every subtask listed in the phase description — do not
     fi
   fi
 
+  # Inject verification failure context on retry
+  _prev_verify_log=".claudeloop/logs/phase-$phase_num.verify.log"
+  if [ "$attempt" -gt 1 ] && [ -f "$_prev_verify_log" ]; then
+    _verify_context=$(tail -n 40 "$_prev_verify_log")
+    if [ -n "$_verify_context" ]; then
+      prompt="${prompt}
+
+## Previous Verification Failed
+
+After your previous attempt completed, a verification step found problems:
+
+\`\`\`
+${_verify_context}
+\`\`\`
+
+Address ALL issues identified above. Make sure tests pass before finishing."
+    fi
+  fi
+
   # Write metadata + prompt header to log (overwrite previous content)
   {
     printf '=== EXECUTION START phase=%s attempt=%s time=%s ===\n' \
@@ -930,6 +972,13 @@ You MUST still complete every subtask listed in the phase description — do not
       return 1
     fi
     log_verbose "execute_phase: phase $phase_num succeeded"
+    if ! verify_phase "$phase_num" "$log_file"; then
+      print_error "Phase $phase_num: verification failed"
+      update_phase_status "$phase_num" "failed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 1
+    fi
     print_success "Phase $phase_num completed successfully"
     update_phase_status "$phase_num" "completed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -938,6 +987,13 @@ You MUST still complete every subtask listed in the phase description — do not
   else
     if has_successful_session "$log_file"; then
       log_verbose "execute_phase: phase $phase_num exited non-zero ($claude_exit) but successful session detected"
+      if ! verify_phase "$phase_num" "$log_file"; then
+        print_error "Phase $phase_num: verification failed"
+        update_phase_status "$phase_num" "failed"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        CURRENT_PHASE=""
+        return 1
+      fi
       print_warning "Phase $phase_num: Claude exited with code $claude_exit but a successful session was detected — treating as completed."
       update_phase_status "$phase_num" "completed"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"

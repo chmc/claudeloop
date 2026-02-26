@@ -76,6 +76,7 @@ See `examples/PLAN.md.example` for a complete example.
 --max-retries <n>    Max retry attempts per phase (default: 5)
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
 --max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
+--verify             Verify each phase with a fresh read-only Claude instance (doubles API calls)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
 --simple             Plain output (no colors)
@@ -110,6 +111,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
 | `AI_PARSE` | `--ai-parse` | `false` |
 | `GRANULARITY` | `--granularity` | `tasks` |
+| `VERIFY_PHASES` | `--verify` | `false` |
 
 Example `.claudeloop/.claudeloop.conf`:
 
@@ -183,8 +185,9 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 1. Parse `PLAN.md` — extract phases and dependencies
 2. Find the next runnable phase (dependencies met, not yet completed)
 3. Spawn a fresh `claude` CLI instance with the phase description
-4. Save result to `PROGRESS.md`
-5. On failure: retry with exponential backoff (up to `--max-retries`)
+4. Optionally verify with a fresh read-only Claude instance (`--verify`)
+5. Save result to `PROGRESS.md`
+6. On failure: retry with exponential backoff (up to `--max-retries`)
 6. Repeat until all phases complete
 
 Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
@@ -207,6 +210,7 @@ claudeloop/
 │   ├── retry.sh           # retry + backoff
 │   ├── ui.sh              # terminal output
 │   ├── ai_parser.sh       # AI plan decomposition
+│   ├── verify.sh          # phase verification
 │   └── release_notes.sh   # release changelog formatter
 ├── tests/
 │   ├── run_all_tests.sh

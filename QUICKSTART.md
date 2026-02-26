@@ -86,6 +86,7 @@ claudeloop --phase-prompt prompts/template.md  # use a custom prompt template
 claudeloop --force             # kill any running instance and take over (preserves progress)
 claudeloop --monitor           # watch live output from a second terminal
 claudeloop --max-phase-time 1800  # kill and retry phases that run longer than 30 min
+claudeloop --verify                    # verify each phase with a fresh Claude instance
 claudeloop --plan ideas.md --ai-parse  # AI-extract a free-form plan into phases
 claudeloop --plan ideas.md --ai-parse --granularity steps  # finer breakdown (with verification feedback loop)
 ```
@@ -135,6 +136,7 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - Claude output streams live to the terminal. Logs are saved to `.claudeloop/logs/phase-N.log`
 - Phase runs longer than `MAX_PHASE_TIME` seconds are automatically killed and retried (disabled by default; set `--max-phase-time <s>` to enable)
 - On retry, the previous attempt's output is injected into the prompt so Claude can learn from it
+- `--verify` doubles API calls per phase (one for execution, one for verification)
 - Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run
 
 See `examples/PLAN.md.example` for a full example, and `README.md` for complete documentation.

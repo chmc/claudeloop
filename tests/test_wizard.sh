@@ -314,3 +314,27 @@ _reset_gitignore_without_claudeloop() {
   [[ "$output" == *"AI parsing: using --ai-parse"* ]]
   grep -q "^AI_PARSE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
+
+# =============================================================================
+# Verify phases wizard questions
+# Prompts in order (no CLI args → all 10 shown):
+#   1. Plan file  2. Progress file  3. Max retries  4. Quota interval
+#   5. Simple mode  6. Skip permissions  7. Phase prompt file
+#   8. AI parse  9. Granularity (only if AI_PARSE=true)  10. Verify phases
+# =============================================================================
+
+@test "wizard: asks about verify phases and saves VERIFY_PHASES=true" {
+  # 8 defaults (AI_PARSE=false so granularity skipped) + VERIFY_PHASES=true
+  # Exit may be non-zero because verification runs (stub lacks tool-call evidence)
+  _cl_wizard $'\n\n\n\n\n\n\n\ntrue\n'
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  grep -q "^VERIFY_PHASES=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: skips verify question when --verify passed" {
+  # Exit may be non-zero because verification runs with stub
+  _cl_wizard $'\n\n\n\n\n\n\n\n' --verify
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+  [[ "$output" == *"using --verify"* ]]
+  grep -q "^VERIFY_PHASES=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}

@@ -20,3 +20,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0012](0012-beta-release-pipeline.md) | Beta/prerelease support in release pipeline | 2026-02-25 | Accepted |
 | [0013](0013-ai-powered-plan-parser.md) | AI-powered plan parser | 2026-02-25 | Accepted |
 | [0014](0014-ai-verify-feedback-loop.md) | AI verification feedback loop | 2026-02-25 | Accepted |
+| [0015](0015-phase-verification.md) | Phase verification | 2026-02-26 | Accepted |

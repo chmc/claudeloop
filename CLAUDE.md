@@ -45,6 +45,7 @@ PHASE_STATUS_N        (pending|in_progress|completed|failed)
 PHASE_ATTEMPTS_N      PHASE_START_TIME_N     PHASE_END_TIME_N
 PHASE_COUNT           (total number of phases)
 PHASE_NUMBERS         (space-separated ordered list, e.g. "1 2 2.5 2.6 3")
+VERIFY_PHASES         (true|false, default false)
 LIVE_LOG              (path to .claudeloop/live.log; empty string during dry-run)
 ```
 
@@ -80,13 +81,14 @@ done
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
 | `lib/retry.sh` | `calculate_backoff` (exponential + jitter), `should_retry_phase`, `power`, `get_random` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning` |
+| `lib/verify.sh` | `verify_phase` — read-only verification, anti-skip check, timeout |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |
 
 ### Execution flow
 
 ```
 main → parse_plan → init_progress → main_loop
-  find_next_phase → execute_phase → update_phase_status → write_progress
+  find_next_phase → execute_phase → verify_phase → update_phase_status → write_progress
   on failure:  should_retry_phase → calculate_backoff → sleep → retry
   on Ctrl+C:   handle_interrupt → write_progress → save_state → exit 130
   --monitor:   run_monitor → tail -f .claudeloop/live.log
