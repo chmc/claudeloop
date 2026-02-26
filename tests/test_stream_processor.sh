@@ -953,3 +953,80 @@ JSON"
   # Spinner carriage return from heartbeat
   [[ "$output" == *$'\r'* ]]
 }
+
+# --- Post-result exit and idle timeout ---
+
+@test "post-result exit: AWK exits after result event + 2 heartbeats (does not consume all 5)" {
+  # Feed: result event then 5 heartbeats. AWK should exit after ~2 heartbeats.
+  local result='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10}}'
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$result" "$hb" "$hb" "$hb" "$hb" "$hb")
+  # Count how many lines AWK actually reads by checking raw_log line count
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 0 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # AWK should exit after result + 2 heartbeats = 3 lines (not all 6)
+  [ "$lines_consumed" -le 4 ]
+}
+
+@test "idle timeout exit: AWK exits after exceeding heartbeat threshold" {
+  # idle_timeout=6 → max_idle_hb = 6/2 = 3; feed 10 heartbeats
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(yes "$hb" | head -10)
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 6 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # Should exit after 3 heartbeats, not consume all 10
+  [ "$lines_consumed" -le 5 ]
+}
+
+@test "idle timeout: no false positive on stream_events (counter resets)" {
+  # idle_timeout=4 → max_idle_hb = 2; interleave heartbeats with stream_event types
+  local hb='{"type":"heartbeat"}'
+  local se='{"type":"stream_event","data":"something"}'
+  # Pattern: hb, stream_event, hb, stream_event, hb, stream_event — counter resets each time
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$hb" "$se" "$hb" "$se" "$hb" "$se")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 6 lines should be consumed (no premature exit since idle counter resets)
+  [ "$lines_consumed" -eq 6 ]
+}
+
+@test "idle timeout: no exit below threshold" {
+  # idle_timeout=10 → max_idle_hb = 5; feed only 3 heartbeats
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n' "$hb" "$hb" "$hb")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 10 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 3 should be consumed (below threshold of 5)
+  [ "$lines_consumed" -eq 3 ]
+}
+
+@test "idle timeout: non-heartbeat unknown events do NOT increment idle counter" {
+  # idle_timeout=4 → max_idle_hb = 2; feed 5 non-heartbeat unknown events
+  local unk='{"type":"stream_event","data":"x"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n' "$unk" "$unk" "$unk" "$unk" "$unk")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 5 should be consumed (non-heartbeat events don't count toward idle)
+  [ "$lines_consumed" -eq 5 ]
+}
+
+@test "idle timeout=0: disabled, all heartbeats consumed" {
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n' "$hb" "$hb" "$hb" "$hb" "$hb")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 0 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 5 should be consumed (idle timeout disabled)
+  [ "$lines_consumed" -eq 5 ]
+}

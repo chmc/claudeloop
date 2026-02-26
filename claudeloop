@@ -22,6 +22,7 @@ _CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
 _CL_SKIP_PERMISSIONS="${SKIP_PERMISSIONS:-}"
 _CL_STREAM_TRUNCATE_LEN="${STREAM_TRUNCATE_LEN:-}"
 _CL_MAX_PHASE_TIME="${MAX_PHASE_TIME:-}"
+_CL_IDLE_TIMEOUT="${IDLE_TIMEOUT:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -55,6 +56,7 @@ HOOKS_ENABLED=false
 LIVE_LOG=""
 MONITOR_MODE=false
 MAX_PHASE_TIME=0             # kill claude after N seconds per phase (0=disabled, default)
+IDLE_TIMEOUT=600             # exit stream processor after N seconds of no activity (0=disabled)
 AI_PARSE=false
 GRANULARITY="tasks"
 VERIFY_PHASES=false
@@ -64,7 +66,7 @@ CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
-_CLI_MAX_PHASE_TIME=""
+_CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
 _CLI_VERIFY_PHASES=""
 
@@ -108,6 +110,7 @@ load_config() {
       STREAM_TRUNCATE_LEN)    STREAM_TRUNCATE_LEN="$value" ;;
       HOOKS_ENABLED)          HOOKS_ENABLED="$value" ;;
       MAX_PHASE_TIME)         MAX_PHASE_TIME="$value" ;;
+      IDLE_TIMEOUT)           IDLE_TIMEOUT="$value" ;;
       AI_PARSE)              AI_PARSE="$value" ;;
       GRANULARITY)           GRANULARITY="$value" ;;
       VERIFY_PHASES)         VERIFY_PHASES="$value" ;;
@@ -150,6 +153,7 @@ write_config() {
       printf 'MAX_DELAY=%s\n'        "$MAX_DELAY"
       printf 'STREAM_TRUNCATE_LEN=%s\n' "$STREAM_TRUNCATE_LEN"
       printf 'MAX_PHASE_TIME=%s\n'      "$MAX_PHASE_TIME"
+      printf 'IDLE_TIMEOUT=%s\n'       "$IDLE_TIMEOUT"
       printf 'AI_PARSE=%s\n'          "$AI_PARSE"
       printf 'GRANULARITY=%s\n'       "$GRANULARITY"
       printf 'VERIFY_PHASES=%s\n'   "$VERIFY_PHASES"
@@ -169,6 +173,7 @@ write_config() {
   [ -n "$_CLI_QUOTA_RETRY_INTERVAL" ] && update_conf_key "$conf_file" QUOTA_RETRY_INTERVAL "$QUOTA_RETRY_INTERVAL"
   [ -n "$_CLI_SKIP_PERMISSIONS" ]     && update_conf_key "$conf_file" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
   [ -n "$_CLI_MAX_PHASE_TIME" ]       && update_conf_key "$conf_file" MAX_PHASE_TIME "$MAX_PHASE_TIME"
+  [ -n "$_CLI_IDLE_TIMEOUT" ]        && update_conf_key "$conf_file" IDLE_TIMEOUT "$IDLE_TIMEOUT"
   [ -n "$_CLI_AI_PARSE" ]            && update_conf_key "$conf_file" AI_PARSE "$AI_PARSE"
   [ -n "$_CLI_GRANULARITY" ]         && update_conf_key "$conf_file" GRANULARITY "$GRANULARITY"
   [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"
@@ -481,6 +486,7 @@ Options:
   --max-retries <n>      Maximum retry attempts per phase (default: 5)
   --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
   --max-phase-time <s>   Kill claude after N seconds per phase, then retry (0=disabled, default)
+  --idle-timeout <s>     Exit stream processor after N seconds of no activity (default: 600, 0=disabled)
   --simple               Use simple output mode (no colors/fancy UI)
   --verbose              Enable verbose debug output
   --force                Kill any running instance and take over (preserves progress)
@@ -557,6 +563,11 @@ parse_args() {
       --max-phase-time)
         if [ $# -lt 2 ]; then echo "Error: --max-phase-time requires an argument" >&2; exit 1; fi
         MAX_PHASE_TIME="$2"; _CLI_MAX_PHASE_TIME=1
+        shift 2
+        ;;
+      --idle-timeout)
+        if [ $# -lt 2 ]; then echo "Error: --idle-timeout requires an argument" >&2; exit 1; fi
+        IDLE_TIMEOUT="$2"; _CLI_IDLE_TIMEOUT=1
         shift 2
         ;;
       --simple)
@@ -886,7 +897,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" &
+  } | inject_heartbeats | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}" &
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
@@ -909,6 +920,10 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   fi
 
   wait "$CURRENT_PIPELINE_PID" || true   # || true required: set -eu is active
+  # Kill remaining pipeline processes (claude CLI may hang after AWK exits)
+  if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
+    kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
+  fi
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
@@ -1219,6 +1234,7 @@ main() {
   [ -n "$_CL_SKIP_PERMISSIONS" ]        && SKIP_PERMISSIONS="$_CL_SKIP_PERMISSIONS"
   [ -n "$_CL_STREAM_TRUNCATE_LEN" ]     && STREAM_TRUNCATE_LEN="$_CL_STREAM_TRUNCATE_LEN"
   [ -n "$_CL_MAX_PHASE_TIME" ]          && MAX_PHASE_TIME="$_CL_MAX_PHASE_TIME"
+  [ -n "$_CL_IDLE_TIMEOUT" ]           && IDLE_TIMEOUT="$_CL_IDLE_TIMEOUT"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

@@ -31,17 +31,20 @@ inject_heartbeats() {
 # process_stream_json: parse stream-json from stdin
 # Args: $1 - log_file path, $2 - raw_log path, $3 - hooks_enabled (true|false, default false)
 #       $4 - live_log path, $5 - simple_mode (true|false, default false)
+#       $6 - idle_timeout (seconds, 0=disabled)
 process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
   local hooks_enabled="${3:-false}"
   local live_log="${4:-}"
   local simple_mode="${5:-false}"
+  local idle_timeout="${6:-0}"
   awk -v log_file="$log_file" -v raw_log="$raw_log" \
       -v trunc_len="${STREAM_TRUNCATE_LEN:-300}" \
       -v hooks_enabled="$hooks_enabled" \
       -v live_log="$live_log" \
-      -v simple_mode="$simple_mode" '
+      -v simple_mode="$simple_mode" \
+      -v idle_timeout_s="$idle_timeout" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -240,6 +243,10 @@ process_stream_json() {
     spinner_start = 0
     last_rate_limit_pct = 0
     prev_total_cost = 0
+    got_result = 0
+    post_result_hb = 0
+    idle_hb = 0
+    max_idle_hb = (idle_timeout_s + 0 > 0) ? int(idle_timeout_s / 2) : 0
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
@@ -259,6 +266,7 @@ process_stream_json() {
     etype = extract(line, "type")
 
     if (etype == "assistant") {
+      idle_hb = 0
       text = extract(line, "text")
       if (text != "") {
         clear_line()
@@ -348,6 +356,7 @@ process_stream_json() {
       }
 
     } else if (etype == "tool_use") {
+      idle_hb = 0
       clear_line()
       spinner_start = 0
       name = extract(line, "name")
@@ -393,6 +402,7 @@ process_stream_json() {
       else if (name == "TodoWrite") handle_todo_event(line)
 
     } else if (etype == "tool_result") {
+      idle_hb = 0
       clear_line()
       spinner_start = 0
       content = extract(line, "content")
@@ -419,6 +429,7 @@ process_stream_json() {
       if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
 
     } else if (etype == "user") {
+      idle_hb = 0
       tool_result = extract(line, "tool_use_result")
       if (tool_result != "") {
         clear_line()
@@ -430,6 +441,8 @@ process_stream_json() {
       }
 
     } else if (etype == "result") {
+      idle_hb = 0
+      got_result = 1
       clear_line()
       spinner_start = 0
       total_cost = extract(line, "total_cost_usd") + 0
@@ -478,6 +491,7 @@ process_stream_json() {
       if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
     } else if (etype == "rate_limit_event") {
+      idle_hb = 0
       util = extract(line, "utilization")
       if (util != "") {
         pct = int((util + 0) * 100)
@@ -490,6 +504,7 @@ process_stream_json() {
       }
 
     } else if (etype == "system") {
+      idle_hb = 0
       subtype_val = extract(line, "subtype")
       if (subtype_val == "init") {
         model_s = extract(line, "model")
@@ -501,6 +516,23 @@ process_stream_json() {
       }
 
     } else {
+      if (etype == "heartbeat") {
+        if (got_result) {
+          post_result_hb++
+          if (post_result_hb >= 2) exit
+        }
+        if (max_idle_hb > 0) {
+          idle_hb++
+          if (idle_hb >= max_idle_hb) {
+            printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
+            printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
+            if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
+            exit
+          }
+        }
+      } else {
+        idle_hb = 0
+      }
       now = get_epoch()
       if (spinner_start == 0) {
         spinner_start = now
@@ -517,6 +549,6 @@ process_stream_json() {
 
 _self="${0##*/}"
 if [ "$_self" = "stream_processor.sh" ]; then
-  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log] [simple_mode]\n' >&2; exit 1; }
-  process_stream_json "$1" "$2" "${3:-false}" "${4:-}" "${5:-false}"
+  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log] [simple_mode] [idle_timeout]\n' >&2; exit 1; }
+  process_stream_json "$1" "$2" "${3:-false}" "${4:-}" "${5:-false}" "${6:-0}"
 fi
