@@ -1092,3 +1092,23 @@ EOF
   [ -f "$TEST_DIR/claude_stdin_3" ]
   grep -q "Verification Failed" "$TEST_DIR/claude_stdin_3"
 }
+
+# =============================================================================
+# Parse message: normal vs cached plan
+# =============================================================================
+@test "integration: normal run shows checkmark Parsing plan file" {
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  # Output should contain the green-checkmark parsing message
+  echo "$output" | grep -q "Parsing plan file"
+  echo "$output" | grep "Parsing plan file" | grep -q "✓"
+}
+
+@test "integration: dry-run shows checkmark Parsing plan file" {
+  _cl --plan PLAN.md --dry-run
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Parsing plan file"
+  echo "$output" | grep "Parsing plan file" | grep -q "✓"
+  # Should NOT show "Using cached plan" for a normal parse
+  ! echo "$output" | grep -q "Using cached plan"
+}

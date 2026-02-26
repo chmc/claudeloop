@@ -1286,13 +1286,14 @@ main() {
   fi
 
   # AI parsing: generate structured plan from free-form input
+  local _parse_msg="Parsing plan file"
   if [ "$AI_PARSE" = "true" ]; then
     local ai_plan=".claudeloop/ai-parsed-plan.md"
     if [ -f "$ai_plan" ] && [ -f "$PROGRESS_FILE" ] && [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
       print_warning "AI-parsed plan already exists. Re-parsing will invalidate progress."
       printf 'Re-parse? (y/N) '
       read -r _ans
-      case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan" ;; esac
+      case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan"; _parse_msg="Using cached plan" ;; esac
     fi
     if [ "$PLAN_FILE" != "$ai_plan" ]; then
       if ! ai_parse_and_verify "$PLAN_FILE" "$GRANULARITY"; then
@@ -1313,11 +1314,17 @@ main() {
     _saved_ai_parse=$(grep '^AI_PARSE=' ".claudeloop/.claudeloop.conf" 2>/dev/null | cut -d= -f2)
     if [ "$_saved_ai_parse" = "true" ]; then
       PLAN_FILE=".claudeloop/ai-parsed-plan.md"
+      _parse_msg="Using cached plan"
     fi
   fi
 
   # Parse plan
-  print_success "Parsing plan file: $PLAN_FILE"
+  if [ "$_parse_msg" = "Parsing plan file" ]; then
+    print_success "$_parse_msg: $PLAN_FILE"
+  else
+    printf '[%s] %s: %s\n' "$(date '+%H:%M:%S')" "$_parse_msg" "$PLAN_FILE"
+    log_live "$_parse_msg: $PLAN_FILE"
+  fi
   if ! parse_plan "$PLAN_FILE"; then
     print_error "Failed to parse plan file"
     exit 1
