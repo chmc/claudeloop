@@ -323,7 +323,7 @@ detect_plan_changes() {
     if [ -z "$matched_old_num" ]; then
       # Phase added — leave as pending
       had_changes=true
-      printf 'Plan change: Phase added — "%s" (new Phase %s)\n' "$new_title" "$new_i"
+      printf '[%s] Plan change: Phase added — "%s" (new Phase %s)\n' "$(date '+%H:%M:%S')" "$new_title" "$new_i"
     else
       matched_old_phases="$matched_old_phases $matched_old_num"
       local old_mnv
@@ -355,8 +355,8 @@ detect_plan_changes() {
       # Report renumbering (string comparison to support decimal numbers)
       if [ "$matched_old_num" != "$new_i" ]; then
         had_changes=true
-        printf 'Plan change: Phase renumbered — "%s" was #%s, now #%s (status: %s)\n' \
-          "$new_title" "$matched_old_num" "$new_i" "$old_status"
+        printf '[%s] Plan change: Phase renumbered — "%s" was #%s, now #%s (status: %s)\n' \
+          "$(date '+%H:%M:%S')" "$new_title" "$matched_old_num" "$new_i" "$old_status"
       fi
 
       # Check dependency changes — compare by title to avoid false positives from renumbering
@@ -390,8 +390,8 @@ detect_plan_changes() {
         local old_display new_display
         old_display=$(printf '%s' "$old_dep_titles" | grep -v '^$' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
         new_display=$(printf '%s' "$new_dep_titles" | grep -v '^$' | sed 's/.*/"&"/' | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')
-        printf 'Plan change: Dependencies changed for "%s" — was: [%s], now: [%s]\n' \
-          "$new_title" "$old_display" "$new_display"
+        printf '[%s] Plan change: Dependencies changed for "%s" — was: [%s], now: [%s]\n' \
+          "$(date '+%H:%M:%S')" "$new_title" "$old_display" "$new_display"
       fi
     fi
   done
@@ -406,15 +406,15 @@ detect_plan_changes() {
       if [ -n "$removed_title" ]; then
         removed_status=$(eval "echo \"\$_OLD_PHASE_STATUS_${old_kv}\"")
         had_changes=true
-        printf 'Plan change: Phase removed — "%s" (was Phase %s, status: %s)\n' \
-          "$removed_title" "$old_k" "$removed_status"
+        printf '[%s] Plan change: Phase removed — "%s" (was Phase %s, status: %s)\n' \
+          "$(date '+%H:%M:%S')" "$removed_title" "$old_k" "$removed_status"
       fi
     fi
   done
 
   if $had_changes; then
     echo ""
-    echo "Plan has changed since last run. Progress reconciled by title matching."
+    printf '[%s] Plan has changed since last run. Progress reconciled by title matching.\n' "$(date '+%H:%M:%S')"
   fi
 
   return 0

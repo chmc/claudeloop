@@ -17,7 +17,7 @@ verify_phase() {
   title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
   description=$(eval "echo \"\$PHASE_DESCRIPTION_${phase_var}\"")
 
-  printf 'Verifying phase %s...\n' "$phase_num" >&2
+  printf '[%s] Verifying phase %s...\n' "$(date '+%H:%M:%S')" "$phase_num" >&2
   log_live "Verifying phase $phase_num..."
 
   # Extract tail of execution log for context
@@ -117,19 +117,19 @@ If ANY check fails, report what failed."
 
   # Exit code check FIRST
   if [ "$verify_exit" -ne 0 ]; then
-    printf 'Verification failed (exit code %s)\n' "$verify_exit" >&2
+    printf '[%s] Verification failed (exit code %s)\n' "$(date '+%H:%M:%S')" "$verify_exit" >&2
     log_live "Verification failed for phase $phase_num (exit code $verify_exit)"
     return 1
   fi
 
   # Anti-skip check: grep for tool invocation evidence (only when exit=0)
   if ! grep -qiE 'ToolUse|Tool_use|tool_use|tool use|\[Tool|Bash|Read|Write|Edit|Glob|Grep' "$verify_log" 2>/dev/null; then
-    printf 'Verification failed: no tool calls detected (verifier may have skipped checks)\n' >&2
+    printf '[%s] Verification failed: no tool calls detected (verifier may have skipped checks)\n' "$(date '+%H:%M:%S')" >&2
     log_live "Verification failed for phase $phase_num: no tool calls detected"
     return 1
   fi
 
-  printf 'Verification passed for phase %s\n' "$phase_num" >&2
+  printf '[%s] Verification passed for phase %s\n' "$(date '+%H:%M:%S')" "$phase_num" >&2
   log_live "Verification passed for phase $phase_num"
   return 0
 }

@@ -873,7 +873,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   if [ "$VERBOSE_MODE" = "true" ]; then
     _claude_debug_flag="--debug-file .claudeloop/logs/phase-$phase_num.claude.debug"
   fi
-  echo "Executing Claude CLI..."
+  printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')"
   [ -n "${LIVE_LOG:-}" ] && printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')" >> "$LIVE_LOG" || true
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
@@ -1323,7 +1323,8 @@ main() {
     exit 1
   fi
 
-  echo "Found $PHASE_COUNT phases"
+  printf '[%s] Found %s phases\n' "$(date '+%H:%M:%S')" "$PHASE_COUNT"
+  log_live "Found $PHASE_COUNT phases"
 
   # Validate environment (skip in dry-run)
   if ! $DRY_RUN; then

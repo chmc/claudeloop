@@ -188,11 +188,23 @@ setup() {
   [[ "$output" == *"✓ All done"* ]]
 }
 
+@test "print_success: includes timestamp prefix" {
+  run print_success "All done"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]
+}
+
 # --- print_error() ---
 
 @test "print_error: exits with status 0" {
   run print_error "Something failed"
   [ "$status" -eq 0 ]
+}
+
+@test "print_error: includes timestamp prefix" {
+  run print_error "Something failed"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]
 }
 
 # --- print_warning() ---
@@ -201,6 +213,20 @@ setup() {
   run print_warning "Caution ahead"
   [ "$status" -eq 0 ]
   [[ "$output" == *"⚠ Caution ahead"* ]]
+}
+
+@test "print_warning: includes timestamp prefix" {
+  run print_warning "Caution ahead"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]
+}
+
+# --- print_quota_wait() ---
+
+@test "print_quota_wait: includes timestamp prefix" {
+  run print_quota_wait 1 120
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]
 }
 
 # --- log_live() ---
