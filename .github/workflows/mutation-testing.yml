@@ -37,6 +37,37 @@ jobs:
       - name: Ensure execute bits
         run: chmod +x claudeloop tests/mutate.sh
 
+      - name: Debug stdin behavior on Linux
+        run: |
+          echo "=== Test 1: basic read from file redirect ==="
+          printf 'n\n' > /tmp/test_input
+          sh -c 'read -r x; echo "got: [$x]"' < /tmp/test_input
+
+          echo "=== Test 2: exec 3<&0 + read <&3 ==="
+          sh -c 'exec 3<&0; read -r x <&3; echo "got: [$x]"; exec 3<&-' < /tmp/test_input
+
+          echo "=== Test 3: read after \$() subshell ==="
+          sh -c '
+            dummy=$(echo hello)
+            read -r x
+            echo "got: [$x]"
+          ' < /tmp/test_input
+
+          echo "=== Test 4: read <&3 after \$() with exec 0</dev/null ==="
+          sh -c '
+            exec 3<&0
+            dummy=$(exec 0</dev/null; echo hello)
+            read -r x <&3
+            echo "got: [$x]"
+            exec 3<&-
+          ' < /tmp/test_input
+
+          echo "=== Test 5: apply mutation and run specific test ==="
+          sed -i 's/\[Nn]\*) exec 3<\&-; return 1/[Nn]*) exec 3<\&-; return 0/' lib/ai_parser.sh
+          grep -n 'Nn.*return' lib/ai_parser.sh
+          bats tests/test_ai_parser.sh --filter "exits when user says n" 2>&1 || echo "TEST_EXIT=$?"
+          git checkout -- lib/ai_parser.sh
+
       - name: Run mutation tests
         id: mutate
         run: |
