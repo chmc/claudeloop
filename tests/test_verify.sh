@@ -222,6 +222,20 @@ STUB
   true
 }
 
+@test "verify_phase: PGID cleanup kill fires for background process" {
+  VERIFY_PHASES=true
+  spy_log="$TEST_DIR/kill_spy.log"
+  # Define a kill() function spy that logs arguments, then delegates to builtin
+  kill() {
+    printf '%s\n' "$*" >> "$spy_log"
+    command kill "$@" 2>/dev/null
+    return 0
+  }
+  verify_phase "1" ".claudeloop/logs/phase-1.log" 2>/dev/null
+  [ -f "$spy_log" ]
+  grep -q -- '-TERM' "$spy_log"
+}
+
 @test "verify_phase: resets CURRENT_PIPELINE_PID after completion" {
   VERIFY_PHASES=true
   CURRENT_PIPELINE_PID="stale"

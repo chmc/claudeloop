@@ -160,13 +160,7 @@ ${plan_content}
   print_success "Calling AI to decompose plan (granularity: $granularity)..."
 
   local ai_output
-  ai_output=$(run_claude_print "$prompt") || {
-    local rc=$?
-    if [ "$rc" -eq 1 ]; then
-      return 1
-    fi
-    return 1
-  }
+  ai_output=$(run_claude_print "$prompt") || return 1
 
   # Validate output is not empty
   if [ -z "$ai_output" ]; then

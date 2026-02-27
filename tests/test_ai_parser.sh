@@ -1168,6 +1168,401 @@ EOF
   grep -q "exact wording" "$TEST_DIR/verify_prompt.txt"
 }
 
+# =============================================================================
+# 4a. run_claude_print direct failure (line 15)
+# =============================================================================
+
+@test "run_claude_print: returns 1 when claude not in PATH" {
+  export PATH="/usr/bin:/bin"
+  run run_claude_print "test"
+  [ "$status" -eq 1 ]
+}
+
+# =============================================================================
+# 4b. ai_parse_plan retry failure paths (lines 200, 204)
+# =============================================================================
+
+@test "ai_parse_plan: returns 1 when retry call to claude fails" {
+  # Call 1 = garbage (no ## Phase), call 2 = exit 1
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+counter_file="${MOCK_COUNTER_FILE}"
+if [ ! -f "$counter_file" ]; then
+  echo "1" > "$counter_file"
+  echo "This is garbage with no phases." | text_to_stream_json
+else
+  exit 1
+fi
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_FILE="$TEST_DIR/counter_retry_fail"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_plan: returns 1 when retry returns empty output" {
+  # Call 1 = garbage, call 2 = exit 0 with no output
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+counter_file="${MOCK_COUNTER_FILE}"
+if [ ! -f "$counter_file" ]; then
+  echo "1" > "$counter_file"
+  echo "This is garbage with no phases." | text_to_stream_json
+else
+  exit 0
+fi
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_FILE="$TEST_DIR/counter_retry_empty"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_parse_plan "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qi "empty output"
+}
+
+# =============================================================================
+# 4c. ai_verify_plan failure (line 278)
+# =============================================================================
+
+@test "ai_verify_plan: returns 1 when claude CLI fails" {
+  mock_claude_fail "network error"
+
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 1 ]
+}
+
+# =============================================================================
+# 4d. ai_reparse_with_feedback failure paths (lines 357, 361, 373)
+# =============================================================================
+
+@test "ai_reparse_with_feedback: returns 1 when claude fails" {
+  mock_claude_fail "timeout"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-parsed-plan.md" << 'EOF'
+## Phase 1: Everything
+Do it all.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-verify-reason.txt" << 'EOF'
+Missing stuff.
+EOF
+
+  run ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_reparse_with_feedback: returns 1 when claude returns empty" {
+  mock_claude_empty
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-parsed-plan.md" << 'EOF'
+## Phase 1: Everything
+Do it all.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-verify-reason.txt" << 'EOF'
+Missing stuff.
+EOF
+
+  run ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qi "empty output"
+}
+
+@test "ai_reparse_with_feedback: returns 1 when output has no Phase headers" {
+  mock_claude "Just some text without any phase headers"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-parsed-plan.md" << 'EOF'
+## Phase 1: Everything
+Do it all.
+EOF
+  cat > "$TEST_DIR/.claudeloop/ai-verify-reason.txt" << 'EOF'
+Missing stuff.
+EOF
+
+  run ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qi "no.*Phase"
+}
+
+# =============================================================================
+# 4e. validate_ai_titles (line 414)
+# =============================================================================
+
+@test "validate_ai_titles: no warning when all titles match" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Run tests
+Run the tests.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+# Plan
+Setup the project.
+Run tests to verify.
+EOF
+
+  run validate_ai_titles "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qi "rephrased"
+}
+
+@test "validate_ai_titles: warns when fewer than half titles match" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Xylophone foo
+Do alpha.
+
+## Phase 2: Zygomorphic bar
+Do bravo.
+
+## Phase 3: Quixotic baz
+Do charlie.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+# Plan
+This plan has completely different text.
+No titles here that would match at all.
+EOF
+
+  run validate_ai_titles "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "rephrased\|match"
+}
+
+@test "validate_ai_titles: no warning at exactly half" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do setup.
+
+## Phase 2: Nonexistent
+Do something.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+# Plan
+Setup the project.
+Build the thing.
+EOF
+
+  run validate_ai_titles "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+  # match=1, total=2, 1 -lt 1 = false → no warning
+  ! echo "$output" | grep -qi "rephrased"
+}
+
+@test "validate_ai_titles: no crash on empty parsed file" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+No phase headers here.
+EOF
+  cat > "$TEST_DIR/original.md" << 'EOF'
+Build something.
+EOF
+
+  run validate_ai_titles "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qi "rephrased"
+}
+
+# =============================================================================
+# 4f. ai_parse_and_verify orchestrator (lines 430, 459, 465)
+# =============================================================================
+
+@test "ai_parse_and_verify: returns 1 when initial parse fails" {
+  mock_claude_fail "API error"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build something.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_and_verify: returns 1 in non-interactive non-YES_MODE" {
+  # Call 1: valid phases, Call 2: FAIL
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMissing stuff.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  # bats `run` pipes stdin → [ ! -t 0 ] true → non-interactive path
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_and_verify: returns 1 when reparse fails" {
+  # Call 1: valid phases, Call 2: FAIL, Call 3: exit 1 (reparse fails)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nStuff missing.\n' | text_to_stream_json ;;
+  3) exit 1 ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qi "reparse failed"
+}
+
+# =============================================================================
+# 4g. confirm_ai_plan interactive paths (lines 519, 528, 532, 544)
+# =============================================================================
+
+@test "confirm_ai_plan: auto-approves on non-TTY without YES_MODE" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=false
+  export DRY_RUN=false
+  # bats `run` pipes stdin → non-TTY → auto-approve path
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "auto-approved"
+}
+
+@test "confirm_ai_plan: returns 0 when user types y" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=false DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    _AI_CONFIRM_FORCE=1 \
+    PATH="$TEST_DIR/bin:$PATH" \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "y\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 0 ]
+}
+
+@test "confirm_ai_plan: returns 1 when user types n" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=false DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    _AI_CONFIRM_FORCE=1 \
+    PATH="$TEST_DIR/bin:$PATH" \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "n\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -qi "rejected"
+}
+
+@test "confirm_ai_plan: returns 0 after valid edit" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  # Mock editor that writes valid ## Phase content
+  cat > "$TEST_DIR/bin/mock_editor" << 'MOCK'
+#!/bin/sh
+cat > "$1" << 'CONTENT'
+## Phase 1: Setup
+Do stuff.
+
+## Phase 2: Build
+Build it.
+CONTENT
+MOCK
+  chmod +x "$TEST_DIR/bin/mock_editor"
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=false DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    EDITOR="$TEST_DIR/bin/mock_editor" _AI_CONFIRM_FORCE=1 \
+    PATH="$TEST_DIR/bin:$PATH" \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "e\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 0 ]
+}
+
 @test "ai_reparse_with_feedback: prompt contains exact wording instruction" {
   cat > "$TEST_DIR/bin/claude" << MOCK
 #!/bin/sh

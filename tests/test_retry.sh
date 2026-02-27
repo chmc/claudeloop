@@ -80,6 +80,18 @@ teardown() { rm -f "$_log"; }
   [ "$output" = "0" ]
 }
 
+@test "get_random: max=0 returns 0" {
+  run get_random 0
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+}
+
+@test "get_random: negative max returns 0" {
+  run get_random -5
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+}
+
 # --- calculate_backoff() ---
 
 @test "calculate_backoff: attempt 1 returns base delay with jitter" {
