@@ -33,7 +33,7 @@ run_claude_print() {
     claude --print --output-format=stream-json --verbose --include-partial-messages \
       < "$tmp_prompt" 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } < /dev/null | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
+  } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
 
   local rc
   rc=$(cat "$_exit_tmp")
@@ -419,8 +419,12 @@ ai_parse_and_verify() {
   local cl_dir="${3:-.claudeloop}"
   local max_retries="${AI_RETRY_MAX:-3}"
 
+  # Save stdin to fd 3 so subprocesses in run_claude_print cannot consume it
+  exec 3<&0
+
   # Initial parse
   if ! ai_parse_plan "$plan_file" "$granularity" "$cl_dir"; then
+    exec 3<&-
     return 1
   fi
 
@@ -430,12 +434,14 @@ ai_parse_and_verify() {
   while true; do
     # Verify
     if ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"; then
+      exec 3<&-
       return 0
     fi
 
     retry=$((retry + 1))
     if [ "$retry" -gt "$max_retries" ]; then
       print_error "AI verification failed after $max_retries retries"
+      exec 3<&-
       return 1
     fi
 
@@ -444,18 +450,20 @@ ai_parse_and_verify() {
       print_warning "Auto-retrying (YES_MODE, attempt $retry/$max_retries)..."
     elif [ -n "${_AI_VERIFY_FORCE:-}" ] || [ -t 0 ]; then
       printf 'Send feedback to AI and retry? (Y/n) '
-      read -r _answer
+      read -r _answer <&3
       case "$_answer" in
-        [Nn]*) return 1 ;;
+        [Nn]*) exec 3<&-; return 1 ;;
       esac
     else
       # Non-interactive, non-YES_MODE
+      exec 3<&-
       return 1
     fi
 
     # Reparse with feedback
     if ! ai_reparse_with_feedback "$plan_file" "$granularity" "$cl_dir"; then
       print_error "AI reparse failed"
+      exec 3<&-
       return 1
     fi
   done
