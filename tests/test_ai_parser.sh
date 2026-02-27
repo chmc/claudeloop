@@ -937,7 +937,9 @@ MOCK
 Build a thing.
 EOF
 
-  # Pipe "n" for the retry prompt
+  # Write "n" to a file and redirect stdin from it for the retry prompt.
+  # Using a file avoids stdin being consumed by subprocess pipelines on Linux.
+  printf 'n\n' > "$TEST_DIR/user_input"
   local script_dir="${BATS_TEST_DIRNAME}/.."
   run env \
     LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
@@ -948,8 +950,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
-      printf "n\n" | ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
-    '
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
+    ' < "$TEST_DIR/user_input"
   [ "$status" -eq 1 ]
 }
 
