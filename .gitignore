@@ -21,3 +21,6 @@ tests/fixtures/.tmp/
 
 # Backup files
 *.bak
+
+exp_plan.md
+exp_result.md
