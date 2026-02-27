@@ -62,10 +62,46 @@ jobs:
             exec 3<&-
           ' < /tmp/test_input
 
-          echo "=== Test 5: apply mutation and run specific test ==="
+          echo "=== Test 5: what does the test's sh -c actually see? ==="
+          printf 'n\n' > /tmp/user_input
+          cat > /tmp/mock_claude << 'MOCK'
+          #!/bin/sh
+          cat /dev/stdin > /dev/null
+          COUNTER_FILE="/tmp/mock_call_count"
+          count=0
+          [ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+          count=$((count + 1))
+          echo "$count" > "$COUNTER_FILE"
+          case "$count" in
+            1) printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"## Phase 1: Setup\\nCreate project.\\n"}]}}\n' ;;
+            2) printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"FAIL\\nMissing stuff.\\n"}]}}\n' ;;
+          esac
+          MOCK
+          chmod +x /tmp/mock_claude
+          rm -f /tmp/mock_call_count
+
+          sh -c '
+            . lib/ui.sh
+            . lib/parser.sh
+            . lib/stream_processor.sh
+            . lib/ai_parser.sh
+            echo "DEBUG: fd0 before exec 3" >&2
+            ls -la /proc/self/fd/0 >&2 2>/dev/null || true
+            exec 3<&0
+            echo "DEBUG: fd3 created" >&2
+            ls -la /proc/self/fd/3 >&2 2>/dev/null || true
+            # Simulate what ai_parse_and_verify does: call $() then read
+            dummy=$(exec 0</dev/null; echo hello)
+            echo "DEBUG: after subshell, reading from fd3..." >&2
+            read -r answer <&3
+            echo "DEBUG: read got: [$answer]" >&2
+            exec 3<&-
+          ' < /tmp/user_input 2>&1
+
+          echo "=== Test 6: apply mutation and run specific test ==="
           sed -i 's/\[Nn]\*) exec 3<\&-; return 1/[Nn]*) exec 3<\&-; return 0/' lib/ai_parser.sh
           grep -n 'Nn.*return' lib/ai_parser.sh
-          bats tests/test_ai_parser.sh --filter "exits when user says n" 2>&1 || echo "TEST_EXIT=$?"
+          bats tests/test_ai_parser.sh --filter "exits when user says n" -T 2>&1 || echo "TEST_EXIT=$?"
           git checkout -- lib/ai_parser.sh
 
       - name: Run mutation tests
