@@ -937,8 +937,9 @@ MOCK
 Build a thing.
 EOF
 
-  # Write "n" to a file and redirect stdin from it for the retry prompt.
-  # Using a file avoids stdin being consumed by subprocess pipelines on Linux.
+  # Write "n" to a file and redirect stdin inside sh -c.
+  # bats "run" may redirect stdin from /dev/null, so the redirect
+  # must happen inside the sh -c script to survive.
   printf 'n\n' > "$TEST_DIR/user_input"
   local script_dir="${BATS_TEST_DIRNAME}/.."
   run env \
@@ -950,8 +951,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
-      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
-    ' < "$TEST_DIR/user_input"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+    '
   [ "$status" -eq 1 ]
 }
 

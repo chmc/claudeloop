@@ -33,7 +33,7 @@ run_claude_print() {
     claude --print --output-format=stream-json --verbose --include-partial-messages \
       < "$tmp_prompt" 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
+  } < /dev/null | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
 
   local rc
   rc=$(cat "$_exit_tmp")
