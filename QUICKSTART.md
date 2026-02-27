@@ -141,4 +141,8 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - `--verify` doubles API calls per phase (one for execution, one for verification)
 - Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run
 
+## CI
+
+Mutation testing runs automatically every Monday via GitHub Actions. Trigger it manually with `gh workflow run "Mutation Testing"`. Results appear in the job summary; survivor reports are uploaded as artifacts.
+
 See `examples/PLAN.md.example` for a full example, and `README.md` for complete documentation.

@@ -597,6 +597,8 @@ main() {
 
   print_summary
   write_report
+
+  [ "$TOTAL_SURVIVED" -gt 0 ] && exit 1
 }
 
 main "$@"

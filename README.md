@@ -267,6 +267,18 @@ shellcheck -s sh lib/retry.sh   # lint
 
 Mutation testing applies small faults to source code one at a time, runs the corresponding tests, and reports which mutations survived undetected. Use `--with-deletions` to include line-deletion mutations and `--with-integration` to re-test survivors against the integration test suite.
 
+### Automated mutation testing
+
+A GitHub Actions workflow runs mutation testing weekly (Monday 06:00 UTC). You can also trigger it manually:
+
+```bash
+gh workflow run "Mutation Testing"                              # all lib files
+gh workflow run "Mutation Testing" -f file=lib/retry.sh         # single file
+gh workflow run "Mutation Testing" -f with-deletions=true       # include deletions
+```
+
+Results appear in the workflow's job summary. When survivors exist, the full report is available as a downloadable artifact.
+
 ## Credits
 
 Inspired by [ralph](https://github.com/snarktank/ralph) by snarktank.

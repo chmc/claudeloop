@@ -1,0 +1,75 @@
+name: Mutation Testing
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'Target file (e.g. lib/retry.sh). Empty = all lib files.'
+        required: false
+        type: string
+      with-deletions:
+        description: 'Include line-deletion mutations'
+        required: false
+        type: boolean
+        default: false
+      with-integration:
+        description: 'Re-test survivors against integration tests'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: mutation-testing-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  mutate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats-core
+        run: npm install -g bats
+
+      - name: Ensure execute bits
+        run: chmod +x claudeloop tests/mutate.sh
+
+      - name: Run mutation tests
+        id: mutate
+        run: |
+          ARGS=""
+          [ -n "$FILE_INPUT" ] && ARGS="$FILE_INPUT"
+          [ "$WITH_DELETIONS" = "true" ] && ARGS="$ARGS --with-deletions"
+          [ "$WITH_INTEGRATION" = "true" ] && ARGS="$ARGS --with-integration"
+          ./tests/mutate.sh $ARGS
+        env:
+          FILE_INPUT: ${{ inputs.file }}
+          WITH_DELETIONS: ${{ inputs.with-deletions }}
+          WITH_INTEGRATION: ${{ inputs.with-integration }}
+
+      - name: Render report to job summary
+        if: always()
+        run: |
+          if [ -f .claudeloop/mutation-report.md ]; then
+            cat .claudeloop/mutation-report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Mutation Testing" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$MUTATE_OUTCOME" = "failure" ]; then
+              echo "Mutation testing failed. Check logs for details." >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "All mutants killed. Score: 100%" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+        env:
+          MUTATE_OUTCOME: ${{ steps.mutate.outcome }}
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: .claudeloop/mutation-report.md
+          if-no-files-found: ignore
