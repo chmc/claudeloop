@@ -15,15 +15,15 @@ inject_heartbeats() {
     _hb_line=""
     _hb_before=$(date +%s)
     if IFS= read -t 2 -r _hb_line; then
-      printf '%s\n' "$_hb_line"
+      printf '%s\n' "$_hb_line" 2>/dev/null || break
     elif [ -n "$_hb_line" ]; then
       # Partial line (data without trailing newline)
-      printf '%s\n' "$_hb_line"
+      printf '%s\n' "$_hb_line" 2>/dev/null || break
     elif [ $(($(date +%s) - _hb_before)) -lt 1 ]; then
       # Returned instantly → EOF (timeout would take ~2s)
       break
     else
-      printf '{"type":"heartbeat"}\n'
+      printf '{"type":"heartbeat"}\n' 2>/dev/null || break
     fi
   done
 }
@@ -245,6 +245,7 @@ process_stream_json() {
     prev_total_cost = 0
     got_result = 0
     post_result_hb = 0
+    post_result_events = 0
     idle_hb = 0
     max_idle_hb = (idle_timeout_s + 0 > 0) ? int(idle_timeout_s / 2) : 0
     printf "[%s]\n", get_time()
@@ -264,6 +265,11 @@ process_stream_json() {
     }
 
     etype = extract(line, "type")
+
+    if (got_result) {
+      post_result_events++
+      if (post_result_events >= 10) exit
+    }
 
     if (etype == "assistant") {
       idle_hb = 0

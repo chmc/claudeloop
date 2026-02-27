@@ -80,24 +80,30 @@ If ANY check fails, report what failed."
       $_skip_flag \
       > "$verify_log" 2>&1 || _rc=$?
     printf '%s' "$_rc" > "$_exit_tmp"
-  } &
+  } >/dev/null 2>&1 &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$!
   set +m
 
-  # Timeout: reuse MAX_PHASE_TIME
-  local _timer_pid _vp_pid _vp_pgid
+  # Timeout: use MAX_PHASE_TIME if set, otherwise default 300s for verification
+  local _timer_pid _vp_pid _vp_pgid _verify_timeout
   _timer_pid=""
   _vp_pid="$CURRENT_PIPELINE_PID"
   _vp_pgid="$CURRENT_PIPELINE_PGID"
+  _verify_timeout=300
   if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null; then
-    set -m
-    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
-    _timer_pid=$!
-    set +m
+    _verify_timeout="$MAX_PHASE_TIME"
   fi
+  set -m
+  ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
+  _timer_pid=$!
+  set +m
 
   wait "$CURRENT_PIPELINE_PID" || true
+  # Kill remaining processes (claude CLI may outlive the subshell)
+  if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
+    kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
+  fi
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 

@@ -1020,6 +1020,39 @@ JSON"
   [ "$lines_consumed" -eq 5 ]
 }
 
+@test "post-result safety exit: AWK exits after result + 10 non-heartbeat events" {
+  # After result, stream_event lines keep flowing (no heartbeats).
+  # AWK should exit after 10 post-result events regardless of type.
+  local result='{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10}}'
+  local se='{"type":"stream_event","data":"x"}'
+  local input
+  input=$(printf '%s\n' "$result" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se" "$se")
+  # 1 result + 20 stream_events; AWK should exit after result + 10 = 11 lines consumed
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 0 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # Should exit after result + 10 non-heartbeat events = 11 lines (not all 21)
+  [ "$lines_consumed" -le 12 ]
+}
+
+@test "inject_heartbeats: no stderr output on broken pipe" {
+  # Close the read end early so printf hits a broken pipe.
+  # inject_heartbeats should exit cleanly with no stderr warnings.
+  local stderr_out
+  stderr_out=$(mktemp)
+  # Feed continuous data but close pipe after 1 line read
+  bash -c '
+    . "'"${BATS_TEST_DIRNAME}"'/../lib/stream_processor.sh"
+    { echo "line1"; sleep 5; } | inject_heartbeats | head -1
+  ' 2>"$stderr_out"
+  local stderr_content
+  stderr_content=$(cat "$stderr_out")
+  rm -f "$stderr_out"
+  # Should have no "Broken pipe" or "write error" in stderr
+  [[ "$stderr_content" != *"Broken pipe"* ]]
+  [[ "$stderr_content" != *"write error"* ]]
+}
+
 @test "idle timeout=0: disabled, all heartbeats consumed" {
   local hb='{"type":"heartbeat"}'
   local input
