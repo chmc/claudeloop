@@ -15,6 +15,11 @@ run_claude_print() {
     return 1
   fi
 
+  # Close inherited stdin so subprocess pipelines cannot consume the caller's
+  # interactive input (claude reads from a temp file, not stdin).
+  # Safe because run_claude_print is always called inside $() subshells.
+  exec 0</dev/null
+
   local tmp_prompt tmp_log tmp_raw _exit_tmp
   tmp_prompt=$(mktemp)
   tmp_log=$(mktemp)
