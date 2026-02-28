@@ -34,6 +34,7 @@ run_claude_print() {
   # process_stream_json stdout (timestamped text) → stderr (visible to user)
   # process_stream_json writes clean text to tmp_log
   {
+    exec 3<&- 2>/dev/null  # prevent pipeline descendants from inheriting caller's saved-stdin fd
     _rc=0
     claude --print --output-format=stream-json --verbose --include-partial-messages \
       < "$tmp_prompt" 2>&1 || _rc=$?

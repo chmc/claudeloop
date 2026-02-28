@@ -954,6 +954,7 @@ EOF
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
   [ "$status" -eq 1 ]
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
 }
 
 @test "ai_parse_and_verify: auto-retries in YES_MODE" {
