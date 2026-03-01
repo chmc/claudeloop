@@ -533,6 +533,7 @@ parse_args() {
         ;;
       --phase)
         if [ $# -lt 2 ]; then echo "Error: --phase requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9.]*)  echo "Error: --phase requires a number" >&2; exit 1 ;; esac
         START_PHASE="$2"
         shift 2
         ;;
@@ -552,21 +553,25 @@ parse_args() {
         ;;
       --max-retries)
         if [ $# -lt 2 ]; then echo "Error: --max-retries requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --max-retries requires a number" >&2; exit 1 ;; esac
         MAX_RETRIES="$2"; _CLI_MAX_RETRIES=1
         shift 2
         ;;
       --quota-retry-interval)
         if [ $# -lt 2 ]; then echo "Error: --quota-retry-interval requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --quota-retry-interval requires a number" >&2; exit 1 ;; esac
         QUOTA_RETRY_INTERVAL="$2"; _CLI_QUOTA_RETRY_INTERVAL=1
         shift 2
         ;;
       --max-phase-time)
         if [ $# -lt 2 ]; then echo "Error: --max-phase-time requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --max-phase-time requires a number" >&2; exit 1 ;; esac
         MAX_PHASE_TIME="$2"; _CLI_MAX_PHASE_TIME=1
         shift 2
         ;;
       --idle-timeout)
         if [ $# -lt 2 ]; then echo "Error: --idle-timeout requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --idle-timeout requires a number" >&2; exit 1 ;; esac
         IDLE_TIMEOUT="$2"; _CLI_IDLE_TIMEOUT=1
         shift 2
         ;;
@@ -1384,6 +1389,18 @@ main() {
 
   # Apply --phase N: mark phases before START_PHASE as completed (skip them)
   if [ -n "$START_PHASE" ]; then
+    # Validate that START_PHASE exists in the plan
+    _phase_found=false
+    for _p in $PHASE_NUMBERS; do
+      if [ "$_p" = "$START_PHASE" ]; then
+        _phase_found=true
+        break
+      fi
+    done
+    if [ "$_phase_found" = false ]; then
+      print_error "Phase $START_PHASE not found in plan (available: $PHASE_NUMBERS)"
+      exit 1
+    fi
     for _p in $PHASE_NUMBERS; do
       phase_less_than "$_p" "$START_PHASE" || break
       eval "PHASE_STATUS_$(phase_to_var "$_p")='completed'"

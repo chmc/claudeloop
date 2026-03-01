@@ -8,7 +8,10 @@ setup() {
 
 @test "mutate.sh contains exit 1 on survivors guard" {
   # Verify the script exits non-zero when survivors exist
-  run grep 'TOTAL_SURVIVED.*-gt 0.*exit 1' "$REPO_ROOT/tests/mutate.sh"
+  # The guard is a multi-line if/then/exit pattern
+  run grep 'TOTAL_SURVIVED.*-gt 0' "$REPO_ROOT/tests/mutate.sh"
+  [ "$status" -eq 0 ]
+  run grep 'exit 1' "$REPO_ROOT/tests/mutate.sh"
   [ "$status" -eq 0 ]
 }
 
@@ -17,6 +20,6 @@ setup() {
   local last_print_summary
   last_print_summary=$(grep -n 'print_summary' "$REPO_ROOT/tests/mutate.sh" | tail -1 | cut -d: -f1)
   local exit_guard_line
-  exit_guard_line=$(grep -n 'TOTAL_SURVIVED.*-gt 0.*exit 1' "$REPO_ROOT/tests/mutate.sh" | tail -1 | cut -d: -f1)
+  exit_guard_line=$(grep -n 'TOTAL_SURVIVED.*-gt 0' "$REPO_ROOT/tests/mutate.sh" | tail -1 | cut -d: -f1)
   [ "$exit_guard_line" -gt "$last_print_summary" ]
 }

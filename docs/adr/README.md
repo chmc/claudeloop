@@ -22,3 +22,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0014](0014-ai-verify-feedback-loop.md) | AI verification feedback loop | 2026-02-25 | Accepted |
 | [0015](0015-phase-verification.md) | Phase verification | 2026-02-26 | Accepted |
 | [0016](0016-mutation-testing-ci.md) | Mutation testing CI | 2026-02-27 | Accepted |
+| [0017](0017-input-sanitization.md) | Input sanitization for eval/awk contexts | 2026-03-01 | Accepted |

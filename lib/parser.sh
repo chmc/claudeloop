@@ -11,7 +11,7 @@ phase_to_var() { echo "$1" | tr '.' '_'; }
 
 # Returns 0 (true) if $1 < $2 as decimal numbers.
 # Uses awk to handle float comparison correctly (e.g., 2.5 > 2.15).
-phase_less_than() { awk "BEGIN { exit ($1 < $2 ? 0 : 1) }"; }
+phase_less_than() { awk -v a="$1" -v b="$2" 'BEGIN { exit (a < b ? 0 : 1) }'; }
 
 # Parse a PLAN.md file
 # Args: $1 - path to PLAN.md file

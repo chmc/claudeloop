@@ -50,6 +50,7 @@ get_random() {
 # Returns: delay in seconds (stdout)
 calculate_backoff() {
   local attempt="$1"
+  case "$attempt" in ''|*[!0-9]*) echo "$BASE_DELAY"; return 0 ;; esac
   local exp_value
   exp_value=$(power 2 $((attempt - 1)))
   local delay=$((BASE_DELAY * exp_value))
@@ -125,6 +126,10 @@ should_retry_phase() {
   local phase_num="$1"
   local attempts
   attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$(phase_to_var "$phase_num")\"")
+
+  # Guard against non-numeric attempts or MAX_RETRIES
+  case "$attempts" in ''|*[!0-9]*) return 1 ;; esac
+  case "$MAX_RETRIES" in ''|*[!0-9]*) return 1 ;; esac
 
   if [ "$attempts" -lt "$MAX_RETRIES" ]; then
     return 0
