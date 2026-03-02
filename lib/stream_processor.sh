@@ -248,6 +248,8 @@ process_stream_json() {
     post_result_events = 0
     idle_hb = 0
     max_idle_hb = (idle_timeout_s + 0 > 0) ? int(idle_timeout_s / 2) : 0
+    last_meaningful_epoch = get_epoch()
+    meaningful_seen = 0
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
@@ -272,9 +274,9 @@ process_stream_json() {
     }
 
     if (etype == "assistant") {
-      idle_hb = 0
       text = extract(line, "text")
       if (text != "") {
+        idle_hb = 0; meaningful_seen = 1
         clear_line()
         spinner_start = 0
         if (at_line_start) printf "[%s] ", get_time()
@@ -289,6 +291,7 @@ process_stream_json() {
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
+        idle_hb = 0; meaningful_seen = 1
         n_tools = split(line, tool_segs, "\"type\":\"tool_use\"")
         for (ti = 2; ti <= n_tools; ti++) {
           seg = tool_segs[ti]
@@ -344,7 +347,14 @@ process_stream_json() {
         }
         if (live_log != "") fflush(live_log)
       } else {
+        # Thinking-only assistant event — update spinner but do NOT reset idle timer
         now = get_epoch()
+        if (idle_timeout_s > 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
+          printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
+          printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
+          if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
+          exit
+        }
         if (spinner_start == 0) {
           spinner_start = now
           if (!at_line_start) printf "\n"
@@ -362,7 +372,7 @@ process_stream_json() {
       }
 
     } else if (etype == "tool_use") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       clear_line()
       spinner_start = 0
       name = extract(line, "name")
@@ -408,7 +418,7 @@ process_stream_json() {
       else if (name == "TodoWrite") handle_todo_event(line)
 
     } else if (etype == "tool_result") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       clear_line()
       spinner_start = 0
       content = extract(line, "content")
@@ -435,7 +445,7 @@ process_stream_json() {
       if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
 
     } else if (etype == "user") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       tool_result = extract(line, "tool_use_result")
       if (tool_result != "") {
         clear_line()
@@ -447,7 +457,7 @@ process_stream_json() {
       }
 
     } else if (etype == "result") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       got_result = 1
       clear_line()
       spinner_start = 0
@@ -497,7 +507,7 @@ process_stream_json() {
       if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
     } else if (etype == "rate_limit_event") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       util = extract(line, "utilization")
       if (util != "") {
         pct = int((util + 0) * 100)
@@ -510,7 +520,7 @@ process_stream_json() {
       }
 
     } else if (etype == "system") {
-      idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1
       subtype_val = extract(line, "subtype")
       if (subtype_val == "init") {
         model_s = extract(line, "model")
@@ -522,6 +532,12 @@ process_stream_json() {
       }
 
     } else {
+      now = get_epoch()
+      # Update wall-clock timer when a meaningful event was seen
+      if (meaningful_seen) {
+        last_meaningful_epoch = now
+        meaningful_seen = 0
+      }
       if (etype == "heartbeat") {
         if (got_result) {
           post_result_hb++
@@ -536,10 +552,14 @@ process_stream_json() {
             exit
           }
         }
-      } else {
-        idle_hb = 0
       }
-      now = get_epoch()
+      # Wall-clock idle check (catches stuck sessions even without heartbeats)
+      if (idle_timeout_s > 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
+        printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
+        printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
+        if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
+        exit
+      }
       if (spinner_start == 0) {
         spinner_start = now
         if (!at_line_start) printf "\n"

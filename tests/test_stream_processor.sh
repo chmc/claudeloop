@@ -982,18 +982,26 @@ JSON"
   [ "$lines_consumed" -le 5 ]
 }
 
-@test "idle timeout: no false positive on stream_events (counter resets)" {
-  # idle_timeout=4 → max_idle_hb = 2; interleave heartbeats with stream_event types
-  local hb='{"type":"heartbeat"}'
+@test "idle timeout: stream_events with delays trigger wall-clock timeout" {
+  # idle_timeout=3; stream_events arrive with 2s sleeps between them.
+  # Wall-clock idle timer should fire because stream_events are NOT meaningful.
+  # No heartbeats — tests pure wall-clock detection.
   local se='{"type":"stream_event","data":"something"}'
-  # Pattern: hb, stream_event, hb, stream_event, hb, stream_event — counter resets each time
-  local input
-  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$hb" "$se" "$hb" "$se" "$hb" "$se")
-  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  {
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+  } | process_stream_json "$_log" "$_raw" false "" false 3 >/dev/null 2>&1
   local lines_consumed
   lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
-  # All 6 lines should be consumed (no premature exit since idle counter resets)
-  [ "$lines_consumed" -eq 6 ]
+  # Should exit before consuming all 5 lines due to wall-clock timeout
+  [ "$lines_consumed" -lt 5 ]
 }
 
 @test "idle timeout: no exit below threshold" {
@@ -1008,16 +1016,75 @@ JSON"
   [ "$lines_consumed" -eq 3 ]
 }
 
-@test "idle timeout: non-heartbeat unknown events do NOT increment idle counter" {
-  # idle_timeout=4 → max_idle_hb = 2; feed 5 non-heartbeat unknown events
+@test "idle timeout: rapid stream_events within time limit are all consumed" {
+  # idle_timeout=10; feed 5 stream_events rapidly (no delays).
+  # Wall-clock check should NOT fire since elapsed < 10s.
   local unk='{"type":"stream_event","data":"x"}'
   local input
   input=$(printf '%s\n%s\n%s\n%s\n%s\n' "$unk" "$unk" "$unk" "$unk" "$unk")
-  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 10 >/dev/null 2>&1
   local lines_consumed
   lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
-  # All 5 should be consumed (non-heartbeat events don't count toward idle)
+  # All 5 should be consumed (within time limit)
   [ "$lines_consumed" -eq 5 ]
+}
+
+@test "idle timeout: continuous stream_events trigger wall-clock timeout" {
+  # Regression test: even without heartbeats, pure stream_events should trigger
+  # wall-clock timeout when enough time passes.
+  # idle_timeout=2; emit stream_events with 1.5s delays
+  local se='{"type":"stream_event","data":"x"}'
+  {
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+    sleep 2
+    printf '%s\n' "$se"
+  } | process_stream_json "$_log" "$_raw" false "" false 2 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # Should exit before consuming all 5 lines
+  [ "$lines_consumed" -lt 5 ]
+}
+
+@test "idle timeout: meaningful event resets wall-clock timer" {
+  # idle_timeout=3; interleave tool_use events (meaningful) with delays.
+  # Each tool_use resets the wall-clock timer, so no timeout should fire.
+  local tool='{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/x"}}'
+  {
+    printf '%s\n' "$tool"
+    sleep 2
+    printf '%s\n' "$tool"
+    sleep 2
+    printf '%s\n' "$tool"
+  } | process_stream_json "$_log" "$_raw" false "" false 3 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 3 should be consumed (meaningful events reset timer)
+  [ "$lines_consumed" -eq 3 ]
+}
+
+@test "idle timeout: thinking-only assistant does NOT reset idle timer" {
+  # idle_timeout=3; emit assistant events without text/tool_use (thinking-only)
+  # These should NOT reset the wall-clock timer.
+  local thinking='{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm"}]}}'
+  {
+    printf '%s\n' "$thinking"
+    sleep 2
+    printf '%s\n' "$thinking"
+    sleep 2
+    printf '%s\n' "$thinking"
+    sleep 2
+    printf '%s\n' "$thinking"
+  } | process_stream_json "$_log" "$_raw" false "" false 3 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # Should exit before consuming all 4 (thinking doesn't reset timer)
+  [ "$lines_consumed" -lt 4 ]
 }
 
 @test "post-result safety exit: AWK exits after result + 10 non-heartbeat events" {

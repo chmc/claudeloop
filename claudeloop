@@ -897,6 +897,15 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   [ -n "${LIVE_LOG:-}" ] && printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')" >> "$LIVE_LOG" || true
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
+
+  # Sentinel file: created when stream processor (AWK) exits.
+  # We poll for this instead of using `wait PID` because bash 3.2 (macOS /bin/sh)
+  # with set -m makes `wait PID` block for the entire pipeline job, not just the
+  # specified process — causing a deadlock when Claude CLI lingers after AWK exits.
+  local _sentinel
+  _sentinel=$(mktemp)
+  rm -f "$_sentinel"
+
   # Use job control (set -m) so the background pipeline gets its own process group.
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
   # not just the last process. Without set -m, kill -TERM $! only kills the last
@@ -917,7 +926,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
         $_claude_debug_flag 2>&1 || _rc=$?
     fi
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}" &
+  } | inject_heartbeats | { process_stream_json "$log_file" "$raw_log" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
@@ -934,16 +943,26 @@ Address ALL issues identified above. Make sure tests pass before finishing."
     # its `sleep` child, preventing orphaned sleep processes from holding open
     # bats (or other tool) internal file descriptors.
     set -m
-    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
+    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
     _timer_pid=$!
     set +m
   fi
 
-  wait "$CURRENT_PIPELINE_PID" || true   # || true required: set -eu is active
-  # Kill remaining pipeline processes (claude CLI may hang after AWK exits)
+  # Wait for stream processor to finish (sentinel-based).
+  # Note: bash 3.2's `wait PID` with set -m blocks for the entire pipeline job,
+  # not just the specified process. The sentinel avoids this deadlock.
+  while [ ! -f "$_sentinel" ]; do
+    sleep 1
+  done
+
+  # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
+  wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  rm -f "$_sentinel"
+  # Clear spinner remnants
+  printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 

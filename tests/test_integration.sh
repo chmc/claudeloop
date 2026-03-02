@@ -1096,6 +1096,36 @@ EOF
 # =============================================================================
 # Parse message: normal vs cached plan
 # =============================================================================
+# =============================================================================
+# Pipeline hang regression: first process lingering doesn't block completion
+# =============================================================================
+@test "integration: pipeline does not hang when first process lingers after last exits" {
+  # Simulate Claude CLI that keeps running after stream processor exits.
+  # The stub outputs a result event then sleeps 30s — the sentinel-based wait
+  # should detect stream processor exit and kill the lingering Claude process.
+  cat > "$TEST_DIR/bin/claude" << EOF
+#!/bin/sh
+count_file="$TEST_DIR/claude_call_count"
+count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+count=\$((count + 1))
+printf '%s\n' "\$count" > "\$count_file"
+# Emit a result event so stream processor exits, then linger
+printf '{"type":"result","total_cost_usd":0.001,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":100,"output_tokens":10}}\n'
+sleep 30
+EOF
+  chmod +x "$TEST_DIR/bin/claude"
+
+  _start=$(date '+%s')
+  _cl --plan PLAN.md
+  _end=$(date '+%s')
+  _elapsed=$((_end - _start))
+
+  [ "$status" -eq 0 ]
+  # Must finish well before 30s (Claude lingers but pipeline should be killed)
+  [ "$_elapsed" -lt 20 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
 @test "integration: normal run shows checkmark Parsing plan file" {
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
