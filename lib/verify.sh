@@ -77,7 +77,7 @@ If ANY check fails, report what failed."
   {
     _rc=0
     # shellcheck disable=SC2086
-    printf '%s\n' "$prompt" | claude --print --verbose \
+    printf '%s\n' "$prompt" | claude --print --output-format=stream-json --verbose \
       $_skip_flag \
       > "$verify_log" 2>&1 || _rc=$?
     printf '%s' "$_rc" > "$_exit_tmp"

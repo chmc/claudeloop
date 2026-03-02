@@ -1025,25 +1025,25 @@ if [ -f "\$exit_codes_file" ]; then
     [ -z "\$exit_code" ] && exit_code=0
 fi
 
-# Detect verification calls: --verbose present but no --output-format
+# Detect verification calls: --verbose present but no --include-partial-messages
+# (execution uses both --verbose and --include-partial-messages; verification only --verbose)
 is_verify=false
 has_verbose=false
-has_output_format=false
+has_partial=false
 for arg in "\$@"; do
   case "\$arg" in
     --verbose) has_verbose=true ;;
-    --output-format*) has_output_format=true ;;
+    --include-partial-messages) has_partial=true ;;
   esac
 done
-if \$has_verbose && ! \$has_output_format; then
+if \$has_verbose && ! \$has_partial; then
   is_verify=true
 fi
 
 if \$is_verify; then
-  # Verification call: emit tool-call evidence
-  printf 'Running checks...\n'
-  printf 'ToolUse: Bash\n'
-  printf 'All tests passed.\n'
+  # Verification call: emit stream-json tool-call evidence
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+  printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests passed."}}\n'
 else
   # Execution call: normal stub output
   printf 'stub output for call %s\n' "\$count"

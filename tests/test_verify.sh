@@ -36,15 +36,15 @@ setup() {
   printf '=== RESPONSE ===\nsome output from execution\n=== EXECUTION END ===\n' \
     > "$TEST_DIR/.claudeloop/logs/phase-1.log"
 
-  # Write stub claude that exits 0 and emits tool-call evidence
+  # Write stub claude that exits 0 and emits stream-json tool-call evidence
   mkdir -p "$TEST_DIR/bin"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 # Read stdin (prompt) to /dev/null
 cat > /dev/null
-printf 'Running verification...\n'
-printf 'ToolUse: Bash\n'
-printf 'All checks passed.\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Running verification..."}}\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed."}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -98,8 +98,8 @@ teardown() {
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /dev/null
-printf 'ToolUse: Bash\n'
-printf 'Tests failed!\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Tests failed!"}}\n'
 exit 1
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -133,8 +133,8 @@ STUB
   VERIFY_PHASES=true
   verify_phase "1" ".claudeloop/logs/phase-1.log"
   [ -f ".claudeloop/logs/phase-1.verify.log" ]
-  # Log should contain tool-call evidence from the stub
-  grep -q "ToolUse" ".claudeloop/logs/phase-1.verify.log"
+  # Log should contain tool-call evidence from the stub (stream-json format)
+  grep -q "tool_use" ".claudeloop/logs/phase-1.verify.log"
 }
 
 # =============================================================================
@@ -147,8 +147,8 @@ STUB
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /tmp/verify_prompt_capture
-printf 'ToolUse: Bash\n'
-printf 'All checks passed.\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed."}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -166,7 +166,7 @@ STUB
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /tmp/verify_prompt_capture2
-printf 'ToolUse: Bash\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -187,7 +187,7 @@ STUB
 #!/bin/sh
 cat > /dev/null
 printf '%s\n' "$*" > /tmp/verify_args_capture
-printf 'ToolUse: Bash\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -207,7 +207,7 @@ STUB
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /dev/null
-printf 'ToolUse: Bash\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 sleep 30
 exit 0
 STUB
@@ -259,11 +259,11 @@ STUB
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /dev/null
-printf 'Running verification...\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Running verification..."}}\n'
 sleep 0.1
-printf 'ToolUse: Bash {"command":"bats tests/test_parser.sh"}\n'
+printf '{"type":"tool_use","name":"Bash","input":{"command":"bats tests/test_parser.sh"}}\n'
 sleep 0.1
-printf 'All checks passed.\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed."}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
