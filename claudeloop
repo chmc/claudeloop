@@ -182,6 +182,9 @@ write_config() {
   return 0
 }
 
+# Convert true/false to y/n for display in wizard prompts
+bool_yn() { if [ "$1" = "true" ]; then printf 'y'; else printf 'n'; fi; }
+
 # Interactive first-run wizard. Prompts for each configurable setting.
 # Only runs when: no .claudeloop.conf, stdin is a tty (or _WIZARD_FORCE=1), not --dry-run.
 # Mutates globals directly; write_config() persists them immediately after.
@@ -246,10 +249,11 @@ run_setup_wizard() {
   if [ -n "$_CLI_SIMPLE_MODE" ]; then
     printf 'Simple mode: using --simple\n'
   else
-    printf 'Simple output, no colors (true/false) [%s]: ' "$SIMPLE_MODE"
+    printf 'Simple output, no colors? (y/n) [%s]: ' "$(bool_yn "$SIMPLE_MODE")"
     read -r response || return 0
     case "$response" in
-      true|false) SIMPLE_MODE="$response" ;;
+      [Yy]|[Yy][Ee][Ss]) SIMPLE_MODE=true ;;
+      [Nn]|[Nn][Oo]) SIMPLE_MODE=false ;;
     esac
   fi
 
@@ -257,10 +261,11 @@ run_setup_wizard() {
   if [ -n "$_CLI_SKIP_PERMISSIONS" ]; then
     printf 'Skip permissions: using --dangerously-skip-permissions\n'
   else
-    printf 'Skip write permission prompts (true/false) [%s]: ' "$SKIP_PERMISSIONS"
+    printf 'Dangerously skip permissions? (y/n) [%s]: ' "$(bool_yn "$SKIP_PERMISSIONS")"
     read -r response || return 0
     case "$response" in
-      true|false) SKIP_PERMISSIONS="$response" ;;
+      [Yy]|[Yy][Ee][Ss]) SKIP_PERMISSIONS=true ;;
+      [Nn]|[Nn][Oo]) SKIP_PERMISSIONS=false ;;
     esac
   fi
 
@@ -278,10 +283,11 @@ run_setup_wizard() {
   if [ -n "$_CLI_AI_PARSE" ]; then
     printf 'AI parsing: using --ai-parse\n'
   else
-    printf 'Use AI to parse free-form plans (true/false) [%s]: ' "$AI_PARSE"
+    printf 'AI-parse free-form plans? (y/n) [%s]: ' "$(bool_yn "$AI_PARSE")"
     read -r response || return 0
     case "$response" in
-      true|false) AI_PARSE="$response" ;;
+      [Yy]|[Yy][Ee][Ss]) AI_PARSE=true ;;
+      [Nn]|[Nn][Oo]) AI_PARSE=false ;;
     esac
   fi
 
@@ -302,10 +308,11 @@ run_setup_wizard() {
   if [ -n "$_CLI_VERIFY_PHASES" ]; then
     printf 'Verify phases: using --verify\n'
   else
-    printf 'Verify completed phases with a fresh Claude instance (true/false) [%s]: ' "$VERIFY_PHASES"
+    printf 'Verify phases with fresh AI? (y/n) [%s]: ' "$(bool_yn "$VERIFY_PHASES")"
     read -r response || return 0
     case "$response" in
-      true|false) VERIFY_PHASES="$response" ;;
+      [Yy]|[Yy][Ee][Ss]) VERIFY_PHASES=true ;;
+      [Nn]|[Nn][Oo]) VERIFY_PHASES=false ;;
     esac
   fi
 

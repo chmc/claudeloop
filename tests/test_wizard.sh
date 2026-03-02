@@ -169,15 +169,15 @@ _cl_wizard() {
 }
 
 @test "wizard: SIMPLE_MODE=true accepted and saved" {
-  # plan=\n, progress=\n, retries=\n, quota=\n, simple=true, skip=\n, prompt=\n
-  _cl_wizard $'\n\n\n\ntrue\n\n\n'
+  # plan=\n, progress=\n, retries=\n, quota=\n, simple=y, skip=\n, prompt=\n
+  _cl_wizard $'\n\n\n\ny\n\n\n'
   [ "$status" -eq 0 ]
   grep -q "^SIMPLE_MODE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "wizard: SKIP_PERMISSIONS=true accepted and saved" {
-  # plan=\n, progress=\n, retries=\n, quota=\n, simple=\n, skip=true, prompt=\n
-  _cl_wizard $'\n\n\n\n\ntrue\n\n'
+  # plan=\n, progress=\n, retries=\n, quota=\n, simple=\n, skip=y, prompt=\n
+  _cl_wizard $'\n\n\n\n\ny\n\n'
   [ "$status" -eq 0 ]
   grep -q "^SKIP_PERMISSIONS=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
@@ -212,6 +212,58 @@ _cl_wizard() {
   _cl_wizard $'\n\n\nbad\n\n\n\n'
   [ "$status" -eq 0 ]
   grep -q "^QUOTA_RETRY_INTERVAL=900$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+# =============================================================================
+# Boolean y/n input variants
+# =============================================================================
+
+@test "wizard: yes/Y/Yes accepted as true for SIMPLE_MODE" {
+  _cl_wizard $'\n\n\n\nyes\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nY\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nYes\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: n/no/N/No accepted as false for SIMPLE_MODE" {
+  _cl_wizard $'\n\n\n\nn\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nno\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nN\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nNo\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: literal true/false rejected, keeps default" {
+  _cl_wizard $'\n\n\n\ntrue\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  rm -rf "$TEST_DIR/.claudeloop"
+  _cl_wizard $'\n\n\n\nfalse\n\n\n'
+  [ "$status" -eq 0 ]
+  grep -q "^SIMPLE_MODE=false$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 # =============================================================================
@@ -281,20 +333,20 @@ _reset_gitignore_without_claudeloop() {
 # Prompts in order (no CLI args → all 9 shown):
 #   1. Plan file  2. Progress file  3. Max retries  4. Quota interval
 #   5. Simple mode  6. Skip permissions  7. Phase prompt file
-#   8. AI parse (true/false)  9. Granularity (phases/tasks/steps)
+#   8. AI parse (y/n)  9. Granularity (phases/tasks/steps)
 # =============================================================================
 
 @test "wizard: asks about AI parsing and saves AI_PARSE=true" {
   # 7 defaults + AI_PARSE=true + GRANULARITY=default
   # Exit may be non-zero because AI parsing runs (and fails with stub claude)
-  _cl_wizard $'\n\n\n\n\n\n\ntrue\n\n'
+  _cl_wizard $'\n\n\n\n\n\n\ny\n\n'
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
   grep -q "^AI_PARSE=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "wizard: asks about granularity and saves GRANULARITY=steps" {
-  # 7 defaults + AI_PARSE=true + GRANULARITY=steps
-  _cl_wizard $'\n\n\n\n\n\n\ntrue\nsteps\n'
+  # 7 defaults + AI_PARSE=y + GRANULARITY=steps
+  _cl_wizard $'\n\n\n\n\n\n\ny\nsteps\n'
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
   grep -q "^GRANULARITY=steps$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
@@ -326,7 +378,7 @@ _reset_gitignore_without_claudeloop() {
 @test "wizard: asks about verify phases and saves VERIFY_PHASES=true" {
   # 8 defaults (AI_PARSE=false so granularity skipped) + VERIFY_PHASES=true
   # Exit may be non-zero because verification runs (stub lacks tool-call evidence)
-  _cl_wizard $'\n\n\n\n\n\n\n\ntrue\n'
+  _cl_wizard $'\n\n\n\n\n\n\n\ny\n'
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
   grep -q "^VERIFY_PHASES=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
