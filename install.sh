@@ -21,9 +21,9 @@ if [ "$MODE" = "download" ]; then
   if [ -z "${VERSION:-}" ]; then
     if [ "${BETA:-0}" = "1" ]; then
       echo "Fetching latest beta version..."
-      VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=20" \
-        | awk '/"tag_name"/{tag=$0} /"prerelease": true/{print tag; exit}' \
-        | sed 's/.*"v\([^"]*\)".*/\1/')
+      VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=50" \
+        | awk '/"tag_name"/{ gsub(/.*"v|".*/,"",$0); tag=$0 } /"prerelease": true/{ print tag }' \
+        | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)
       if [ -z "$VERSION" ]; then
         echo "error: no beta release found" >&2
         exit 1
