@@ -63,6 +63,7 @@ If ANY check fails, report what failed."
   # Prepare verify log
   local verify_log=".claudeloop/logs/phase-$phase_num.verify.log"
   mkdir -p ".claudeloop/logs"
+  : > "$verify_log"
 
   # Run claude in a killable background process group
   local _exit_tmp _skip_flag
@@ -85,6 +86,23 @@ If ANY check fails, report what failed."
   CURRENT_PIPELINE_PGID=$!
   set +m
 
+  # Stream verify log to stderr and LIVE_LOG with [verify] prefix
+  CURRENT_TAIL_PID=""
+  CURRENT_TAIL_PGID=""
+  if [ -n "${LIVE_LOG:-}" ]; then
+    set -m
+    {
+      exec 3<&- 2>/dev/null   # prevent fd leak (matches ai_parser.sh pattern)
+      tail -f "$verify_log" 2>/dev/null | while IFS= read -r _vline; do
+        printf ' [verify] %s\n' "$_vline" >&2
+        printf '[%s] [verify] %s\n' "$(date '+%H:%M:%S')" "$_vline" >> "$LIVE_LOG"
+      done
+    } &
+    CURRENT_TAIL_PID=$!
+    CURRENT_TAIL_PGID=$!
+    set +m
+  fi
+
   # Timeout: use MAX_PHASE_TIME if set, otherwise default 300s for verification
   local _timer_pid _vp_pid _vp_pgid _verify_timeout
   _timer_pid=""
@@ -100,6 +118,15 @@ If ANY check fails, report what failed."
   set +m
 
   wait "$CURRENT_PIPELINE_PID" || true
+
+  # Kill verify tail streamer
+  if [ -n "$CURRENT_TAIL_PGID" ] && [ "${CURRENT_TAIL_PGID:-0}" -gt 1 ]; then
+    kill -TERM -- "-$CURRENT_TAIL_PGID" 2>/dev/null || true
+    wait "$CURRENT_TAIL_PID" 2>/dev/null || true
+  fi
+  CURRENT_TAIL_PID=""
+  CURRENT_TAIL_PGID=""
+
   # Kill remaining processes (claude CLI may outlive the subshell)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true

@@ -54,6 +54,8 @@ STUB
 }
 
 teardown() {
+  # Kill any leftover background processes (tail -f, etc.)
+  jobs -p 2>/dev/null | xargs kill 2>/dev/null || true
   cd /
   rm -rf "$TEST_DIR"
 }
@@ -243,4 +245,38 @@ STUB
   verify_phase "1" ".claudeloop/logs/phase-1.log"
   [ -z "$CURRENT_PIPELINE_PID" ]
   [ -z "$CURRENT_PIPELINE_PGID" ]
+}
+
+# =============================================================================
+# Live log streaming
+# =============================================================================
+
+@test "verify_phase: streams output to LIVE_LOG with [verify] prefix" {
+  VERIFY_PHASES=true
+  LIVE_LOG="$TEST_DIR/.claudeloop/live.log"
+  : > "$LIVE_LOG"
+  # Use a claude stub that writes slowly so tail -f can pick it up
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf 'Running verification...\n'
+sleep 0.1
+printf 'ToolUse: Bash {"command":"bats tests/test_parser.sh"}\n'
+sleep 0.1
+printf 'All checks passed.\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+  verify_phase "1" ".claudeloop/logs/phase-1.log" 2>/dev/null
+  # LIVE_LOG should contain [verify] prefixed lines
+  grep -q '\[verify\]' "$LIVE_LOG"
+}
+
+@test "verify_phase: no tail when LIVE_LOG is empty" {
+  VERIFY_PHASES=true
+  LIVE_LOG=""
+  verify_phase "1" ".claudeloop/logs/phase-1.log" 2>/dev/null
+  # Should succeed without errors; CURRENT_TAIL_PID should be empty
+  [ -z "${CURRENT_TAIL_PID:-}" ]
+  [ -z "${CURRENT_TAIL_PGID:-}" ]
 }
