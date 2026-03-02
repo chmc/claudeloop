@@ -447,6 +447,24 @@ ai_parse_and_verify() {
     retry=$((retry + 1))
     if [ "$retry" -gt "$max_retries" ]; then
       print_error "AI verification failed after $max_retries retries"
+      # YES_MODE and non-interactive: hard-fail
+      if [ "${YES_MODE:-false}" = "true" ]; then
+        exec 3<&-
+        return 1
+      elif [ -n "${_AI_VERIFY_FORCE:-}" ] || [ -t 0 ]; then
+        # Interactive: offer continue/abort if plan has phases
+        if grep -q '^## Phase [0-9]' "$ai_plan" 2>/dev/null; then
+          printf 'Max retries reached. [C]ontinue as-is / [a]bort? (C/a) '
+          read -r _answer <&3
+          case "$_answer" in
+            [Aa]*) exec 3<&-; return 1 ;;
+          esac
+          # Continue: clean up and return success
+          rm -f "$cl_dir/ai-verify-reason.txt"
+          exec 3<&-
+          return 0
+        fi
+      fi
       exec 3<&-
       return 1
     fi
@@ -455,10 +473,21 @@ ai_parse_and_verify() {
     if [ "${YES_MODE:-false}" = "true" ]; then
       print_warning "Auto-retrying (YES_MODE, attempt $retry/$max_retries)..."
     elif [ -n "${_AI_VERIFY_FORCE:-}" ] || [ -t 0 ]; then
-      printf 'Send feedback to AI and retry? (Y/n) '
+      printf '[R]etry with feedback / [c]ontinue as-is / [a]bort? (R/c/a) '
       read -r _answer <&3
       case "$_answer" in
-        [Nn]*) exec 3<&-; return 1 ;;
+        [Aa]*) exec 3<&-; return 1 ;;
+        [Cc]*)
+          # Continue with plan as-is if it has at least one phase
+          if grep -q '^## Phase [0-9]' "$ai_plan" 2>/dev/null; then
+            rm -f "$cl_dir/ai-verify-reason.txt"
+            exec 3<&-
+            return 0
+          fi
+          print_error "Parsed plan has no phases — cannot continue"
+          exec 3<&-
+          return 1
+          ;;
       esac
     else
       # Non-interactive, non-YES_MODE

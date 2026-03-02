@@ -909,7 +909,7 @@ EOF
   [ "$(cat "$TEST_DIR/call_count")" = "4" ]
 }
 
-@test "ai_parse_and_verify: exits when user says n" {
+@test "ai_parse_and_verify: exits when user says a (abort)" {
   # Call 1: parse. Call 2: verify (FAIL)
   cat > "$TEST_DIR/bin/claude" << 'MOCK'
 #!/bin/sh
@@ -937,10 +937,7 @@ MOCK
 Build a thing.
 EOF
 
-  # Write "n" to a file and redirect stdin inside sh -c.
-  # bats "run" may redirect stdin from /dev/null, so the redirect
-  # must happen inside the sh -c script to survive.
-  printf 'n\n' > "$TEST_DIR/user_input"
+  printf 'a\n' > "$TEST_DIR/user_input"
   local script_dir="${BATS_TEST_DIRNAME}/.."
   run env \
     LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
@@ -955,6 +952,235 @@ EOF
     '
   [ "$status" -eq 1 ]
   [ "$(cat "$TEST_DIR/call_count")" = "2" ]
+}
+
+@test "ai_parse_and_verify: continues as-is when user says c" {
+  # Call 1: parse (valid). Call 2: verify (FAIL). User types 'c' → return 0
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMinor title rephrasing.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  printf 'c\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+    '
+  [ "$status" -eq 0 ]
+  # Plan file should still exist
+  [ -f "$TEST_DIR/.claudeloop/ai-parsed-plan.md" ]
+  # ai-verify-reason.txt should be cleaned up
+  [ ! -f "$TEST_DIR/.claudeloop/ai-verify-reason.txt" ]
+  # Only 2 claude calls (parse + verify), no reparse
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
+}
+
+@test "ai_parse_and_verify: retries on R or empty input" {
+  # Call 1: parse. Call 2: verify (FAIL). User types '' (enter). Call 3: reparse. Call 4: verify (PASS)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMissing build phase.\n' | text_to_stream_json ;;
+  3) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+
+## Phase 2: Build
+Build it.
+ENDOUT
+    ;;
+  4) echo "PASS" | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing with a build step.
+EOF
+
+  # Empty input (just Enter) should retry
+  printf '\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+    '
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/call_count")" = "4" ]
+}
+
+@test "ai_parse_and_verify: continues as-is after max retries when user says c" {
+  # All verify calls return FAIL. After max retries, user types 'c' → return 0
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case $((count % 2)) in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  0) printf 'FAIL\nStill missing stuff.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+  export AI_RETRY_MAX=1
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  # Provide 'R' for the first prompt (retry), then 'c' for the max-retries prompt
+  printf 'R\nc\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false AI_RETRY_MAX=1 \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+    '
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_parse_and_verify: aborts after max retries when user says a" {
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case $((count % 2)) in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  0) printf 'FAIL\nStill missing stuff.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=false
+  export AI_RETRY_MAX=1
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  # Provide 'R' for the first prompt (retry), then 'a' for the max-retries prompt
+  printf 'R\na\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false AI_RETRY_MAX=1 \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+    '
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_and_verify: YES_MODE hard-fails at max retries" {
+  # All verify calls return FAIL — YES_MODE should still hard-fail (no continue option)
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case $((count % 2)) in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  0) printf 'FAIL\nStill missing stuff.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+  export AI_RETRY_MAX=1
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
 }
 
 @test "ai_parse_and_verify: auto-retries in YES_MODE" {
