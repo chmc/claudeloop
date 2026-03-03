@@ -321,8 +321,13 @@ detect_plan_changes() {
     done
 
     if [ -z "$matched_old_num" ]; then
-      # Phase added — leave as pending
+      # Phase added — explicitly reset to defaults (init_progress may have loaded stale
+      # status from PROGRESS.md by phase number before detect_plan_changes ran)
       had_changes=true
+      eval "PHASE_STATUS_${new_iv}=pending"
+      eval "PHASE_ATTEMPTS_${new_iv}=0"
+      eval "PHASE_START_TIME_${new_iv}=''"
+      eval "PHASE_END_TIME_${new_iv}=''"
       printf '[%s] Plan change: Phase added — "%s" (new Phase %s)\n' "$(date '+%H:%M:%S')" "$new_title" "$new_i"
     else
       matched_old_phases="$matched_old_phases $matched_old_num"
@@ -413,11 +418,174 @@ detect_plan_changes() {
   done
 
   if $had_changes; then
+    # Backup before any further writes might overwrite the old progress
+    cp "$progress_file" "${progress_file}.bak"
+
+    # Count removed phases
+    local removed_count=0
+    for old_k in $_OLD_PHASE_NUMBERS; do
+      if ! echo " $matched_old_phases " | grep -qF " $old_k "; then
+        local _rkv
+        _rkv=$(phase_to_var "$old_k")
+        local _rtitle
+        _rtitle=$(eval "echo \"\$_OLD_PHASE_TITLE_${_rkv}\"")
+        [ -n "$_rtitle" ] && removed_count=$((removed_count + 1))
+      fi
+    done
+
+    # Drastic change guard: >50% removed and old count > 4
+    if [ "$_OLD_PHASE_COUNT" -gt 4 ] && [ "$removed_count" -gt 0 ]; then
+      local _pct=$(( (removed_count * 100) / _OLD_PHASE_COUNT ))
+      if [ "$_pct" -gt 50 ]; then
+        printf '\n[%s] ⚠ Drastic plan change: %s of %s old phases removed (%s%%).\n' \
+          "$(date '+%H:%M:%S')" "$removed_count" "$_OLD_PHASE_COUNT" "$_pct"
+        if [ -f ".claudeloop/ai-parsed-plan.md" ]; then
+          printf '[%s]   Hint: use --plan .claudeloop/ai-parsed-plan.md if you meant the AI-parsed plan.\n' "$(date '+%H:%M:%S')"
+        fi
+        if [ -d ".claudeloop/logs" ] && ls .claudeloop/logs/phase-*.log >/dev/null 2>&1; then
+          printf '[%s]   Hint: use --recover-progress to reconstruct progress from logs.\n' "$(date '+%H:%M:%S')"
+        fi
+        printf '[%s]   Backup saved to %s\n' "$(date '+%H:%M:%S')" "${progress_file}.bak"
+
+        if [ "$YES_MODE" = "true" ]; then
+          printf '[%s]   YES_MODE active — proceeding automatically.\n' "$(date '+%H:%M:%S')"
+        elif [ -t 0 ]; then
+          printf 'Continue? (y/N) '
+          read -r _ans
+          case "$_ans" in
+            [yY]*) ;;
+            *) printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"; return 1 ;;
+          esac
+        else
+          printf '[%s] Non-interactive mode — aborting to prevent data loss.\n' "$(date '+%H:%M:%S')"
+          return 1
+        fi
+      fi
+    fi
+
     echo ""
     printf '[%s] Plan has changed since last run. Progress reconciled by title matching.\n' "$(date '+%H:%M:%S')"
   fi
 
   return 0
+}
+
+# Recover progress from log files in .claudeloop/logs/
+# Reconstructs PHASE_STATUS/ATTEMPTS/START_TIME/END_TIME from ground truth in log files.
+# Args: $1 - project dir (e.g. .claudeloop), $2 - progress file path, $3 - plan file path
+recover_progress_from_logs() {
+  local project_dir="$1"
+  local progress_file="$2"
+  local plan_file="$3"
+  local logs_dir="$project_dir/logs"
+
+  # Initialize all phases to defaults
+  for _phase in $PHASE_NUMBERS; do
+    local _pv
+    _pv=$(phase_to_var "$_phase")
+    eval "PHASE_STATUS_${_pv}=pending"
+    eval "PHASE_ATTEMPTS_${_pv}=0"
+    eval "PHASE_START_TIME_${_pv}=''"
+    eval "PHASE_END_TIME_${_pv}=''"
+  done
+
+  # Process each phase
+  for _phase in $PHASE_NUMBERS; do
+    local _pv
+    _pv=$(phase_to_var "$_phase")
+    local log_file="$logs_dir/phase-${_phase}.log"
+
+    if [ ! -f "$log_file" ]; then
+      # No log file — phase never started
+      continue
+    fi
+
+    # Count attempts: archived attempt files + 1 for current log
+    local attempt_count=0
+    for _af in "$logs_dir"/phase-"${_phase}".attempt-*.log; do
+      [ -f "$_af" ] && attempt_count=$((attempt_count + 1))
+    done
+    attempt_count=$((attempt_count + 1))
+    eval "PHASE_ATTEMPTS_${_pv}=$attempt_count"
+
+    # Extract start time from EXECUTION START line
+    local start_time
+    start_time=$(sed -n 's/^=== EXECUTION START .* time=\([^ ]*\) ===$/\1/p' "$log_file" | tail -1)
+    if [ -n "$start_time" ]; then
+      start_time=$(printf '%s' "$start_time" | sed 's/T/ /')
+      eval "PHASE_START_TIME_${_pv}='$start_time'"
+    fi
+
+    # Check for EXECUTION END
+    local end_line
+    end_line=$(grep '^=== EXECUTION END ' "$log_file" | tail -1)
+    if [ -z "$end_line" ]; then
+      # No end marker — interrupted, leave as pending
+      continue
+    fi
+
+    # Extract exit code and end time
+    local exit_code end_time
+    exit_code=$(printf '%s' "$end_line" | sed -n 's/.*exit_code=\([0-9]*\).*/\1/p')
+    end_time=$(printf '%s' "$end_line" | sed -n 's/.* time=\([^ ]*\) ===$/\1/p')
+    if [ -n "$end_time" ]; then
+      end_time=$(printf '%s' "$end_time" | sed 's/T/ /')
+      eval "PHASE_END_TIME_${_pv}='$end_time'"
+    fi
+
+    # Determine status
+    local phase_ok=false
+    if [ "$exit_code" = "0" ]; then
+      phase_ok=true
+    elif has_successful_session "$log_file" 2>/dev/null; then
+      phase_ok=true
+    fi
+
+    if $phase_ok; then
+      # Check verify.log if it exists
+      local verify_log="$logs_dir/phase-${_phase}.verify.log"
+      if [ -f "$verify_log" ]; then
+        if grep -q 'VERIFICATION_PASSED' "$verify_log"; then
+          eval "PHASE_STATUS_${_pv}=completed"
+        else
+          eval "PHASE_STATUS_${_pv}=failed"
+        fi
+      else
+        eval "PHASE_STATUS_${_pv}=completed"
+      fi
+    else
+      eval "PHASE_STATUS_${_pv}=failed"
+    fi
+  done
+
+  # Warn about unknown phase logs
+  if [ -d "$logs_dir" ]; then
+    for _lf in "$logs_dir"/phase-*.log; do
+      [ -f "$_lf" ] || continue
+      # Skip attempt and verify logs
+      case "$_lf" in
+        *.attempt-*.log|*.verify.log|*.raw.json) continue ;;
+      esac
+      local _lnum
+      _lnum=$(printf '%s' "$_lf" | sed -n 's|.*/phase-\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)\.log$|\1|p')
+      [ -z "$_lnum" ] && continue
+      local _found=false
+      for _p in $PHASE_NUMBERS; do
+        if [ "$_p" = "$_lnum" ]; then
+          _found=true
+          break
+        fi
+      done
+      if ! $_found; then
+        printf '[%s] Warning: Log file for phase %s not in current plan — possible wrong plan file.\n' \
+          "$(date '+%H:%M:%S')" "$_lnum"
+      fi
+    done
+  fi
+
+  # Write the recovered progress
+  write_progress "$progress_file" "$plan_file"
+  printf '[%s] Progress recovered from logs → %s\n' "$(date '+%H:%M:%S')" "$progress_file"
 }
 
 # Update phase status

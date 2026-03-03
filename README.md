@@ -71,6 +71,7 @@ See `examples/PLAN.md.example` for a complete example.
 --continue           Resume from last checkpoint
 --phase <n>          Start from specific phase number
 --mark-complete <n>  Mark a phase as completed (use when a phase succeeded but was logged as failed)
+--recover-progress   Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
 --force              Kill any running instance and take over (preserves progress)
 --dry-run            Validate plan without executing
 --max-retries <n>    Max retry attempts per phase (default: 5)
@@ -254,6 +255,10 @@ Or to tail the raw log directly:
     claudeloop --mark-complete 1
 
 If the repo has uncommitted changes from the prior session, ClaudeLoop detects the existing progress and skips the uncommitted-changes gate automatically.
+
+**Progress corrupted (wrong plan file overwrote PROGRESS.md)** — ClaudeLoop now backs up PROGRESS.md before overwriting and warns on drastic plan changes. If progress was already lost, reconstruct it from execution logs:
+
+    claudeloop --plan your-plan.md --recover-progress
 
 ## Testing
 

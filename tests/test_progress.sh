@@ -663,3 +663,468 @@ EOF
   [ "$PHASE_ATTEMPT_TIME_1_1" = "2026-02-22 10:00:00" ]
   [ "$PHASE_ATTEMPT_TIME_1_2" = "2026-02-22 10:05:00" ]
 }
+
+# --- Fix 1: Unmatched phases must be reset ---
+
+@test "detect_plan_changes: all unmatched phases reset to pending (collision bug)" {
+  # Simulate: old PROGRESS.md had 6 completed phases with different titles
+  PHASE_COUNT=6
+  PHASE_NUMBERS="1 2 3 4 5 6"
+  PHASE_TITLE_1="New Alpha"
+  PHASE_TITLE_2="New Beta"
+  PHASE_TITLE_3="New Gamma"
+  PHASE_TITLE_4="New Delta"
+  PHASE_TITLE_5="New Epsilon"
+  PHASE_TITLE_6="New Zeta"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3=""
+  PHASE_DEPENDENCIES_4="" PHASE_DEPENDENCIES_5="" PHASE_DEPENDENCIES_6=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_STATUS_4="pending" PHASE_STATUS_5="pending" PHASE_STATUS_6="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  PHASE_ATTEMPTS_4=0 PHASE_ATTEMPTS_5=0 PHASE_ATTEMPTS_6=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Old Alpha
+Status: completed
+Started: 2026-03-01 10:00:00
+Completed: 2026-03-01 10:05:00
+Attempts: 1
+
+### ✅ Phase 2: Old Beta
+Status: completed
+Started: 2026-03-01 10:10:00
+Completed: 2026-03-01 10:15:00
+Attempts: 1
+
+### ✅ Phase 3: Old Gamma
+Status: completed
+Started: 2026-03-01 10:20:00
+Completed: 2026-03-01 10:25:00
+Attempts: 1
+
+### ✅ Phase 4: Old Delta
+Status: completed
+Started: 2026-03-01 10:30:00
+Completed: 2026-03-01 10:35:00
+Attempts: 1
+
+### ✅ Phase 5: Old Epsilon
+Status: completed
+Started: 2026-03-01 10:40:00
+Completed: 2026-03-01 10:45:00
+Attempts: 1
+
+### ✅ Phase 6: Old Zeta
+Status: completed
+Started: 2026-03-01 10:50:00
+Completed: 2026-03-01 10:55:00
+Attempts: 1
+EOF
+  # init_progress reads by number, polluting PHASE_STATUS with old "completed" values
+  init_progress "$TEST_DIR/PROGRESS.md"
+  # detect_plan_changes should reset all unmatched phases
+  YES_MODE=true
+  detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "pending" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
+  [ "$PHASE_STATUS_4" = "pending" ]
+  [ "$PHASE_STATUS_5" = "pending" ]
+  [ "$PHASE_STATUS_6" = "pending" ]
+  [ "$PHASE_ATTEMPTS_1" = "0" ]
+  [ "$PHASE_ATTEMPTS_2" = "0" ]
+}
+
+@test "detect_plan_changes: mixed — matched keep status, unmatched reset" {
+  PHASE_COUNT=6
+  PHASE_NUMBERS="1 2 3 4 5 6"
+  PHASE_TITLE_1="Keep One"
+  PHASE_TITLE_2="Keep Two"
+  PHASE_TITLE_3="Keep Three"
+  PHASE_TITLE_4="New Four"
+  PHASE_TITLE_5="New Five"
+  PHASE_TITLE_6="New Six"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3=""
+  PHASE_DEPENDENCIES_4="" PHASE_DEPENDENCIES_5="" PHASE_DEPENDENCIES_6=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_STATUS_4="pending" PHASE_STATUS_5="pending" PHASE_STATUS_6="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  PHASE_ATTEMPTS_4=0 PHASE_ATTEMPTS_5=0 PHASE_ATTEMPTS_6=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Keep One
+Status: completed
+Started: 2026-03-01 10:00:00
+Completed: 2026-03-01 10:05:00
+Attempts: 2
+
+### ✅ Phase 2: Keep Two
+Status: completed
+Attempts: 1
+
+### ❌ Phase 3: Keep Three
+Status: failed
+Attempts: 3
+
+### ✅ Phase 4: Old Four
+Status: completed
+Attempts: 1
+
+### ✅ Phase 5: Old Five
+Status: completed
+Attempts: 1
+
+### ✅ Phase 6: Old Six
+Status: completed
+Attempts: 1
+EOF
+  init_progress "$TEST_DIR/PROGRESS.md"
+  detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  # Matched phases keep their status
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_ATTEMPTS_1" = "2" ]
+  [ "$PHASE_STATUS_2" = "completed" ]
+  [ "$PHASE_STATUS_3" = "failed" ]
+  [ "$PHASE_ATTEMPTS_3" = "3" ]
+  # Unmatched phases reset
+  [ "$PHASE_STATUS_4" = "pending" ]
+  [ "$PHASE_ATTEMPTS_4" = "0" ]
+  [ "$PHASE_STATUS_5" = "pending" ]
+  [ "$PHASE_STATUS_6" = "pending" ]
+}
+
+# --- Fix 2: Backup + drastic change guard ---
+
+@test "detect_plan_changes: creates .bak when changes detected" {
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="New Phase"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ -f "$TEST_DIR/PROGRESS.md.bak" ]
+}
+
+@test "detect_plan_changes: no .bak when no changes" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: Phase One
+Status: pending
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ ! -f "$TEST_DIR/PROGRESS.md.bak" ]
+}
+
+@test "detect_plan_changes: drastic change warning when >50% removed, count>4" {
+  # New plan has 3 phases, old had 8 — 5 removed (62.5%)
+  PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
+  PHASE_TITLE_1="Alpha"
+  PHASE_TITLE_2="Beta"
+  PHASE_TITLE_3="Gamma"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Alpha
+Status: completed
+
+### ✅ Phase 2: Beta
+Status: completed
+
+### ✅ Phase 3: Gamma
+Status: completed
+
+### ✅ Phase 4: Delta
+Status: completed
+
+### ✅ Phase 5: Epsilon
+Status: completed
+
+### ✅ Phase 6: Zeta
+Status: completed
+
+### ✅ Phase 7: Eta
+Status: completed
+
+### ✅ Phase 8: Theta
+Status: completed
+EOF
+  YES_MODE=true
+  output=$(detect_plan_changes "$TEST_DIR/PROGRESS.md" 2>&1)
+  echo "$output" | grep -q "Drastic plan change"
+}
+
+@test "detect_plan_changes: no drastic warning for minor removals" {
+  # New plan has 4 phases, old had 5 — 1 removed (20%)
+  PHASE_COUNT=4
+  PHASE_NUMBERS="1 2 3 4"
+  PHASE_TITLE_1="A"
+  PHASE_TITLE_2="B"
+  PHASE_TITLE_3="C"
+  PHASE_TITLE_4="D"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3="" PHASE_DEPENDENCIES_4=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending" PHASE_STATUS_4="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0 PHASE_ATTEMPTS_4=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: A
+Status: pending
+
+### ⏳ Phase 2: B
+Status: pending
+
+### ⏳ Phase 3: C
+Status: pending
+
+### ⏳ Phase 4: D
+Status: pending
+
+### ⏳ Phase 5: E
+Status: pending
+EOF
+  output=$(detect_plan_changes "$TEST_DIR/PROGRESS.md" 2>&1)
+  ! echo "$output" | grep -q "Drastic plan change"
+}
+
+@test "detect_plan_changes: YES_MODE proceeds automatically on drastic change" {
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Alpha"
+  PHASE_TITLE_2="Beta"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Alpha
+Status: completed
+
+### ✅ Phase 2: Beta
+Status: completed
+
+### ✅ Phase 3: Gamma
+Status: completed
+
+### ✅ Phase 4: Delta
+Status: completed
+
+### ✅ Phase 5: Epsilon
+Status: completed
+EOF
+  YES_MODE=true
+  run detect_plan_changes "$TEST_DIR/PROGRESS.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "detect_plan_changes: non-interactive aborts on drastic change" {
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Alpha"
+  PHASE_TITLE_2="Beta"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Alpha
+Status: completed
+
+### ✅ Phase 2: Beta
+Status: completed
+
+### ✅ Phase 3: Gamma
+Status: completed
+
+### ✅ Phase 4: Delta
+Status: completed
+
+### ✅ Phase 5: Epsilon
+Status: completed
+EOF
+  YES_MODE=false
+  # Pipe from /dev/null to ensure non-interactive (stdin is not a TTY)
+  run detect_plan_changes "$TEST_DIR/PROGRESS.md" < /dev/null
+  [ "$status" -eq 1 ]
+}
+
+# --- recover_progress_from_logs() ---
+
+setup_recovery() {
+  # Source retry.sh for has_successful_session
+  . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
+  PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2="1"
+  PHASE_DEPENDENCIES_3="2"
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+}
+
+@test "recover_progress_from_logs: completed phase (exit_code=0, VERIFICATION_PASSED)" {
+  setup_recovery
+  VERIFY_PHASES=true
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+some output
+=== EXECUTION END exit_code=0 duration=60s time=2026-03-01T10:01:00 ===
+EOF
+  printf '{"type":"text","text":"VERIFICATION_PASSED"}\n' > "$TEST_DIR/.claudeloop/logs/phase-1.verify.log"
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_ATTEMPTS_1" = "1" ]
+  [ "$PHASE_START_TIME_1" = "2026-03-01 10:00:00" ]
+  [ "$PHASE_END_TIME_1" = "2026-03-01 10:01:00" ]
+}
+
+@test "recover_progress_from_logs: completed phase (exit_code=0, no verify.log)" {
+  setup_recovery
+  VERIFY_PHASES=false
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+}
+
+@test "recover_progress_from_logs: failed phase (exit_code=1)" {
+  setup_recovery
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+error output
+=== EXECUTION END exit_code=1 duration=10s time=2026-03-01T10:00:10 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "failed" ]
+}
+
+@test "recover_progress_from_logs: failed phase (exit_code=0, VERIFICATION_FAILED)" {
+  setup_recovery
+  VERIFY_PHASES=true
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  printf '{"type":"text","text":"VERIFICATION_FAILED"}\n' > "$TEST_DIR/.claudeloop/logs/phase-1.verify.log"
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "failed" ]
+}
+
+@test "recover_progress_from_logs: failed phase (exit_code=0, verify.log exists but no PASSED)" {
+  setup_recovery
+  VERIFY_PHASES=true
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  printf '{"type":"text","text":"some other output"}\n' > "$TEST_DIR/.claudeloop/logs/phase-1.verify.log"
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "failed" ]
+}
+
+@test "recover_progress_from_logs: interrupted phase (no EXECUTION END) → pending" {
+  setup_recovery
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+partial output...
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "pending" ]
+}
+
+@test "recover_progress_from_logs: attempt counting from archived logs" {
+  setup_recovery
+  # 2 archived attempts + current = 3 total
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.attempt-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T09:00:00 ===
+first try
+=== EXECUTION END exit_code=1 duration=10s time=2026-03-01T09:00:10 ===
+EOF
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.attempt-2.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=2 time=2026-03-01T09:30:00 ===
+second try
+=== EXECUTION END exit_code=1 duration=10s time=2026-03-01T09:30:10 ===
+EOF
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=3 time=2026-03-01T10:00:00 ===
+third try
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_ATTEMPTS_1" = "3" ]
+  [ "$PHASE_STATUS_1" = "completed" ]
+}
+
+@test "recover_progress_from_logs: phases with no logs → pending" {
+  setup_recovery
+  # No log files at all for phase 2 and 3
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  [ "$PHASE_ATTEMPTS_2" = "0" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
+}
+
+@test "recover_progress_from_logs: has_successful_session fallback" {
+  setup_recovery
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+[Session: completed, turns=5, duration=120s]
+=== EXECUTION END exit_code=1 duration=120s time=2026-03-01T10:02:00 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+}
+
+@test "recover_progress_from_logs: warns about unknown phase logs" {
+  setup_recovery
+  cat > "$TEST_DIR/.claudeloop/logs/phase-99.log" << 'EOF'
+=== EXECUTION START phase=99 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  output=$(recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md" 2>&1)
+  echo "$output" | grep -q "not in current plan"
+}
+
+@test "recover_progress_from_logs: writes valid PROGRESS.md" {
+  setup_recovery
+  cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+output
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  cat > "$TEST_DIR/.claudeloop/logs/phase-2.log" << 'EOF'
+=== EXECUTION START phase=2 attempt=1 time=2026-03-01T10:05:00 ===
+output
+=== EXECUTION END exit_code=1 duration=10s time=2026-03-01T10:05:10 ===
+EOF
+  recover_progress_from_logs "$TEST_DIR/.claudeloop" "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  [ -f "$TEST_DIR/PROGRESS.md" ]
+  grep -q "Status: completed" "$TEST_DIR/PROGRESS.md"
+  grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
+  grep -q "Status: pending" "$TEST_DIR/PROGRESS.md"
+}

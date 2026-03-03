@@ -77,6 +77,7 @@ _WIZARD_FORCE="${_WIZARD_FORCE:-}"
 YES_MODE="${YES_MODE:-false}"
 RESUME_MODE=false
 MARK_COMPLETE_PHASE=""
+RECOVER_PROGRESS=false
 
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
@@ -488,6 +489,7 @@ Options:
   --continue             Continue from last checkpoint (default)
   --phase <n>            Start from specific phase number
   --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
+  --recover-progress     Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
   --max-retries <n>      Maximum retry attempts per phase (default: 5)
@@ -617,6 +619,10 @@ parse_args() {
         ;;
       --verify)
         VERIFY_PHASES=true; _CLI_VERIFY_PHASES=1
+        shift
+        ;;
+      --recover-progress)
+        RECOVER_PROGRESS=true
         shift
         ;;
       --monitor)
@@ -1340,16 +1346,6 @@ main() {
     PLAN_FILE="$ai_plan"
   fi
 
-  # --continue with existing AI plan: reuse if config confirms AI was used
-  if [ "$RESUME_MODE" = "true" ] && [ -f ".claudeloop/ai-parsed-plan.md" ]; then
-    local _saved_ai_parse
-    _saved_ai_parse=$(grep '^AI_PARSE=' ".claudeloop/.claudeloop.conf" 2>/dev/null | cut -d= -f2)
-    if [ "$_saved_ai_parse" = "true" ]; then
-      PLAN_FILE=".claudeloop/ai-parsed-plan.md"
-      _parse_msg="Using cached plan"
-    fi
-  fi
-
   # Parse plan
   if [ "$_parse_msg" = "Parsing plan file" ]; then
     print_success "$_parse_msg: $PLAN_FILE"
@@ -1387,6 +1383,15 @@ main() {
   # Check for interrupted session (skip in dry-run and reset)
   if ! $DRY_RUN && ! $RESET_PROGRESS; then
     load_state || true
+  fi
+
+  # Recover progress from logs if requested
+  if [ "$RECOVER_PROGRESS" = "true" ]; then
+    if [ -f "$PROGRESS_FILE" ]; then
+      cp "$PROGRESS_FILE" "${PROGRESS_FILE}.bak"
+      printf '[%s] Backed up existing progress to %s\n' "$(date '+%H:%M:%S')" "${PROGRESS_FILE}.bak"
+    fi
+    recover_progress_from_logs ".claudeloop" "$PROGRESS_FILE" "$PLAN_FILE"
   fi
 
   # Initialize progress
