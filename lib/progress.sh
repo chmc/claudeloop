@@ -482,6 +482,7 @@ detect_orphan_logs() {
   local project_dir="$1"
   local logs_dir="$project_dir/logs"
   _ORPHAN_LOG_PHASES=""
+  _ORPHAN_RECOVERY_ACTION=""
 
   # No logs dir → nothing to check
   if [ ! -d "$logs_dir" ]; then
@@ -515,46 +516,64 @@ detect_orphan_logs() {
     return 0
   fi
 
+  _ORPHAN_RECOVERY_ACTION=""
+  local _has_ai_plan=false
+  if [ -f "$project_dir/ai-parsed-plan.md" ]; then
+    _has_ai_plan=true
+  fi
+
   printf '\n[%s] ⚠ Orphan log files detected for phases not in the current plan: %s\n' \
     "$(date '+%H:%M:%S')" "$_ORPHAN_LOG_PHASES"
   printf '[%s]   This may indicate corrupted progress from a previous run with a different plan.\n' \
     "$(date '+%H:%M:%S')"
-  if [ -f "$project_dir/ai-parsed-plan.md" ]; then
-    printf '[%s]   Hint: use --plan %s/ai-parsed-plan.md if you meant the AI-parsed plan.\n' \
-      "$(date '+%H:%M:%S')" "$project_dir"
+  if $_has_ai_plan; then
+    printf '[%s]   → Will switch to ai-parsed-plan.md and recover progress from logs.\n' \
+      "$(date '+%H:%M:%S')"
+  else
+    printf '[%s]   Hint: use --reset to start fresh.\n' "$(date '+%H:%M:%S')"
   fi
-  printf '[%s]   Hint: use --reset to start fresh.\n' "$(date '+%H:%M:%S')"
 
   if [ "$YES_MODE" = "true" ]; then
     printf '[%s]   YES_MODE active — continuing automatically.\n' "$(date '+%H:%M:%S')"
+    _ORPHAN_RECOVERY_ACTION=continue
     return 0
   elif [ -t 0 ] || [ "${_ORPHAN_FORCE_TTY:-}" = "true" ]; then
-    printf '[r]eset (recommended) / [c]ontinue / [a]bort? '
-    read -r _ans
-    case "$_ans" in
-      [rR]*)
-        printf '[%s] Resetting all phase statuses to pending.\n' "$(date '+%H:%M:%S')"
-        for _p in $PHASE_NUMBERS; do
-          local _pv
-          _pv=$(phase_to_var "$_p")
-          eval "PHASE_STATUS_${_pv}=pending"
-          eval "PHASE_ATTEMPTS_${_pv}=0"
-          eval "PHASE_START_TIME_${_pv}=''"
-          eval "PHASE_END_TIME_${_pv}=''"
-        done
-        return 0
-        ;;
-      [cC]*)
-        printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
-        return 0
-        ;;
-      *)
-        printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
-        return 1
-        ;;
-    esac
+    if $_has_ai_plan; then
+      printf '[r]ecover (recommended) / [c]ontinue / [a]bort? '
+      read -r _ans
+      case "$_ans" in
+        [rR]*)
+          _ORPHAN_RECOVERY_ACTION=recover
+          return 0
+          ;;
+        [cC]*)
+          printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
+          _ORPHAN_RECOVERY_ACTION=continue
+          return 0
+          ;;
+        *)
+          printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
+          return 1
+          ;;
+      esac
+    else
+      printf '[c]ontinue / [a]bort? '
+      read -r _ans
+      case "$_ans" in
+        [cC]*)
+          printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
+          _ORPHAN_RECOVERY_ACTION=continue
+          return 0
+          ;;
+        *)
+          printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
+          return 1
+          ;;
+      esac
+    fi
   else
     printf '[%s] Non-interactive mode — continuing (use --reset to start fresh).\n' "$(date '+%H:%M:%S')"
+    _ORPHAN_RECOVERY_ACTION=continue
     return 0
   fi
 }

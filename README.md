@@ -260,6 +260,11 @@ If the repo has uncommitted changes from the prior session, ClaudeLoop detects t
 
     claudeloop --plan your-plan.md --recover-progress
 
+**Orphan log detection** — When ClaudeLoop finds log files for phases not in the current plan (e.g., after switching between `--ai-parse` and manual plans), it warns and offers options:
+
+- If `.claudeloop/ai-parsed-plan.md` exists: `[r]ecover` (recommended) switches to the AI-parsed plan and reconstructs progress from logs automatically, `[c]ontinue`, or `[a]bort`
+- If no AI-parsed plan exists: `[c]ontinue` or `[a]bort` (with `--reset` hint)
+
 ## Testing
 
 ```bash

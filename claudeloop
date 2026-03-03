@@ -694,6 +694,26 @@ validate_environment() {
 
 }
 
+# Handle orphan recovery when detect_orphan_logs signals _ORPHAN_RECOVERY_ACTION=recover.
+# Switches to ai-parsed-plan.md, re-parses, and recovers progress from logs.
+handle_orphan_recovery() {
+  [ "${_ORPHAN_RECOVERY_ACTION:-}" = "recover" ] || return 0
+
+  printf '[%s] Switching plan to .claudeloop/ai-parsed-plan.md\n' "$(date '+%H:%M:%S')"
+  PLAN_FILE=".claudeloop/ai-parsed-plan.md"
+  parse_plan "$PLAN_FILE"
+  printf '[%s] Re-parsed: %s phases\n' "$(date '+%H:%M:%S')" "$PHASE_COUNT"
+
+  if [ -f "$PROGRESS_FILE" ]; then
+    cp "$PROGRESS_FILE" "${PROGRESS_FILE}.bak"
+    printf '[%s] Backed up progress to %s\n' "$(date '+%H:%M:%S')" "${PROGRESS_FILE}.bak"
+  fi
+
+  recover_progress_from_logs ".claudeloop" "$PROGRESS_FILE" "$PLAN_FILE"
+
+  _PLAN_HAD_CHANGES=""
+}
+
 # Offer to set up .gitignore for claudeloop artifacts
 setup_project() {
   if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
@@ -1410,6 +1430,7 @@ main() {
   if ! $DRY_RUN && ! $RESET_PROGRESS && [ "$RECOVER_PROGRESS" != "true" ] \
      && [ "$_PLAN_HAD_CHANGES" != "true" ]; then
     detect_orphan_logs ".claudeloop" || exit 1
+    handle_orphan_recovery
   fi
 
   # Create lock file (before --phase/--mark-complete so re-init after force-kill is correct)
@@ -1426,6 +1447,7 @@ main() {
       if ! $RESET_PROGRESS && [ "$RECOVER_PROGRESS" != "true" ] \
          && [ "$_PLAN_HAD_CHANGES" != "true" ]; then
         detect_orphan_logs ".claudeloop" || exit 1
+        handle_orphan_recovery
       fi
     fi
   fi

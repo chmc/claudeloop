@@ -1257,22 +1257,82 @@ setup_orphan() {
   [ "$status" -eq 0 ]
 }
 
-@test "detect_orphan_logs: interactive reset clears all phases to pending" {
+@test "detect_orphan_logs: interactive recover sets _ORPHAN_RECOVERY_ACTION when ai-plan exists" {
   setup_orphan
   mkdir -p "$TEST_DIR/.claudeloop/logs"
   for i in 1 2 3 4 5 6 7; do
     touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
   done
-  # Simulate interactive "r" response via _ORPHAN_FORCE_TTY and file redirection
+  # Create ai-parsed-plan.md so [r]ecover is offered
+  printf '# Plan\n## Phase 1\nDo something\n' > "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
   _ORPHAN_FORCE_TTY=true
   printf 'r\n' > "$TEST_DIR/input"
   detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input" > /dev/null 2>&1
-  [ "$PHASE_STATUS_1" = "pending" ]
-  [ "$PHASE_STATUS_2" = "pending" ]
-  [ "$PHASE_STATUS_3" = "pending" ]
-  [ "$PHASE_STATUS_4" = "pending" ]
-  [ "$PHASE_STATUS_5" = "pending" ]
-  [ "$PHASE_STATUS_6" = "pending" ]
+  [ "$_ORPHAN_RECOVERY_ACTION" = "recover" ]
+  # Phases should be unchanged (not reset inline)
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "completed" ]
+}
+
+@test "detect_orphan_logs: recovery not offered when ai-parsed-plan.md absent" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  # No ai-parsed-plan.md → no [r]ecover option; 'r' should abort
+  _ORPHAN_FORCE_TTY=true
+  printf 'r\n' > "$TEST_DIR/input"
+  run detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input"
+  [ "$status" -eq 1 ]
+}
+
+@test "detect_orphan_logs: YES_MODE sets _ORPHAN_RECOVERY_ACTION=continue" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7 8; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  YES_MODE=true
+  detect_orphan_logs "$TEST_DIR/.claudeloop" > /dev/null 2>&1
+  [ "$_ORPHAN_RECOVERY_ACTION" = "continue" ]
+}
+
+@test "detect_orphan_logs: interactive continue sets _ORPHAN_RECOVERY_ACTION=continue" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  _ORPHAN_FORCE_TTY=true
+  printf 'c\n' > "$TEST_DIR/input"
+  detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input" > /dev/null 2>&1
+  [ "$_ORPHAN_RECOVERY_ACTION" = "continue" ]
+}
+
+@test "detect_orphan_logs: prompt mentions plan switch when ai-parsed-plan.md exists" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  printf '# Plan\n' > "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
+  _ORPHAN_FORCE_TTY=true
+  printf 'c\n' > "$TEST_DIR/input"
+  output=$(detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input" 2>&1)
+  echo "$output" | grep -q "ai-parsed-plan.md"
+  echo "$output" | grep -q "recover"
+}
+
+@test "detect_orphan_logs: non-interactive sets _ORPHAN_RECOVERY_ACTION=continue" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  _ORPHAN_FORCE_TTY=false
+  detect_orphan_logs "$TEST_DIR/.claudeloop" < /dev/null > /dev/null 2>&1
+  [ "$_ORPHAN_RECOVERY_ACTION" = "continue" ]
 }
 
 @test "detect_orphan_logs: interactive abort returns 1" {
