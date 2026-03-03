@@ -134,6 +134,14 @@ teardown() { rm -f "$_log"; }
   [ "$output" -le 12 ]
 }
 
+@test "calculate_backoff: non-numeric input returns BASE_DELAY with exit 0" {
+  BASE_DELAY=5
+  MAX_DELAY=60
+  run calculate_backoff "abc"
+  [ "$status" -eq 0 ]
+  [ "$output" = "5" ]
+}
+
 # --- should_retry_phase() ---
 
 @test "should_retry_phase: returns 0 (should retry) when attempts < MAX_RETRIES" {
@@ -169,6 +177,20 @@ teardown() { rm -f "$_log"; }
   PHASE_ATTEMPTS_7=2
   run should_retry_phase 7
   [ "$status" -eq 0 ]
+}
+
+@test "should_retry_phase: returns 1 when PHASE_ATTEMPTS is empty" {
+  PHASE_ATTEMPTS_1=""
+  MAX_RETRIES=3
+  run should_retry_phase 1
+  [ "$status" -eq 1 ]
+}
+
+@test "should_retry_phase: returns 1 when MAX_RETRIES is non-numeric" {
+  PHASE_ATTEMPTS_1=2
+  MAX_RETRIES="abc"
+  run should_retry_phase 1
+  [ "$status" -eq 1 ]
 }
 
 # --- is_quota_error() ---
