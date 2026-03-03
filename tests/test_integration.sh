@@ -1003,8 +1003,8 @@ PROG
 # =============================================================================
 
 # Helper: write a verify-aware claude stub that distinguishes execution calls
-# (has --output-format) from verification calls (has --verbose but no --output-format).
-# Verification calls emit tool-call evidence so anti-skip passes.
+# from verification calls (detected by "verification agent" in stdin prompt).
+# Verification calls emit tool-call evidence and VERIFICATION_PASSED verdict.
 _write_verify_claude_stub() {
   local dir="$1"
   mkdir -p "$dir/bin"
@@ -1025,25 +1025,16 @@ if [ -f "\$exit_codes_file" ]; then
     [ -z "\$exit_code" ] && exit_code=0
 fi
 
-# Detect verification calls: --verbose present but no --include-partial-messages
-# (execution uses both --verbose and --include-partial-messages; verification only --verbose)
+# Detect verification calls by checking saved stdin for "verification agent" keyword
 is_verify=false
-has_verbose=false
-has_partial=false
-for arg in "\$@"; do
-  case "\$arg" in
-    --verbose) has_verbose=true ;;
-    --include-partial-messages) has_partial=true ;;
-  esac
-done
-if \$has_verbose && ! \$has_partial; then
+if grep -q "verification agent" "${dir}/claude_stdin_\${count}" 2>/dev/null; then
   is_verify=true
 fi
 
 if \$is_verify; then
-  # Verification call: emit stream-json tool-call evidence
+  # Verification call: emit stream-json tool-call evidence + verdict keyword
   printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
-  printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests passed."}}\n'
+  printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests passed.\nVERIFICATION_PASSED\n"}}\n'
 else
   # Execution call: normal stub output
   printf 'stub output for call %s\n' "\$count"

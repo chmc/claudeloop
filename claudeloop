@@ -62,8 +62,6 @@ GRANULARITY="tasks"
 VERIFY_PHASES=false
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
-CURRENT_TAIL_PID=""         # PID of tail -f streaming verify output
-CURRENT_TAIL_PGID=""        # PGID of tail -f process group
 
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
@@ -427,12 +425,6 @@ handle_interrupt() {
     CURRENT_PIPELINE_PID=""
     CURRENT_PIPELINE_PGID=""
   fi
-  # Kill verify tail -f streamer
-  if [ -n "${CURRENT_TAIL_PGID:-}" ] && [ "${CURRENT_TAIL_PGID:-0}" -gt 1 ]; then
-    kill -TERM -- "-$CURRENT_TAIL_PGID" 2>/dev/null || true
-  fi
-  CURRENT_TAIL_PID=""
-  CURRENT_TAIL_PGID=""
   INTERRUPTED=true
   echo ""
   print_warning "Interrupt received (Ctrl+C)"
@@ -978,6 +970,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
     claude_exit=$(cat "$_exit_tmp")
     rm -f "$_exit_tmp"
   fi
+  case "$claude_exit" in ''|*[!0-9]*) claude_exit=1 ;; esac
 
   # Write metadata footer to log
   end_ts=$(date '+%s')

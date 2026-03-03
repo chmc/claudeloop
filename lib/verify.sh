@@ -2,7 +2,7 @@
 
 # Phase Verification Library
 # Runs a read-only Claude instance to verify phase completion.
-# Exit-code based: claude exit 0 + tool calls detected = pass.
+# Verdict-based: requires explicit VERIFICATION_PASSED keyword + tool_use JSON events.
 
 # verify_phase(phase_num, log_file)
 # Returns 0 if verification passes (or VERIFY_PHASES is disabled), 1 on failure.
@@ -55,17 +55,22 @@ You MUST actually execute commands. Do NOT skip testing. Do NOT assume. Run them
 
 If no test suite exists, focus on reviewing the git diff for correctness and obvious errors.
 
-## Reporting
+## Verdict (MANDATORY)
 
-If ALL checks pass, your task is complete.
-If ANY check fails, report what failed."
+After completing ALL verification steps above, you MUST output your verdict as the LAST thing you write.
+Do NOT skip this. Do NOT just end silently.
 
-  # Prepare verify log
+- If ALL checks pass: output exactly the word VERIFICATION_PASSED on its own line
+- If ANY check fails: output exactly the word VERIFICATION_FAILED on its own line, followed by a brief summary of what failed"
+
+  # Prepare verify log files
   local verify_log=".claudeloop/logs/phase-$phase_num.verify.log"
+  local verify_formatted_log=".claudeloop/logs/phase-$phase_num.verify.formatted.log"
   mkdir -p ".claudeloop/logs"
   : > "$verify_log"
+  : > "$verify_formatted_log"
 
-  # Run claude in a killable background process group
+  # Run claude piped through process_stream_json (same pattern as execute_phase)
   local _exit_tmp _skip_flag
   _exit_tmp=$(mktemp)
   _skip_flag=""
@@ -73,35 +78,24 @@ If ANY check fails, report what failed."
     _skip_flag="--dangerously-skip-permissions"
   fi
 
+  # Sentinel file: created when stream processor (AWK) exits.
+  local _sentinel
+  _sentinel=$(mktemp)
+  rm -f "$_sentinel"
+
   set -m
   {
     _rc=0
     # shellcheck disable=SC2086
     printf '%s\n' "$prompt" | claude --print --output-format=stream-json --verbose \
-      $_skip_flag \
-      > "$verify_log" 2>&1 || _rc=$?
-    printf '%s' "$_rc" > "$_exit_tmp"
-  } >/dev/null 2>&1 &
+      --include-partial-messages \
+      $_skip_flag 2>&1 || _rc=$?
+    printf '%s\n' "$_rc" > "$_exit_tmp"
+  } | inject_heartbeats | { process_stream_json "$verify_formatted_log" "$verify_log" \
+      "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
-  CURRENT_PIPELINE_PGID=$!
+  CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
   set +m
-
-  # Stream verify log to stderr and LIVE_LOG with [verify] prefix
-  CURRENT_TAIL_PID=""
-  CURRENT_TAIL_PGID=""
-  if [ -n "${LIVE_LOG:-}" ]; then
-    set -m
-    {
-      exec 3<&- 2>/dev/null   # prevent fd leak (matches ai_parser.sh pattern)
-      tail -f "$verify_log" 2>/dev/null | while IFS= read -r _vline; do
-        printf ' [verify] %s\n' "$_vline" >&2
-        printf '[%s] [verify] %s\n' "$(date '+%H:%M:%S')" "$_vline" >> "$LIVE_LOG"
-      done
-    } &
-    CURRENT_TAIL_PID=$!
-    CURRENT_TAIL_PGID=$!
-    set +m
-  fi
 
   # Timeout: use MAX_PHASE_TIME if set, otherwise default 300s for verification
   local _timer_pid _vp_pid _vp_pgid _verify_timeout
@@ -113,24 +107,23 @@ If ANY check fails, report what failed."
     _verify_timeout="$MAX_PHASE_TIME"
   fi
   set -m
-  ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null ) >/dev/null 2>&1 &
+  ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
   _timer_pid=$!
   set +m
 
-  wait "$CURRENT_PIPELINE_PID" || true
+  # Wait for stream processor to finish (sentinel-based, same as execute_phase)
+  while [ ! -f "$_sentinel" ]; do
+    sleep 1
+  done
 
-  # Kill verify tail streamer
-  if [ -n "$CURRENT_TAIL_PGID" ] && [ "${CURRENT_TAIL_PGID:-0}" -gt 1 ]; then
-    kill -TERM -- "-$CURRENT_TAIL_PGID" 2>/dev/null || true
-    wait "$CURRENT_TAIL_PID" 2>/dev/null || true
-  fi
-  CURRENT_TAIL_PID=""
-  CURRENT_TAIL_PGID=""
-
-  # Kill remaining processes (claude CLI may outlive the subshell)
+  # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
+  wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  rm -f "$_sentinel"
+  # Clear spinner remnants
+  printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
@@ -141,12 +134,13 @@ If ANY check fails, report what failed."
     _timer_pid=""
   fi
 
-  # Read exit code
+  # Read exit code with guard against empty/non-numeric values
   local verify_exit=1
   if [ -f "$_exit_tmp" ]; then
     verify_exit=$(cat "$_exit_tmp")
     rm -f "$_exit_tmp"
   fi
+  case "$verify_exit" in ''|*[!0-9]*) verify_exit=1 ;; esac
 
   # Exit code check FIRST
   if [ "$verify_exit" -ne 0 ]; then
@@ -155,10 +149,24 @@ If ANY check fails, report what failed."
     return 1
   fi
 
-  # Anti-skip check: grep for tool invocation evidence (only when exit=0)
-  if ! grep -qiE 'ToolUse|Tool_use|tool_use|tool use|\[Tool|Bash|Read|Write|Edit|Glob|Grep' "$verify_log" 2>/dev/null; then
+  # Verdict check 1: VERIFICATION_FAILED takes priority (even if PASSED also appears)
+  if grep -q 'VERIFICATION_FAILED' "$verify_log" 2>/dev/null; then
+    printf '[%s] Verification failed: verifier reported VERIFICATION_FAILED\n' "$(date '+%H:%M:%S')" >&2
+    log_live "Verification failed for phase $phase_num: VERIFICATION_FAILED"
+    return 1
+  fi
+
+  # Verdict check 2: tool calls were actually made (JSON-aware anti-skip)
+  if ! grep -q '"type":"tool_use"' "$verify_log" 2>/dev/null; then
     printf '[%s] Verification failed: no tool calls detected (verifier may have skipped checks)\n' "$(date '+%H:%M:%S')" >&2
     log_live "Verification failed for phase $phase_num: no tool calls detected"
+    return 1
+  fi
+
+  # Verdict check 3: explicit VERIFICATION_PASSED verdict required
+  if ! grep -q 'VERIFICATION_PASSED' "$verify_log" 2>/dev/null; then
+    printf '[%s] Verification failed: no VERIFICATION_PASSED verdict found\n' "$(date '+%H:%M:%S')" >&2
+    log_live "Verification failed for phase $phase_num: no VERIFICATION_PASSED verdict"
     return 1
   fi
 
