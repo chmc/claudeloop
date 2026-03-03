@@ -1128,3 +1128,174 @@ EOF
   grep -q "Status: failed" "$TEST_DIR/PROGRESS.md"
   grep -q "Status: pending" "$TEST_DIR/PROGRESS.md"
 }
+
+# --- detect_plan_changes: _PLAN_HAD_CHANGES flag ---
+
+@test "detect_plan_changes: sets _PLAN_HAD_CHANGES=true when changes found" {
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="New Phase"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ "$_PLAN_HAD_CHANGES" = "true" ]
+}
+
+@test "detect_plan_changes: sets _PLAN_HAD_CHANGES=false when no changes" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending" PHASE_STATUS_3="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0 PHASE_ATTEMPTS_3=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ⏳ Phase 1: Phase One
+Status: pending
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ "$_PLAN_HAD_CHANGES" = "false" ]
+}
+
+# --- detect_orphan_logs() ---
+
+setup_orphan() {
+  PHASE_COUNT=6
+  PHASE_NUMBERS="1 2 3 4 5 6"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_TITLE_3="Phase Three"
+  PHASE_TITLE_4="Phase Four"
+  PHASE_TITLE_5="Phase Five"
+  PHASE_TITLE_6="Phase Six"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3=""
+  PHASE_DEPENDENCIES_4="" PHASE_DEPENDENCIES_5="" PHASE_DEPENDENCIES_6=""
+  for _p in $PHASE_NUMBERS; do
+    eval "PHASE_STATUS_$(phase_to_var "$_p")=completed"
+    eval "PHASE_ATTEMPTS_$(phase_to_var "$_p")=1"
+  done
+  YES_MODE=false
+}
+
+@test "detect_orphan_logs: no logs dir — empty orphans, no output" {
+  setup_orphan
+  run detect_orphan_logs "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "detect_orphan_logs: all logs match plan phases — no warning" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  run detect_orphan_logs "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "detect_orphan_logs: orphan logs present (phases 7-11) — warns" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7 8 9 10 11; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  YES_MODE=true
+  detect_orphan_logs "$TEST_DIR/.claudeloop" > /dev/null 2>&1
+  # Check _ORPHAN_LOG_PHASES contains 7 8 9 10 11
+  echo "$_ORPHAN_LOG_PHASES" | grep -q "7"
+  echo "$_ORPHAN_LOG_PHASES" | grep -q "11"
+}
+
+@test "detect_orphan_logs: skips .attempt-*.log, .verify.log, .raw.json, .formatted.log" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  touch "$TEST_DIR/.claudeloop/logs/phase-1.log"
+  touch "$TEST_DIR/.claudeloop/logs/phase-7.attempt-1.log"
+  touch "$TEST_DIR/.claudeloop/logs/phase-7.verify.log"
+  touch "$TEST_DIR/.claudeloop/logs/phase-7.raw.json"
+  touch "$TEST_DIR/.claudeloop/logs/phase-7.formatted.log"
+  YES_MODE=true
+  detect_orphan_logs "$TEST_DIR/.claudeloop" > /dev/null 2>&1
+  [ -z "$_ORPHAN_LOG_PHASES" ]
+}
+
+@test "detect_orphan_logs: decimal phase orphan phase-2.5.log detected" {
+  PHASE_COUNT=3
+  PHASE_NUMBERS="1 2 3"
+  PHASE_TITLE_1="A" PHASE_TITLE_2="B" PHASE_TITLE_3="C"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2="" PHASE_DEPENDENCIES_3=""
+  PHASE_STATUS_1="completed" PHASE_STATUS_2="completed" PHASE_STATUS_3="completed"
+  PHASE_ATTEMPTS_1=1 PHASE_ATTEMPTS_2=1 PHASE_ATTEMPTS_3=1
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  touch "$TEST_DIR/.claudeloop/logs/phase-1.log"
+  touch "$TEST_DIR/.claudeloop/logs/phase-2.5.log"
+  YES_MODE=true
+  detect_orphan_logs "$TEST_DIR/.claudeloop" > /dev/null 2>&1
+  [ "$_ORPHAN_LOG_PHASES" = "2.5" ]
+}
+
+@test "detect_orphan_logs: YES_MODE continues without prompt, returns 0" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7 8; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  YES_MODE=true
+  run detect_orphan_logs "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 0 ]
+}
+
+@test "detect_orphan_logs: interactive reset clears all phases to pending" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  # Simulate interactive "r" response via _ORPHAN_FORCE_TTY and file redirection
+  _ORPHAN_FORCE_TTY=true
+  printf 'r\n' > "$TEST_DIR/input"
+  detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input" > /dev/null 2>&1
+  [ "$PHASE_STATUS_1" = "pending" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  [ "$PHASE_STATUS_3" = "pending" ]
+  [ "$PHASE_STATUS_4" = "pending" ]
+  [ "$PHASE_STATUS_5" = "pending" ]
+  [ "$PHASE_STATUS_6" = "pending" ]
+}
+
+@test "detect_orphan_logs: interactive abort returns 1" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  _ORPHAN_FORCE_TTY=true
+  printf 'a\n' > "$TEST_DIR/input"
+  run detect_orphan_logs "$TEST_DIR/.claudeloop" < "$TEST_DIR/input"
+  [ "$status" -eq 1 ]
+}
+
+@test "detect_orphan_logs: end-to-end — 6 completed + orphan logs 7-11 → orphan warning" {
+  setup_orphan
+  mkdir -p "$TEST_DIR/.claudeloop/logs"
+  for i in 1 2 3 4 5 6 7 8 9 10 11; do
+    touch "$TEST_DIR/.claudeloop/logs/phase-${i}.log"
+  done
+  YES_MODE=true
+  output=$(detect_orphan_logs "$TEST_DIR/.claudeloop" 2>&1)
+  echo "$output" | grep -qi "orphan"
+  echo "$output" | grep -q "7"
+  echo "$output" | grep -q "11"
+}

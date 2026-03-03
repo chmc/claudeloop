@@ -24,3 +24,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0016](0016-mutation-testing-ci.md) | Mutation testing CI | 2026-02-27 | Accepted |
 | [0017](0017-input-sanitization.md) | Input sanitization for eval/awk contexts | 2026-03-01 | Accepted |
 | [0018](0018-progress-recovery-from-logs.md) | Progress recovery from logs | 2026-03-03 | Accepted |
+| [0019](0019-orphan-log-integrity-check.md) | Orphan log integrity check | 2026-03-03 | Accepted |

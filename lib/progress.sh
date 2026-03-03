@@ -288,6 +288,7 @@ read_old_phase_list() {
 # Args: $1 - progress file path
 detect_plan_changes() {
   local progress_file="$1"
+  _PLAN_HAD_CHANGES=false
   read_old_phase_list "$progress_file"
 
   # No-op if no saved progress
@@ -418,6 +419,7 @@ detect_plan_changes() {
   done
 
   if $had_changes; then
+    _PLAN_HAD_CHANGES=true
     # Backup before any further writes might overwrite the old progress
     cp "$progress_file" "${progress_file}.bak"
 
@@ -468,6 +470,93 @@ detect_plan_changes() {
   fi
 
   return 0
+}
+
+# Detect orphan log files — logs for phases not in the current plan.
+# This catches corrupted progress from a previous buggy run (e.g. --ai-parse with
+# more phases, then re-run without it). Orphan logs are the only retroactive signal.
+# Args: $1 - project dir (e.g. .claudeloop)
+# Sets: _ORPHAN_LOG_PHASES (space-separated list of orphan phase numbers)
+# Returns: 0 on continue/reset, 1 on abort
+detect_orphan_logs() {
+  local project_dir="$1"
+  local logs_dir="$project_dir/logs"
+  _ORPHAN_LOG_PHASES=""
+
+  # No logs dir → nothing to check
+  if [ ! -d "$logs_dir" ]; then
+    return 0
+  fi
+
+  # Scan for phase-N.log files not matching any current plan phase
+  for _lf in "$logs_dir"/phase-*.log; do
+    [ -f "$_lf" ] || continue
+    # Skip auxiliary files
+    case "$_lf" in
+      *.attempt-*.log|*.verify.log|*.raw.json|*.formatted.log) continue ;;
+    esac
+    local _lnum
+    _lnum=$(printf '%s' "$_lf" | sed -n 's|.*/phase-\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)\.log$|\1|p')
+    [ -z "$_lnum" ] && continue
+    local _found=false
+    for _p in $PHASE_NUMBERS; do
+      if [ "$_p" = "$_lnum" ]; then
+        _found=true
+        break
+      fi
+    done
+    if ! $_found; then
+      _ORPHAN_LOG_PHASES="${_ORPHAN_LOG_PHASES:+$_ORPHAN_LOG_PHASES }$_lnum"
+    fi
+  done
+
+  # No orphans → all clear
+  if [ -z "$_ORPHAN_LOG_PHASES" ]; then
+    return 0
+  fi
+
+  printf '\n[%s] ⚠ Orphan log files detected for phases not in the current plan: %s\n' \
+    "$(date '+%H:%M:%S')" "$_ORPHAN_LOG_PHASES"
+  printf '[%s]   This may indicate corrupted progress from a previous run with a different plan.\n' \
+    "$(date '+%H:%M:%S')"
+  if [ -f "$project_dir/ai-parsed-plan.md" ]; then
+    printf '[%s]   Hint: use --plan %s/ai-parsed-plan.md if you meant the AI-parsed plan.\n' \
+      "$(date '+%H:%M:%S')" "$project_dir"
+  fi
+  printf '[%s]   Hint: use --reset to start fresh.\n' "$(date '+%H:%M:%S')"
+
+  if [ "$YES_MODE" = "true" ]; then
+    printf '[%s]   YES_MODE active — continuing automatically.\n' "$(date '+%H:%M:%S')"
+    return 0
+  elif [ -t 0 ] || [ "${_ORPHAN_FORCE_TTY:-}" = "true" ]; then
+    printf '[r]eset (recommended) / [c]ontinue / [a]bort? '
+    read -r _ans
+    case "$_ans" in
+      [rR]*)
+        printf '[%s] Resetting all phase statuses to pending.\n' "$(date '+%H:%M:%S')"
+        for _p in $PHASE_NUMBERS; do
+          local _pv
+          _pv=$(phase_to_var "$_p")
+          eval "PHASE_STATUS_${_pv}=pending"
+          eval "PHASE_ATTEMPTS_${_pv}=0"
+          eval "PHASE_START_TIME_${_pv}=''"
+          eval "PHASE_END_TIME_${_pv}=''"
+        done
+        return 0
+        ;;
+      [cC]*)
+        printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
+        return 0
+        ;;
+      *)
+        printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
+        return 1
+        ;;
+    esac
+  else
+    printf '[%s] Non-interactive mode — continuing (use --reset to start fresh).\n' "$(date '+%H:%M:%S')"
+    return 0
+  fi
 }
 
 # Recover progress from log files in .claudeloop/logs/

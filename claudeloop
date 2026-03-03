@@ -1406,6 +1406,12 @@ main() {
     detect_plan_changes "$PROGRESS_FILE"
   fi
 
+  # Detect orphan logs (only when detect_plan_changes did NOT find changes)
+  if ! $DRY_RUN && ! $RESET_PROGRESS && [ "$RECOVER_PROGRESS" != "true" ] \
+     && [ "$_PLAN_HAD_CHANGES" != "true" ]; then
+    detect_orphan_logs ".claudeloop" || exit 1
+  fi
+
   # Create lock file (before --phase/--mark-complete so re-init after force-kill is correct)
   if ! $DRY_RUN; then
     create_lock
@@ -1415,6 +1421,11 @@ main() {
       init_progress "$PROGRESS_FILE"
       if ! $RESET_PROGRESS; then
         detect_plan_changes "$PROGRESS_FILE"
+      fi
+      # Detect orphan logs after force-kill re-read
+      if ! $RESET_PROGRESS && [ "$RECOVER_PROGRESS" != "true" ] \
+         && [ "$_PLAN_HAD_CHANGES" != "true" ]; then
+        detect_orphan_logs ".claudeloop" || exit 1
       fi
     fi
   fi
