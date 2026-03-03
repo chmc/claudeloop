@@ -71,7 +71,7 @@ calculate_backoff() {
 is_quota_error() {
   local log_file="$1"
   [ -f "$log_file" ] || return 1
-  grep -qiE "usage limit|quota|rate.?limit|too many requests|429|rate_limit_error|overloaded" "$log_file"
+  grep -qiE "usage limit|quota|rate.?limit|too many requests|rate_limit_error|overloaded" "$log_file"
 }
 
 # Check if a phase log contains an unanswered permission prompt from Claude

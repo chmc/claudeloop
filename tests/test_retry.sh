@@ -208,10 +208,10 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 0 ]
 }
 
-@test "is_quota_error: detects '429'" {
-  printf 'HTTP 429 response received\n' > "$_log"
+@test "is_quota_error: bare 429 in unrelated context does not trigger" {
+  printf 'Processed 429 tokens in phase 3\n' > "$_log"
   run is_quota_error "$_log"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
 }
 
 @test "is_quota_error: detects 'Too Many Requests' (case-insensitive)" {
