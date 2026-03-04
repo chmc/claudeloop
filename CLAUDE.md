@@ -96,16 +96,6 @@ main → parse_plan → init_progress → main_loop
 
 All `print_*` output (via `lib/ui.sh`) and stream processor output are teed to `.claudeloop/live.log` via `LIVE_LOG` (set in `main()` after `setup_project`; empty during dry-run).
 
-### POSIX migration
-
-Migrated from `#!/opt/homebrew/bin/bash` (associative arrays, `[[ ]]`, `BASH_REMATCH`, `**`, `$RANDOM`, `echo -e`) to `#!/bin/sh`:
-
-| TODO | Files | Status |
-|------|-------|--------|
-| TODO1.md | `lib/retry.sh`, `lib/ui.sh` | ✅ done |
-| TODO2.md | `lib/dependencies.sh`, `lib/progress.sh` | ✅ done |
-| TODO3.md | `lib/parser.sh`, `claudeloop` | ✅ done |
-
 ## Skills
 
 - `/github` — Git/GitHub conventions (commit, push, PR)
