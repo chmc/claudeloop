@@ -112,10 +112,10 @@ _cl_wizard() {
   grep -q "^PROGRESS_FILE=\.claudeloop/PROGRESS\.md$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
-@test "wizard: default MAX_RETRIES=5 saved to conf" {
+@test "wizard: default MAX_RETRIES=10 saved to conf" {
   _cl_wizard $'\n\n\n\n\n\n\n'
   [ "$status" -eq 0 ]
-  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  grep -q "^MAX_RETRIES=10$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "wizard: default QUOTA_RETRY_INTERVAL=900 saved to conf" {
@@ -197,16 +197,16 @@ _cl_wizard() {
 # Numeric validation — non-digit input silently keeps default
 # =============================================================================
 
-@test "wizard: MAX_RETRIES=-1 rejected: keeps default 5" {
+@test "wizard: MAX_RETRIES=-1 rejected: keeps default 10" {
   _cl_wizard $'\n\n-1\n\n\n\n\n'
   [ "$status" -eq 0 ]
-  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  grep -q "^MAX_RETRIES=10$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
-@test "wizard: MAX_RETRIES=abc rejected: keeps default 5" {
+@test "wizard: MAX_RETRIES=abc rejected: keeps default 10" {
   _cl_wizard $'\n\nabc\n\n\n\n\n'
   [ "$status" -eq 0 ]
-  grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  grep -q "^MAX_RETRIES=10$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
 @test "wizard: QUOTA_RETRY_INTERVAL=bad rejected: keeps default 900" {

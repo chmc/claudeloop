@@ -103,7 +103,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 |---|---|---|
 | `PLAN_FILE` | `--plan` | `PLAN.md` |
 | `PROGRESS_FILE` | `--progress` | `.claudeloop/PROGRESS.md` |
-| `MAX_RETRIES` | `--max-retries` | `5` |
+| `MAX_RETRIES` | `--max-retries` | `10` |
 | `SIMPLE_MODE` | `--simple` | `false` |
 | `SKIP_PERMISSIONS` | `--dangerously-skip-permissions` | `false` |
 | `BASE_DELAY` | — | `5` |
@@ -120,7 +120,7 @@ Example `.claudeloop/.claudeloop.conf`:
 
 ```
 PLAN_FILE=my-plan.md
-MAX_RETRIES=5
+MAX_RETRIES=10
 SKIP_PERMISSIONS=true
 ```
 

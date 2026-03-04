@@ -11,7 +11,7 @@ Users need multiple ways to configure ClaudeLoop: sensible defaults for zero-con
 
 Implement a four-layer config precedence chain where later layers override earlier ones:
 
-1. **Hardcoded defaults** — set in the script (e.g., `MAX_RETRIES=5`, `BASE_DELAY=5`)
+1. **Hardcoded defaults** — set in the script (e.g., `MAX_RETRIES=10`, `BASE_DELAY=5`)
 2. **Config file** (`.claudeloop/.claudeloop.conf`) — plain `KEY=VALUE` format, auto-created on first run
 3. **Environment variables** — same names as config keys (e.g., `MAX_RETRIES=10 claudeloop`)
 4. **CLI arguments** — highest priority (e.g., `--max-retries 10`)

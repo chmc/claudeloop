@@ -121,7 +121,7 @@ ClaudeLoop creates `.claudeloop/.claudeloop.conf` automatically on first run. Af
 
 ```bash
 # First run — conf is created with your settings
-claudeloop --plan my-plan.md --max-retries 5
+claudeloop --plan my-plan.md --max-retries 10
 
 # Subsequent runs — settings are read from .claudeloop/.claudeloop.conf
 claudeloop

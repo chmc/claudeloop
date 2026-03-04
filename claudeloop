@@ -907,30 +907,52 @@ Implement the above phase completely. Make sure to:
 4. Commit your changes when complete"
   fi
 
-  # Archive previous attempt log and inject context into prompt on retry
-  if [ "$attempt" -gt 1 ] && [ -f "$log_file" ]; then
-    local _prev_attempt_log
-    _prev_attempt_log="${log_file%.log}.attempt-$((attempt - 1)).log"
-    cp "$log_file" "$_prev_attempt_log"
+  # Archive previous attempt log and inject failure context into prompt on retry
+  if [ "$attempt" -gt 1 ]; then
+    # Read fail reason from previous attempt
+    local _fail_reason _fail_hint
+    _fail_reason=$(eval "echo \"\$PHASE_FAIL_REASON_${_epv}\"")
+    _fail_hint=$(fail_reason_hint "$_fail_reason")
 
-    # Extract response section from archived log for context injection
-    local _prev_context
-    _prev_context=$(awk '
-      /^=== RESPONSE ===$/ { found=1; next }
-      /^=== EXECUTION END/ { exit }
-      found { print }
-    ' "$_prev_attempt_log" | tail -n 80)
+    # Compute "different angle" nudge when retries are >= 50% exhausted
+    local _angle_hint=""
+    if past_retry_midpoint "$attempt" "$MAX_RETRIES"; then
+      if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+        _angle_hint="CRITICAL: This is your FINAL attempt ($attempt of $MAX_RETRIES). Your previous approaches have all failed. You MUST take a fundamentally different, simpler approach to complete this phase."
+      else
+        _angle_hint="You have used $((attempt - 1)) of $MAX_RETRIES allowed attempts. Your previous approaches have not worked. Try a different strategy — break the task into smaller steps, use different tools, or simplify your approach."
+      fi
+    fi
 
-    if [ -n "$_prev_context" ]; then
+    # Archive log and extract previous response context
+    local _prev_context=""
+    if [ -f "$log_file" ]; then
+      local _prev_attempt_log
+      _prev_attempt_log="${log_file%.log}.attempt-$((attempt - 1)).log"
+      cp "$log_file" "$_prev_attempt_log"
+
+      _prev_context=$(awk '
+        /^=== RESPONSE ===$/ { found=1; next }
+        /^=== EXECUTION END/ { exit }
+        found { print }
+      ' "$_prev_attempt_log" | tail -n 80)
+    fi
+
+    # Inject if we have any failure info
+    if [ -n "$_fail_hint" ] || [ -n "$_prev_context" ] || [ -n "$_angle_hint" ]; then
       prompt="${prompt}
 
 ## Previous Attempt Failed (attempt $((attempt - 1)))
 
-The previous attempt exited without completing the phase. Here is the tail of what happened:
+The previous attempt exited without completing the phase.${_fail_hint:+
+${_fail_hint}}${_angle_hint:+
+${_angle_hint}}${_prev_context:+
+
+Here is the tail of what happened:
 
 \`\`\`
 ${_prev_context}
-\`\`\`
+\`\`\`}
 
 Learn from the above. Do not repeat the same mistakes. Address any errors shown before proceeding.
 You MUST still complete every subtask listed in the phase description — do not skip steps because prior work exists."
@@ -1089,6 +1111,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
 
   # Empty log means Claude produced no output — always a failure
   if is_empty_log "$log_file"; then
+    eval "PHASE_FAIL_REASON_${_epv}='empty_log'"
     print_error "Phase $phase_num: Claude produced no output (empty log)."
     update_phase_status "$phase_num" "failed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1109,6 +1132,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
 
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$raw_log"; then
+      eval "PHASE_FAIL_REASON_${_epv}='no_write_actions'"
       log_verbose "execute_phase: phase $phase_num exited 0 but no write actions in raw log"
       print_warning "Phase $phase_num: Claude exited successfully but made no changes — treating as failed"
       update_phase_status "$phase_num" "failed"
@@ -1119,6 +1143,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
 
     log_verbose "execute_phase: phase $phase_num succeeded"
     if ! verify_phase "$phase_num" "$log_file"; then
+      eval "PHASE_FAIL_REASON_${_epv}='verification_failed'"
       print_error "Phase $phase_num: verification failed"
       update_phase_status "$phase_num" "failed"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1134,6 +1159,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
     if has_successful_session "$log_file"; then
       log_verbose "execute_phase: phase $phase_num exited non-zero ($claude_exit) but successful session detected"
       if ! verify_phase "$phase_num" "$log_file"; then
+        eval "PHASE_FAIL_REASON_${_epv}='verification_failed'"
         print_error "Phase $phase_num: verification failed"
         update_phase_status "$phase_num" "failed"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1146,6 +1172,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
       CURRENT_PHASE=""
       return 0
     fi
+    eval "PHASE_FAIL_REASON_${_epv}='no_session'"
     log_verbose "execute_phase: phase $phase_num failed"
     print_error "Phase $phase_num failed"
     update_phase_status "$phase_num" "failed"

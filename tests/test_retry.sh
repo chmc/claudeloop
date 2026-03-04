@@ -415,6 +415,95 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 1 ]
 }
 
+# --- fail_reason_hint() ---
+
+@test "fail_reason_hint: no_write_actions returns hint about file changes" {
+  run fail_reason_hint "no_write_actions"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "no file changes"
+}
+
+@test "fail_reason_hint: empty_log returns hint about no output" {
+  run fail_reason_hint "empty_log"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "no output"
+}
+
+@test "fail_reason_hint: no_session returns hint about crash" {
+  run fail_reason_hint "no_session"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "crash\|killed"
+}
+
+@test "fail_reason_hint: verification_failed returns hint about verification" {
+  run fail_reason_hint "verification_failed"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "verification"
+}
+
+@test "fail_reason_hint: empty string returns empty" {
+  run fail_reason_hint ""
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "fail_reason_hint: unknown string returns empty" {
+  run fail_reason_hint "something_random"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- past_retry_midpoint() ---
+
+@test "past_retry_midpoint: attempt=5 max=10 returns true (5 >= 5)" {
+  run past_retry_midpoint 5 10
+  [ "$status" -eq 0 ]
+}
+
+@test "past_retry_midpoint: attempt=4 max=10 returns false (4 < 5)" {
+  run past_retry_midpoint 4 10
+  [ "$status" -eq 1 ]
+}
+
+@test "past_retry_midpoint: attempt=1 max=10 returns false" {
+  run past_retry_midpoint 1 10
+  [ "$status" -eq 1 ]
+}
+
+@test "past_retry_midpoint: attempt=3 max=5 returns true (3 >= 3)" {
+  run past_retry_midpoint 3 5
+  [ "$status" -eq 0 ]
+}
+
+@test "past_retry_midpoint: attempt=2 max=5 returns false (2 < 3)" {
+  run past_retry_midpoint 2 5
+  [ "$status" -eq 1 ]
+}
+
+@test "past_retry_midpoint: attempt=1 max=1 returns true (1 >= 1)" {
+  run past_retry_midpoint 1 1
+  [ "$status" -eq 0 ]
+}
+
+@test "past_retry_midpoint: max=0 returns false (guard)" {
+  run past_retry_midpoint 1 0
+  [ "$status" -eq 1 ]
+}
+
+@test "past_retry_midpoint: max=abc returns false (guard)" {
+  run past_retry_midpoint 1 abc
+  [ "$status" -eq 1 ]
+}
+
+# --- PHASE_FAIL_REASON round-trip ---
+
+@test "PHASE_FAIL_REASON round-trip via phase_to_var" {
+  _pv=$(phase_to_var "2.5")
+  eval "PHASE_FAIL_REASON_${_pv}='no_write_actions'"
+  reason=$(eval "echo \"\$PHASE_FAIL_REASON_${_pv}\"")
+  [ "$reason" = "no_write_actions" ]
+}
+
 @test "has_write_actions: multi-attempt log only checks last execution block" {
   printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
   printf '{"type":"tool_use","name":"Edit","input":{}}\n' >> "$_log"

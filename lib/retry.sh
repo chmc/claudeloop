@@ -4,7 +4,7 @@
 # Handles retry attempts and exponential backoff
 
 # Configuration
-MAX_RETRIES="${MAX_RETRIES:-5}"
+MAX_RETRIES="${MAX_RETRIES:-10}"
 BASE_DELAY="${BASE_DELAY:-5}"
 MAX_DELAY="${MAX_DELAY:-60}"
 QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
@@ -132,6 +132,34 @@ has_write_actions() {
     /"name":"Agent"/ {found=1}
     END{exit (found ? 0 : 1)}
   ' "$raw_log"
+}
+
+# Map failure reason code to a human-readable hint for the retry prompt
+# Args: $1 - failure reason code
+# Returns: hint string (stdout), empty for unknown/empty codes
+fail_reason_hint() {
+  case "$1" in
+    no_write_actions)
+      echo "You made no file changes in the previous attempt (no Edit/Write/NotebookEdit calls). You MUST write code changes to complete this phase." ;;
+    empty_log)
+      echo "You produced no output at all in the previous attempt. Make sure to actively work on the task." ;;
+    no_session)
+      echo "The previous attempt crashed or was killed before completing. Start fresh and work through the task methodically." ;;
+    verification_failed)
+      echo "Your previous changes failed verification. See the verification section below for details." ;;
+    *) ;;
+  esac
+}
+
+# Check if attempt is past the midpoint of allowed retries.
+# Args: $1 - current attempt, $2 - max retries
+# Returns: 0 if past midpoint, 1 otherwise
+past_retry_midpoint() {
+  local attempt="$1"
+  local max_retries="$2"
+  [ "$max_retries" -gt 0 ] 2>/dev/null || return 1
+  local half=$(( (max_retries + 1) / 2 ))
+  [ "$attempt" -ge "$half" ]
 }
 
 # Check if phase should be retried
