@@ -365,3 +365,61 @@ teardown() { rm -f "$_log"; }
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
 }
+
+# --- has_write_actions() ---
+
+@test "has_write_actions: returns 0 when raw log contains Edit tool" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"Edit","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_write_actions: returns 0 when raw log contains Write tool" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"Write","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_write_actions: returns 0 when raw log contains NotebookEdit tool" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"NotebookEdit","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_write_actions: returns 0 when raw log contains Agent tool" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"Agent","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_write_actions: returns 1 when raw log has only Read/Grep tools" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$_log"
+  printf '{"type":"tool_use","name":"Grep","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_write_actions: returns 1 when log is empty" {
+  printf '' > "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_write_actions: returns 1 when log file missing" {
+  run has_write_actions "/nonexistent/phase-99.raw.json"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_write_actions: multi-attempt log only checks last execution block" {
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$_log"
+  printf '{"type":"tool_use","name":"Edit","input":{}}\n' >> "$_log"
+  printf '=== EXECUTION START phase=1 attempt=2 ===\n' >> "$_log"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$_log"
+  run has_write_actions "$_log"
+  [ "$status" -eq 1 ]
+}

@@ -28,6 +28,7 @@ if grep -qx "\$count" "\$silent_calls_file" 2>/dev/null; then
   exit "\$exit_code"
 fi
 printf 'stub output for call %s\n' "\$count"
+printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 custom_outputs_file="${dir}/claude_custom_outputs"
 if [ -f "\$custom_outputs_file" ]; then
   custom_text=\$(sed -n "\${count}p" "\$custom_outputs_file" 2>/dev/null || echo "")
@@ -581,6 +582,7 @@ count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
 printf '%s\n' "\$count" > "\$count_file"
 printf 'stub output for call %s\n' "\$count"
+printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 exit 0
 EOF
   chmod +x "$TEST_DIR/bin/claude"
@@ -866,6 +868,7 @@ if [ "\$count" -eq 1 ]; then
   exit 1
 fi
 printf 'stub output for call %s\n' "\$count"
+printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 exit 0
 EOF
   chmod +x "$TEST_DIR/bin/claude"
@@ -910,6 +913,7 @@ if [ "\$count" -eq 1 ]; then
   exit 1
 fi
 printf 'stub output for call %s\n' "\$count"
+printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 exit 0
 EOF
   chmod +x "$TEST_DIR/bin/claude"
@@ -1038,6 +1042,7 @@ if \$is_verify; then
 else
   # Execution call: normal stub output
   printf 'stub output for call %s\n' "\$count"
+  printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 fi
 
 exit "\$exit_code"

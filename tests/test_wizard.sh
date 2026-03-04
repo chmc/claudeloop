@@ -42,6 +42,7 @@ PLAN
   cat > "$TEST_DIR/bin/claude" << 'EOF'
 #!/bin/sh
 printf 'stub output\n'
+printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 exit 0
 EOF
   chmod +x "$TEST_DIR/bin/claude"

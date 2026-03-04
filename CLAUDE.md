@@ -79,7 +79,7 @@ done
 | `lib/parser.sh` | `parse_plan` → sets all `PHASE_*_N` vars and `PHASE_COUNT` |
 | `lib/dependencies.sh` | `find_next_phase`, `is_phase_runnable`, `detect_dependency_cycles` (DFS, space-separated visited/stack strings) |
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
-| `lib/retry.sh` | `calculate_backoff` (exponential + jitter), `should_retry_phase`, `power`, `get_random` |
+| `lib/retry.sh` | `calculate_backoff` (exponential + jitter), `should_retry_phase`, `has_write_actions` (raw JSON log write-action check), `power`, `get_random` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning` |
 | `lib/verify.sh` | `verify_phase` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |

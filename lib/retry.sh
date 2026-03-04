@@ -119,6 +119,21 @@ has_successful_session() {
        END{exit (found ? 0 : 1)}' "$log_file"
 }
 
+# Check if the most recent execution block in a raw JSON log contains
+# evidence of write actions (Edit, Write, NotebookEdit, or Agent tool calls).
+# Args: $1 - path to raw JSON log file (.raw.json)
+# Returns: 0 if write actions found, 1 otherwise
+has_write_actions() {
+  local raw_log="$1"
+  [ -f "$raw_log" ] || return 1
+  awk '
+    /^=== EXECUTION START /{found=0; next}
+    /"name":"Edit"/ || /"name":"Write"/ || /"name":"NotebookEdit"/ {found=1}
+    /"name":"Agent"/ {found=1}
+    END{exit (found ? 0 : 1)}
+  ' "$raw_log"
+}
+
 # Check if phase should be retried
 # Args: $1 - phase number
 # Returns: 0 if should retry, 1 if max retries exceeded

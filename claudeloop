@@ -318,6 +318,52 @@ run_setup_wizard() {
   printf '\n'
 }
 
+# Re-configure runtime settings after recovery. Skips file paths and AI parsing
+# since those are determined by the recovery process.
+# Respects _CLI_* flags (same pattern as run_setup_wizard).
+run_config_wizard() {
+  printf '\nRecovery changed your execution plan. Let'"'"'s verify runtime settings.\n'
+  printf 'Press Enter to keep the current value [shown in brackets].\n\n'
+  local response
+
+  # MAX_RETRIES
+  if [ -n "$_CLI_MAX_RETRIES" ]; then
+    printf 'Max retries: using --max-retries %s\n' "$MAX_RETRIES"
+  else
+    printf 'Max retries on failure [%s]: ' "$MAX_RETRIES"
+    read -r response || return 0
+    if [ -n "$response" ]; then
+      case "$response" in *[!0-9]*) ;; *) MAX_RETRIES="$response" ;; esac
+    fi
+  fi
+
+  # SKIP_PERMISSIONS
+  if [ -n "$_CLI_SKIP_PERMISSIONS" ]; then
+    printf 'Skip permissions: using --dangerously-skip-permissions\n'
+  else
+    printf 'Dangerously skip permissions? (y/n) [%s]: ' "$(bool_yn "$SKIP_PERMISSIONS")"
+    read -r response || return 0
+    case "$response" in
+      [Yy]|[Yy][Ee][Ss]) SKIP_PERMISSIONS=true ;;
+      [Nn]|[Nn][Oo]) SKIP_PERMISSIONS=false ;;
+    esac
+  fi
+
+  # VERIFY_PHASES
+  if [ -n "$_CLI_VERIFY_PHASES" ]; then
+    printf 'Verify phases: using --verify\n'
+  else
+    printf 'Verify phases with fresh AI? (y/n) [%s]: ' "$(bool_yn "$VERIFY_PHASES")"
+    read -r response || return 0
+    case "$response" in
+      [Yy]|[Yy][Ee][Ss]) VERIFY_PHASES=true ;;
+      [Nn]|[Nn][Oo]) VERIFY_PHASES=false ;;
+    esac
+  fi
+
+  printf '\n'
+}
+
 # Save current state to state file
 save_state() {
   mkdir -p "$(dirname "$STATE_FILE")"
@@ -711,6 +757,20 @@ handle_orphan_recovery() {
 
   recover_progress_from_logs ".claudeloop" "$PROGRESS_FILE" "$PLAN_FILE"
 
+  # Persist recovered PLAN_FILE to config
+  update_conf_key ".claudeloop/.claudeloop.conf" PLAN_FILE "$PLAN_FILE"
+
+  # Prompt user to verify runtime settings
+  if [ -t 0 ]; then
+    run_config_wizard
+    # Persist any changes
+    update_conf_key ".claudeloop/.claudeloop.conf" MAX_RETRIES "$MAX_RETRIES"
+    update_conf_key ".claudeloop/.claudeloop.conf" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
+    update_conf_key ".claudeloop/.claudeloop.conf" VERIFY_PHASES "$VERIFY_PHASES"
+  else
+    printf '[%s] Non-interactive: review .claudeloop/.claudeloop.conf to verify settings\n' "$(date '+%H:%M:%S')"
+  fi
+
   _PLAN_HAD_CHANGES=""
 }
 
@@ -1044,6 +1104,17 @@ Address ALL issues identified above. Make sure tests pass before finishing."
       CURRENT_PHASE=""
       return 1
     fi
+
+    # Safety: check that Claude made write actions (not just reads)
+    if ! has_write_actions "$raw_log"; then
+      log_verbose "execute_phase: phase $phase_num exited 0 but no write actions in raw log"
+      print_warning "Phase $phase_num: Claude exited successfully but made no changes — treating as failed"
+      update_phase_status "$phase_num" "failed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 1
+    fi
+
     log_verbose "execute_phase: phase $phase_num succeeded"
     if ! verify_phase "$phase_num" "$log_file"; then
       print_error "Phase $phase_num: verification failed"
