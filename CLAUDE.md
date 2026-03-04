@@ -106,6 +106,11 @@ Migrated from `#!/opt/homebrew/bin/bash` (associative arrays, `[[ ]]`, `BASH_REM
 | TODO2.md | `lib/dependencies.sh`, `lib/progress.sh` | ✅ done |
 | TODO3.md | `lib/parser.sh`, `claudeloop` | ✅ done |
 
+## Skills
+
+- `/github` — Git/GitHub conventions (commit, push, PR)
+- `/release beta|stable` — Trigger GitHub release workflow
+
 ## Testing
 
 Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-core`). Each lib has a corresponding `tests/test_<lib>.sh`.
