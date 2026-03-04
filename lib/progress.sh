@@ -34,7 +34,7 @@ read_progress() {
 
   # Parse PROGRESS.md to restore state
   local current_phase=""
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
     if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
       current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')
@@ -217,7 +217,7 @@ read_old_phase_list() {
   fi
 
   local current_phase=""
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
     if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
       current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')

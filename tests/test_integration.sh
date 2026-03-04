@@ -1138,3 +1138,81 @@ EOF
   # Should NOT show "Using cached plan" for a normal parse
   ! echo "$output" | grep -q "Using cached plan"
 }
+
+# =============================================================================
+# Bug fix: load_config reads last line without trailing newline
+# =============================================================================
+
+@test "integration: load_config reads last line without trailing newline" {
+  # Write conf without trailing newline — AI_PARSE=true is last line
+  printf 'BASE_DELAY=0\nMAX_DELAY=0\nAI_PARSE=true' > "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  local _parser="${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  run sh -c "
+    cd '$TEST_DIR'
+    AI_PARSE=''
+    PLAN_FILE='' PROGRESS_FILE='' MAX_RETRIES='' SIMPLE_MODE=''
+    PHASE_PROMPT_FILE='' BASE_DELAY='' MAX_DELAY='' QUOTA_RETRY_INTERVAL=''
+    SKIP_PERMISSIONS='' STREAM_TRUNCATE_LEN='' HOOKS_ENABLED='' MAX_PHASE_TIME=''
+    IDLE_TIMEOUT='' GRANULARITY='' VERIFY_PHASES=''
+    . '$_parser'
+    eval \"\$(sed -n '/^load_config()/,/^}/p' '$CLAUDELOOP')\"
+    load_config
+    printf '%s' \"\$AI_PARSE\"
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "true" ]
+}
+
+# =============================================================================
+# Bug fix: update_conf_key ensures trailing newline
+# =============================================================================
+
+@test "integration: update_conf_key ensures trailing newline after sed update" {
+  eval "$(sed -n '/^update_conf_key()/,/^}/p' "$CLAUDELOOP")"
+  printf 'KEY1=old\nKEY2=val2' > "$TEST_DIR/test.conf"
+  update_conf_key "$TEST_DIR/test.conf" KEY1 new
+  # File must end with newline
+  [ -z "$(tail -c 1 "$TEST_DIR/test.conf")" ]
+  # Value must be updated
+  grep -q "^KEY1=new" "$TEST_DIR/test.conf"
+}
+
+# =============================================================================
+# Bug fix: --phase N resets completed phases from N onward
+# =============================================================================
+
+@test "integration: --phase 2 with phase 2 already completed resets it to pending and runs it" {
+  # Simulate a previous run where both phases completed
+  mkdir -p "$TEST_DIR/.claudeloop"
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 2
+- In progress: 0
+- Pending: 0
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+Attempts: 1
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+
+### ✅ Phase 2: Build
+Status: completed
+Attempts: 1
+Started: 2026-01-01 00:01:00
+Completed: 2026-01-01 00:02:00
+PROGRESS
+  # --phase 2 should reset phase 2 and re-run it
+  _cl --plan PLAN.md --phase 2
+  [ "$status" -eq 0 ]
+  # Phase 2 should have been re-executed (1 claude call)
+  [ "$(_call_count)" -eq 1 ]
+  [ "$(_completed_count)" -eq 2 ]
+}

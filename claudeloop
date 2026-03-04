@@ -90,7 +90,7 @@ load_config() {
   [ ! -f "$conf_file" ] && return 0
 
   local line key value
-  while IFS= read -r line; do
+  while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       ''|'#'*) continue ;;
     esac
@@ -127,6 +127,8 @@ update_conf_key() {
   escaped=$(printf '%s\n' "$value" | sed 's/[\\&|]/\\&/g')
   if grep -q "^${key}=" "$file" 2>/dev/null; then
     sed "s|^${key}=.*|${key}=${escaped}|" "$file" > "$tmp" && mv "$tmp" "$file"
+    # Ensure trailing newline (defense-in-depth for load_config)
+    [ -n "$(tail -c 1 "$file")" ] && printf '\n' >> "$file" || true
   else
     printf '%s=%s\n' "$key" "$value" >> "$file"
   fi
@@ -1435,6 +1437,10 @@ main() {
       fi
     fi
     PLAN_FILE="$ai_plan"
+    # Persist resolved plan file so subsequent runs use it
+    if ! $DRY_RUN; then
+      update_conf_key ".claudeloop/.claudeloop.conf" PLAN_FILE "$PLAN_FILE"
+    fi
   fi
 
   # Parse plan
@@ -1541,6 +1547,22 @@ main() {
       phase_less_than "$_p" "$START_PHASE" || break
       eval "PHASE_STATUS_$(phase_to_var "$_p")='completed'"
     done
+    # Reset START_PHASE and all subsequent phases to pending
+    _past_start=false
+    for _p in $PHASE_NUMBERS; do
+      if [ "$_p" = "$START_PHASE" ]; then _past_start=true; fi
+      if [ "$_past_start" = true ]; then
+        _pv=$(phase_to_var "$_p")
+        eval "PHASE_STATUS_${_pv}='pending'"
+        eval "PHASE_ATTEMPTS_${_pv}=0"
+        eval "PHASE_START_TIME_${_pv}=''"
+        eval "PHASE_END_TIME_${_pv}=''"
+      fi
+    done
+    # Persist immediately so Ctrl+C before first phase doesn't lose the reset
+    if ! $DRY_RUN; then
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    fi
     log_verbose "main: skipped phases before $START_PHASE (marked completed)"
   fi
 

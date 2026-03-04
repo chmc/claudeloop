@@ -1359,3 +1359,28 @@ setup_orphan() {
   echo "$output" | grep -q "7"
   echo "$output" | grep -q "11"
 }
+
+# =============================================================================
+# Bug fix: read_progress reads last line without trailing newline
+# =============================================================================
+
+@test "read_progress: reads last phase when file has no trailing newline" {
+  # printf without \n at the end — no trailing newline
+  printf '### ✅ Phase 1: Phase One\nStatus: completed\nAttempts: 2\n\n### ⏳ Phase 2: Phase Two\nStatus: pending\nAttempts: 0\n\n### ❌ Phase 3: Phase Three\nStatus: failed\nAttempts: 3' > "$TEST_DIR/PROGRESS.md"
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_3" = "failed" ]
+  [ "$PHASE_ATTEMPTS_3" = "3" ]
+}
+
+# =============================================================================
+# Bug fix: read_old_phase_list reads last line without trailing newline
+# =============================================================================
+
+@test "read_old_phase_list: reads last phase when file has no trailing newline" {
+  printf '### ✅ Phase 1: Phase One\nStatus: completed\nAttempts: 1\n\n### ❌ Phase 2: Phase Two\nStatus: failed\nAttempts: 5' > "$TEST_DIR/PROGRESS.md"
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$_OLD_PHASE_COUNT" -eq 2 ]
+  [ "$_OLD_PHASE_STATUS_2" = "failed" ]
+  [ "$_OLD_PHASE_ATTEMPTS_2" = "5" ]
+}
