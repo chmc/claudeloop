@@ -1818,3 +1818,30 @@ EOF
   ai_reparse_with_feedback "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
   grep -q "exact original wording" "$TEST_DIR/reparse_prompt.txt"
 }
+
+# =============================================================================
+# confirm_ai_plan: prompt discoverability
+# =============================================================================
+
+@test "confirm_ai_plan: prompt shows labeled options Yes/no/edit" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=false DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    _AI_CONFIRM_FORCE=1 \
+    PATH="$TEST_DIR/bin:$PATH" \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "y\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q '\[Y\]es'
+  echo "$output" | grep -q '\[n\]o'
+  echo "$output" | grep -q '\[e\]dit'
+}

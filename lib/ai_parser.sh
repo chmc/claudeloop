@@ -558,7 +558,7 @@ confirm_ai_plan() {
 
   # Interactive confirmation loop
   while true; do
-    printf 'Accept? (Y/n/e) '
+    printf 'Accept? [Y]es / [n]o / [e]dit in $EDITOR: '
     read -r _answer
     case "$_answer" in
       ''|[Yy]*)
