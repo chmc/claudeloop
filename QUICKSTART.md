@@ -89,6 +89,7 @@ claudeloop --monitor           # watch live output from a second terminal
 claudeloop --max-phase-time 1800  # kill and retry phases that run longer than 30 min
 claudeloop --idle-timeout 300    # exit stream processor after 5 min of no activity (default: 600)
 claudeloop --verify                    # verify each phase with a fresh Claude instance
+claudeloop --verify-timeout 900        # increase verification timeout to 15 min (default: 300)
 claudeloop --plan ideas.md --ai-parse  # AI-extract a free-form plan into phases
 claudeloop --plan ideas.md --ai-parse --granularity steps  # finer breakdown (with verification feedback loop)
 ```

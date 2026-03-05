@@ -1130,3 +1130,94 @@ JSON"
   # All 5 should be consumed (idle timeout disabled)
   [ "$lines_consumed" -eq 5 ]
 }
+
+# --- Tool-active idle timeout suppression ---
+
+@test "tool_use suspends idle timeout: heartbeats during active tool don't trigger exit" {
+  # idle_timeout=4 → max_idle_hb=2; emit tool_use → 5 heartbeats → tool_result
+  # All should be consumed because tool is active
+  local tool='{"type":"tool_use","id":"toolu_01","name":"Bash","input":{"command":"npm test"}}'
+  local hb='{"type":"heartbeat"}'
+  local result='{"type":"tool_result","tool_use_id":"toolu_01","content":"ok"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$tool" "$hb" "$hb" "$hb" "$hb" "$hb" "$result")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 7 lines should be consumed (tool active suppresses idle timeout)
+  [ "$lines_consumed" -eq 7 ]
+}
+
+@test "tool_result resumes idle tracking: heartbeats after tool_result trigger timeout" {
+  # idle_timeout=4 → max_idle_hb=2; emit tool_use → tool_result → 5 heartbeats
+  # After tool_result, heartbeats should trigger timeout
+  local tool='{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"npm test"}}'
+  local result='{"type":"tool_result","tool_use_id":"toolu_02","content":"ok"}'
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$tool" "$result" "$hb" "$hb" "$hb" "$hb" "$hb")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # tool_use + tool_result + 2 heartbeats (threshold) = 4 lines consumed, not all 7
+  [ "$lines_consumed" -le 5 ]
+}
+
+@test "parallel tool calls: idle timeout suppressed until all tools complete" {
+  # idle_timeout=4 → max_idle_hb=2; emit 2× tool_use → 1× tool_result → heartbeats → 1× tool_result → heartbeats
+  local tool1='{"type":"tool_use","id":"toolu_p1","name":"Bash","input":{"command":"test1"}}'
+  local tool2='{"type":"tool_use","id":"toolu_p2","name":"Read","input":{"file_path":"/tmp/x"}}'
+  local result1='{"type":"tool_result","tool_use_id":"toolu_p1","content":"ok"}'
+  local result2='{"type":"tool_result","tool_use_id":"toolu_p2","content":"ok"}'
+  local hb='{"type":"heartbeat"}'
+  local input
+  # 2 tools → result1 → 3 heartbeats (tool_active=1, survives) → result2 → 3 heartbeats (tool_active=0, timeout)
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$tool1" "$tool2" "$result1" "$hb" "$hb" "$hb" "$result2" "$hb" "$hb" "$hb" "$hb")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # First batch of heartbeats (3) survives because tool_active=1
+  # After result2, heartbeats trigger timeout after 2 → consume ~9 lines, not all 11
+  [ "$lines_consumed" -ge 8 ]
+  [ "$lines_consumed" -le 10 ]
+}
+
+@test "wall-clock timeout suppressed during tool-active" {
+  # idle_timeout=2; emit tool_use → delayed heartbeats → tool_result
+  # Wall-clock should NOT fire while tool is active
+  local tool='{"type":"tool_use","id":"toolu_wc","name":"Bash","input":{"command":"e2e"}}'
+  local hb='{"type":"heartbeat"}'
+  local result='{"type":"tool_result","tool_use_id":"toolu_wc","content":"done"}'
+  {
+    printf '%s\n' "$tool"
+    sleep 2
+    printf '%s\n' "$hb"
+    sleep 2
+    printf '%s\n' "$hb"
+    printf '%s\n' "$result"
+  } | process_stream_json "$_log" "$_raw" false "" false 2 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 4 should be consumed (tool active suppresses wall-clock timeout)
+  [ "$lines_consumed" -eq 4 ]
+}
+
+@test "duplicate tool_use doesn't double-count tool_active" {
+  # Emit same tool_id in embedded assistant then standalone tool_use
+  # After single tool_result, tool_active should be 0, and idle timeout should fire
+  local assistant='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_dup1","name":"Bash","input":{"command":"test"}}]}}'
+  local standalone='{"type":"tool_use","id":"toolu_dup1","name":"Bash","input":{"command":"test"}}'
+  local result='{"type":"tool_result","tool_use_id":"toolu_dup1","content":"ok"}'
+  local hb='{"type":"heartbeat"}'
+  local input
+  # idle_timeout=4 → max_idle_hb=2
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "$assistant" "$standalone" "$result" "$hb" "$hb" "$hb" "$hb")
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 4 >/dev/null 2>&1
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # After result, tool_active=0 → heartbeats trigger timeout after 2
+  # Should consume assistant + standalone + result + 2 hb = 5, not all 7
+  [ "$lines_consumed" -le 6 ]
+}

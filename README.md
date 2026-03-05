@@ -78,6 +78,7 @@ See `examples/PLAN.md.example` for a complete example.
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
 --max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
+--verify-timeout <s> Kill verification after N seconds (default: 300)
 --verify             Verify each phase with a fresh read-only Claude instance using verdict-based checking (VERIFICATION_PASSED/FAILED keywords, doubles API calls)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
@@ -112,6 +113,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
 | `IDLE_TIMEOUT` | `--idle-timeout` | `600` |
+| `VERIFY_TIMEOUT` | `--verify-timeout` | `300` |
 | `AI_PARSE` | `--ai-parse` | `false` |
 | `GRANULARITY` | `--granularity` | `tasks` |
 | `VERIFY_PHASES` | `--verify` | `false` |

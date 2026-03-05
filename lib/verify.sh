@@ -102,8 +102,8 @@ Do NOT skip this. Do NOT just end silently.
   _timer_pid=""
   _vp_pid="$CURRENT_PIPELINE_PID"
   _vp_pgid="$CURRENT_PIPELINE_PGID"
-  _verify_timeout=300
-  if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null; then
+  _verify_timeout="${VERIFY_TIMEOUT:-300}"
+  if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null && [ "$_verify_timeout" -eq 300 ]; then
     _verify_timeout="$MAX_PHASE_TIME"
   fi
   set -m
