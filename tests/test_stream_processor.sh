@@ -186,7 +186,7 @@ run_processor() {
 @test "consecutive silent events: each gets its own spinner update" {
   local e1='{"type":"assistant","message":{"role":"assistant","content":[]}}'
   local e2='{"type":"unknown_event"}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Second tick uses \r to overwrite; at least one carriage return
   count=$(printf '%s' "$output" | tr -cd $'\r' | wc -c | tr -d ' ')
@@ -194,17 +194,17 @@ run_processor() {
 }
 
 @test "10 consecutive silent events: spinner shown, only one initial timestamp" {
-  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -10 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -10 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Spinner carriage-return updates should appear
   [[ "$output" == *$'\r'* ]]
-  # BEGIN prints one timestamp; spinner never emits extra timestamps
+  # BEGIN prints one timestamp on stdout; spinner never emits extra timestamps
   count=$(printf '%s' "$output" | grep -o '\[[0-9][0-9]:[0-9][0-9]:[0-9][0-9]\]' | wc -l | tr -d ' ')
   [ "$count" -eq 1 ]
 }
 
 @test "50 consecutive silent events: spinner shows elapsed time in seconds" {
-  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -50 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "yes '{\"type\":\"unknown_event\"}' | head -50 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Timer format like "0s" should appear in spinner output
   [[ "$output" =~ [0-9]+s ]]
@@ -213,7 +213,7 @@ run_processor() {
 @test "text after silent spinner: text starts on new line" {
   local silent='{"type":"unknown_event"}'
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
-  run bash -c "printf '%s\n%s\n' '$silent' '$text' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$silent' '$text' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'\r'* ]]
   [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\]\ hello ]]
@@ -222,7 +222,7 @@ run_processor() {
 @test "spinner resets after visible text: second silent period starts fresh" {
   local silent='{"type":"unknown_event"}'
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi\n"}]}}'
-  run bash -c "printf '%s\n%s\n%s\n' '$silent' '$text' '$silent' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n%s\n' '$silent' '$text' '$silent' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Both spinner periods show elapsed time, text appears between them
   [[ "$output" == *"hi"* ]]
@@ -233,7 +233,7 @@ run_processor() {
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}'
   local silent='{"type":"unknown_event"}'
   local text2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"world\n"}]}}'
-  run bash -c "printf '%s\n%s\n%s\n' '$text' '$silent' '$text2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n%s\n' '$text' '$silent' '$text2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # clear_bottom_block inserts newline before spinner when mid-line
   [[ "$output" == *"hello"* ]]
@@ -661,7 +661,7 @@ JSON"
 # --- heartbeat events ---
 
 @test "heartbeat event: spinner updates with elapsed time" {
-  run bash -c "yes '{\"type\":\"heartbeat\"}' | head -5 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "yes '{\"type\":\"heartbeat\"}' | head -5 | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Heartbeat falls into the catch-all else block which shows spinner with elapsed time
   [[ "$output" =~ [0-9]+s ]]
@@ -847,7 +847,7 @@ JSON"
 @test "TaskCreate standalone: green color in panel output" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
   local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Panel uses green for completed items
   [[ "$output" == *$'\033[0;32m'* ]]
@@ -953,7 +953,7 @@ JSON"
 @test "heartbeat after real event: text then heartbeat handled cleanly" {
   local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hello\n"}]}}'
   local hb='{"type":"heartbeat"}'
-  run bash -c "printf '%s\n%s\n' '$text' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$text' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   # Text should appear
   [[ "$output" == *"hello"* ]]
@@ -1217,7 +1217,7 @@ strip_ansi() {
   sed 's/\033\[[0-9;]*[a-zA-Z]//g'
 }
 
-@test "sticky panel: TodoWrite renders individual items on stdout" {
+@test "sticky panel: TodoWrite renders individual items" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Add tests","status":"completed"},{"content":"Fix bug","status":"in_progress"},{"content":"Write docs","status":"pending"}]}}'
   run run_processor "$event"
   [ "$status" -eq 0 ]
@@ -1291,7 +1291,7 @@ strip_ansi() {
 @test "sticky panel: TaskUpdate completed shows checkmark" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Build","activeForm":"Building","description":"build project"}}'
   local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *$'\xe2\x9c\x93 Build'* ]]
 }
@@ -1300,7 +1300,7 @@ strip_ansi() {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"a"}}'
   local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task B","description":"b"}}'
   local e3='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"deleted"}}'
-  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   local stripped
   stripped=$(printf '%s' "$output" | strip_ansi)
@@ -1316,7 +1316,7 @@ strip_ansi() {
 @test "sticky panel: not rendered after result event" {
   local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
   local result='{"type":"result","duration_ms":1000,"num_turns":1,"is_error":false,"total_cost_usd":0.01,"usage":{"input_tokens":100,"output_tokens":50}}'
-  run bash -c "printf '%s\n%s\n' '$todo' '$result' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$todo' '$result' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   local stripped
   stripped=$(printf '%s' "$output" | strip_ansi)
@@ -1357,6 +1357,70 @@ strip_ansi() {
   [ "$status" -eq 0 ]
   # \033[?25h should appear (show cursor)
   [[ "$output" == *$'\033[?25h'* ]]
+}
+
+# --- stderr migration tests ---
+
+@test "sticky panel: not rendered on stdout" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
+  # Capture stdout only (discard stderr)
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  # Panel items and separator should NOT appear on stdout
+  [[ "$stripped" != *"Item A"* ]]
+  [[ "$stripped" != *"Item B"* ]]
+  [[ "$stripped" != *"────"* ]]
+}
+
+@test "spinner: not rendered on stdout" {
+  local event='{"type":"unknown_event"}'
+  # Capture stdout only (discard stderr)
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  # Spinner chars should NOT appear on stdout
+  [[ "$output" != *"|"*"0s"* ]]
+  [[ "$output" != *"/"*"0s"* ]]
+}
+
+@test "sticky panel: DECSTBM set when term_height available" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  # STREAM_TERM_HEIGHT overrides tput lines in the awk script
+  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  # Check stderr output contains scroll region set escape (ESC[1;Nr)
+  [[ "$output" == *$'\033[1;'* ]]
+}
+
+@test "sticky panel: DECSTBM reset after all done" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done","status":"completed"}]}}'
+  local e2='{"type":"heartbeat"}'
+  run bash -c "export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  # Should contain scroll region reset (ESC[r)
+  [[ "$output" == *$'\033[r'* ]]
+}
+
+@test "sticky panel: fallback when no terminal height" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  # Without term_height, fallback uses cursor-up approach on stderr
+  run run_processor "$event"
+  [ "$status" -eq 0 ]
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  # Fallback should still show items (captured via run which merges stderr)
+  [[ "$stripped" == *"Item"* ]]
+}
+
+@test "sticky panel: absolute positioning in DECSTBM mode" {
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task X","status":"pending"}]}}'
+  # STREAM_TERM_HEIGHT=30 → panel_size=2, content_bottom=28 → panel at row 29
+  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  # Should use absolute positioning (ESC[row;1H) not cursor-up (ESC[nA)
+  [[ "$output" == *$'\033['*';1H'* ]]
+  [[ "$output" != *$'\033['*'A\033[J'* ]]
 }
 
 @test "duplicate tool_use doesn't double-count tool_active" {
