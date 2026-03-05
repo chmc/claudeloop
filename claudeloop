@@ -1076,7 +1076,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
   # Clear spinner remnants
-  printf '\r%-12s\r' '' >/dev/stderr
+  printf '\033[?25h\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
