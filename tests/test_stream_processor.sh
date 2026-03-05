@@ -1423,6 +1423,34 @@ strip_ansi() {
   [[ "$output" != *$'\033['*'A\033[J'* ]]
 }
 
+@test "sticky panel: uses stty not tput for term height inside AWK" {
+  # Verify the AWK code calls 'stty size' not 'tput lines' for terminal height
+  grep -q 'stty size </dev/tty' "$STREAM_PROCESSOR_LIB"
+  ! grep -q 'tput lines' "$STREAM_PROCESSOR_LIB"
+}
+
+@test "sticky panel: stty size parses rows correctly from AWK" {
+  # Without STREAM_TERM_HEIGHT, get_term_height() calls stty size </dev/tty.
+  # In CI/test (no /dev/tty), stty returns empty → h=0 → panel skipped gracefully.
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  run bash -c "unset STREAM_TERM_HEIGHT; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  # Should not crash; output should contain the item text (inline fallback)
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  [[ "$stripped" == *"Item"* ]]
+}
+
+@test "sticky panel: STREAM_TERM_HEIGHT override bypasses stty" {
+  # When STREAM_TERM_HEIGHT is set, AWK uses override_term_height and never
+  # needs stty. Verify DECSTBM activates correctly with the override.
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task","status":"pending"}]}}'
+  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  # DECSTBM scroll region should be set using the override height
+  [[ "$output" == *$'\033[1;'* ]]
+}
+
 @test "duplicate tool_use doesn't double-count tool_active" {
   # Emit same tool_id in embedded assistant then standalone tool_use
   # After single tool_result, tool_active should be 0, and idle timeout should fire

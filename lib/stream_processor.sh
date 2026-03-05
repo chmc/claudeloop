@@ -241,10 +241,11 @@ process_stream_json() {
     else sticky_all_done = 0
   }
 
-  function get_term_height(    h) {
-    "tput lines 2>/dev/null" | getline h
-    close("tput lines 2>/dev/null")
-    h = h + 0
+  function get_term_height(    _sz, _sp, h) {
+    "stty size </dev/tty 2>/dev/null" | getline _sz
+    close("stty size </dev/tty 2>/dev/null")
+    split(_sz, _sp, " ")
+    h = _sp[1] + 0
     if (h < 1) h = 0
     term_height = h
     return h
@@ -277,11 +278,12 @@ process_stream_json() {
     content_bottom = 0
   }
 
-  function render_panel_content(    _si, new_h) {
+  function render_panel_content(    _si, new_h, _sz, _szp) {
     if (!panel_active) return
-    "tput lines 2>/dev/null" | getline new_h
-    close("tput lines 2>/dev/null")
-    new_h = new_h + 0
+    "stty size </dev/tty 2>/dev/null" | getline _sz
+    close("stty size </dev/tty 2>/dev/null")
+    split(_sz, _szp, " ")
+    new_h = _szp[1] + 0
     if (new_h > 0 && new_h != term_height) {
       term_height = new_h
       deactivate_panel()
