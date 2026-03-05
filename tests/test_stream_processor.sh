@@ -1451,6 +1451,56 @@ strip_ansi() {
   [[ "$output" == *$'\033[1;'* ]]
 }
 
+# --- DECSC/DECRC and stale text clearing tests ---
+
+@test "activate_panel: DECSC emitted before scroll region set" {
+  # activate_panel should save cursor (DECSC = ESC7) before setting scroll region
+  # This is needed so DECRC can restore cursor position (prevents empty line gaps)
+  # Current code does NOT emit DECSC in activate_panel — only render_panel_content does
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  # DECSC (^[7) must appear BEFORE the scroll region (^[[1;28r)
+  # In current code, the first ^[7 comes from render_panel_content AFTER activate_panel
+  # After fix, ^[7 should be the very first thing from activate_panel
+  # Extract position: ^[7 must come before ^[[1;
+  local first_decsc first_scroll
+  first_decsc=$(printf '%s' "$output_raw" | grep -b -o '\^\[7' | head -1 | cut -d: -f1)
+  first_scroll=$(printf '%s' "$output_raw" | grep -b -o '\^\[\[1;' | head -1 | cut -d: -f1)
+  [ -n "$first_decsc" ]
+  [ -n "$first_scroll" ]
+  [ "$first_decsc" -lt "$first_scroll" ]
+}
+
+@test "activate_panel: uses DECRC not cursor-jump on first activation" {
+  # After setting scroll region, activate_panel should use DECRC (ESC8) to restore
+  # cursor, NOT jump to content_bottom with ESC[N;1H
+  # New sequence: ESC7 ESC[J ESC[1;28r ESC8
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  # The activate_panel sequence should be: ^[7^[[J^[[1;28r^[8
+  [[ "$output_raw" == *'^[7^[[J^[[1;28r^[8'* ]]
+}
+
+@test "deactivate_panel: emits ESC[J after DECRC to clear stale text" {
+  # deactivate_panel should clear stale text below restored cursor position
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done","status":"completed"}]}}'
+  local e2='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' "$e1" "$e2" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  # deactivate_panel sequence should end with: ^[[r^[8^[[J
+  [[ "$output_raw" == *'^[[r^[8^[[J'* ]]
+}
+
+@test "non-JSON stdout line: fflush before render_sticky" {
+  # Verify that non-JSON lines produce output (basic regression test for fflush)
+  local line="plain text output"
+  run bash -c "echo '$line' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"plain text output"* ]]
+}
+
 @test "duplicate tool_use doesn't double-count tool_active" {
   # Emit same tool_id in embedded assistant then standalone tool_use
   # After single tool_result, tool_active should be 0, and idle timeout should fire
