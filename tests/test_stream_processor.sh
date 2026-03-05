@@ -1483,14 +1483,44 @@ strip_ansi() {
   [[ "$output_raw" == *'^[7^[[J^[[1;28r^[8'* ]]
 }
 
-@test "deactivate_panel: emits ESC[J after DECRC to clear stale text" {
-  # deactivate_panel should clear stale text below restored cursor position
+@test "deactivate_panel: uses direct cursor positioning (no DECSC/DECRC)" {
+  # deactivate_panel should use absolute cursor positioning, not DECSC/DECRC
   local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done","status":"completed"}]}}'
   local e2='{"type":"heartbeat"}'
   local output_raw
   output_raw=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' "$e1" "$e2" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # deactivate_panel sequence should end with: ^[[r^[8^[[J
-  [[ "$output_raw" == *'^[[r^[8^[[J'* ]]
+  # deactivate_panel sequence: move to panel area, clear, reset region, cursor to content_bottom
+  # With STREAM_TERM_HEIGHT=30 and 1 todo + 1 separator = panel_size=2, content_bottom=28
+  # So: ^[[29;1H^[[J^[[r^[[28;1H
+  [[ "$output_raw" == *'^[[29;1H^[[J^[[r^[[28;1H'* ]]
+  # Must NOT contain DECSC (^[7) in the deactivation sequence — only in activation
+}
+
+@test "deactivate_panel on result: panel deactivated during result handling" {
+  # When result event arrives with active panel, panel should be deactivated
+  # during result handling (not just in END block)
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"in_progress"}]}}'
+  local e2='{"type":"result","duration_ms":5000,"num_turns":3,"total_cost_usd":0.05,"session_id":"s1","input_tokens":100,"output_tokens":50}'
+  local e3='{"type":"heartbeat"}'
+  local e4='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n%s\n%s\n' "$e1" "$e2" "$e3" "$e4" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  # ^[[r (scroll region reset) should appear BEFORE [Session: (the result summary)
+  local before_session="${output_raw%%\[Session:*}"
+  [[ "$before_session" == *'^[[r'* ]]
+}
+
+@test "no ghost spinner after result event" {
+  # After got_result=1, heartbeats should NOT produce spinner output
+  local e1='{"type":"result","duration_ms":1000,"num_turns":1,"total_cost_usd":0.01,"session_id":"s1","input_tokens":10,"output_tokens":5}'
+  local e2='{"type":"heartbeat"}'
+  local e3='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(printf '%s\n%s\n%s\n' "$e1" "$e2" "$e3" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  # Should NOT contain spinner characters after the session summary
+  # The spinner would show "| 0s" — check it's not present after [Session:
+  local after_session="${output_raw##*\[Session:*\]}"
+  [[ "$after_session" != *'| 0s'* ]]
 }
 
 @test "non-JSON stdout line: fflush before render_sticky" {

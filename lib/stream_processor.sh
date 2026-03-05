@@ -272,11 +272,9 @@ process_stream_json() {
 
   function deactivate_panel() {
     if (!panel_active) return
-    printf "\0337" > "/dev/stderr"
-    printf "\033[%d;1H\033[J", (content_bottom + 1) > "/dev/stderr"
-    printf "\033[r" > "/dev/stderr"
-    printf "\0338" > "/dev/stderr"
-    printf "\033[J" > "/dev/stderr"                                   # Clear stale text below cursor
+    printf "\033[%d;1H\033[J", (content_bottom + 1) > "/dev/stderr"  # Clear panel area
+    printf "\033[r" > "/dev/stderr"                                   # Reset scroll region
+    printf "\033[%d;1H", content_bottom > "/dev/stderr"               # Cursor to content bottom
     fflush("/dev/stderr")
     panel_active = 0
     panel_size = 0
@@ -313,7 +311,7 @@ process_stream_json() {
 
   function render_sticky(    _si, _sr, needed) {
     if (sticky_count == 0 || simple_mode == "true" || got_result) return
-    if (sticky_all_done > 1) { sticky_count = 0; sticky_all_done = 0; deactivate_panel(); return }
+    if (sticky_all_done > 1) { sticky_count = 0; sticky_all_done = 0; deactivate_panel(); at_line_start = 1; return }
     if (sticky_all_done == 1) sticky_all_done = 2
 
     needed = sticky_count + 1
@@ -348,6 +346,7 @@ process_stream_json() {
   }
 
   function clear_bottom_block() {
+    fflush()  # Flush stdout before any stderr cursor operations
     if (panel_active) {
       if (!at_line_start && spinner_start > 0) {
         printf "\r%-12s\r", "" > "/dev/stderr"
@@ -679,6 +678,7 @@ process_stream_json() {
     } else if (etype == "result") {
       idle_hb = 0; meaningful_seen = 1
       got_result = 1
+      if (panel_active) deactivate_panel()
       clear_line()
       spinner_start = 0
       total_cost = extract(line, "total_cost_usd") + 0
@@ -722,7 +722,9 @@ process_stream_json() {
         summary = summary " web=" wsearch "s/" wfetch "f"
       if (n_denials > 0) summary = summary " denials=" n_denials
       summary = summary "]"
+      fflush()
       print summary > "/dev/stderr"
+      fflush("/dev/stderr")
       print summary >> log_file
       if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
@@ -749,6 +751,7 @@ process_stream_json() {
           printf "[%s] model=%s\n", get_time(), model_s > "/dev/stderr"
           printf "[%s] model=%s\n", get_time(), model_s >> log_file
         }
+        fflush("/dev/stderr")
         if (model_s != "" && live_log != "") { printf "[%s] model=%s\n", get_time(), model_s >> live_log; fflush(live_log) }
       }
       render_sticky()
@@ -784,17 +787,19 @@ process_stream_json() {
         if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
         exit
       }
-      if (spinner_start == 0) {
-        clear_bottom_block()
-        spinner_start = now
-        render_sticky()
-        printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
-      } else {
-        printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
+      if (!got_result) {
+        if (spinner_start == 0) {
+          clear_bottom_block()
+          spinner_start = now
+          render_sticky()
+          printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
+        } else {
+          printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
+        }
+        fflush("/dev/stderr")
+        at_line_start = 0
+        spinner_idx++
       }
-      fflush("/dev/stderr")
-      at_line_start = 0
-      spinner_idx++
     }
   }
   END {
