@@ -470,6 +470,8 @@ remove_lock() {
 
 # Signal handler for graceful shutdown
 handle_interrupt() {
+  # Reset scroll region + show cursor immediately (panel may be active)
+  printf '\033[r\033[?25h' >/dev/stderr
   # Kill running claude pipeline immediately (don't wait for it to clean up)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
@@ -1079,8 +1081,8 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
-  # Clear spinner remnants
-  printf '\033[r\033[?25h\r%-12s\r' '' >/dev/stderr
+  # Clear spinner remnants and stale panel text
+  printf '\033[r\033[?25h\033[J\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
