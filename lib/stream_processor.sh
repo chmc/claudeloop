@@ -251,16 +251,21 @@ process_stream_json() {
     return h
   }
 
-  function activate_panel(n) {
+  function activate_panel(n, clamp_cursor) {
     if (n <= 0) return
     if (term_height < 1) get_term_height()
     if (term_height < 10) return
     if (n > term_height - 5) n = term_height - 5
     panel_size = n
     content_bottom = term_height - panel_size
-    printf "\033[1;%dr", content_bottom > "/dev/stderr"
-    printf "\033[%d;1H\033[J", (content_bottom + 1) > "/dev/stderr"
-    printf "\033[%d;1H", content_bottom > "/dev/stderr"
+    printf "\0337" > "/dev/stderr"                                    # DECSC: save cursor
+    printf "\033[J" > "/dev/stderr"                                   # Clear from cursor to end (stale text + old panel)
+    printf "\033[1;%dr", content_bottom > "/dev/stderr"               # Set scroll region
+    if (clamp_cursor) {
+      printf "\033[%d;1H", content_bottom > "/dev/stderr"             # Clamp to content_bottom (resize/size-change safety)
+    } else {
+      printf "\0338" > "/dev/stderr"                                  # DECRC: restore cursor (first activation)
+    }
     fflush("/dev/stderr")
     panel_active = 1
   }
@@ -268,10 +273,10 @@ process_stream_json() {
   function deactivate_panel() {
     if (!panel_active) return
     printf "\0337" > "/dev/stderr"
-    printf "\033[%d;1H", (content_bottom + 1) > "/dev/stderr"
-    printf "\033[J" > "/dev/stderr"
+    printf "\033[%d;1H\033[J", (content_bottom + 1) > "/dev/stderr"
     printf "\033[r" > "/dev/stderr"
     printf "\0338" > "/dev/stderr"
+    printf "\033[J" > "/dev/stderr"                                   # Clear stale text below cursor
     fflush("/dev/stderr")
     panel_active = 0
     panel_size = 0
@@ -287,7 +292,7 @@ process_stream_json() {
     if (new_h > 0 && new_h != term_height) {
       term_height = new_h
       deactivate_panel()
-      activate_panel(sticky_count + 1)
+      activate_panel(sticky_count + 1, 1)
       if (!panel_active) return
     }
     printf "\0337" > "/dev/stderr"
@@ -317,7 +322,7 @@ process_stream_json() {
       activate_panel(needed)
     } else if (needed != panel_size) {
       deactivate_panel()
-      activate_panel(needed)
+      activate_panel(needed, 1)
     }
 
     if (panel_active) {
@@ -459,6 +464,7 @@ process_stream_json() {
       clear_bottom_block()
       print line
       print line >> log_file
+      fflush()
       if (live_log != "") { printf "[%s] %s\n", get_time(), line >> live_log; fflush(live_log) }
       render_sticky()
       next
