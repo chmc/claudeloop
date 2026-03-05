@@ -1024,6 +1024,9 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
   # not just the last process. Without set -m, kill -TERM $! only kills the last
   # process; with set -m, kill -TERM -- -$PGID kills every process in the job.
+  STREAM_TERM_HEIGHT=$(tput lines 2>/dev/null || echo 0)
+  export STREAM_TERM_HEIGHT
+
   set -m
   {
     _rc=0
