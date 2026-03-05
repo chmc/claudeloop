@@ -402,6 +402,11 @@ STUB
   [ "$elapsed" -lt 15 ]
 }
 
+@test "verify_phase: cleanup includes scroll region reset" {
+  # The cleanup printf after pipeline should include ESC[r to reset scroll region
+  grep -q '\\033\[r' "$CLAUDELOOP_DIR/lib/verify.sh"
+}
+
 @test "verify_phase: empty exit code defaults to failure" {
   VERIFY_PHASES=true
   # Stub that creates a tool_use event and VERIFICATION_PASSED but writes empty exit file

@@ -1216,3 +1216,12 @@ PROGRESS
   [ "$(_call_count)" -eq 1 ]
   [ "$(_completed_count)" -eq 2 ]
 }
+
+# =============================================================================
+# Bug fix: STREAM_TERM_HEIGHT uses stty size instead of tput lines
+# =============================================================================
+
+@test "integration: STREAM_TERM_HEIGHT set via stty size not tput lines" {
+  grep -q 'stty size' "$CLAUDELOOP"
+  ! grep -q 'tput lines' "$CLAUDELOOP"
+}
