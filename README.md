@@ -74,7 +74,7 @@ See `examples/PLAN.md.example` for a complete example.
 --recover-progress   Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
 --force              Kill any running instance and take over (preserves progress)
 --dry-run            Validate plan without executing
---max-retries <n>    Max retry attempts per phase (default: 5)
+--max-retries <n>    Max retry attempts per phase (default: 10)
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
 --max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
