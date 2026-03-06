@@ -6,6 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Use conventional commits
 
+### Branching model
+
+Two long-lived branches:
+
+| Branch | Purpose | VERSION state |
+|--------|---------|---------------|
+| `main` | Stable/production code | Always stable (e.g. `0.16.0`) |
+| `beta` | Experimental/beta development | Always beta (e.g. `0.17.0-beta.1`) |
+
+**Rebase-only policy:** No merge commits. All branch synchronization uses `git rebase` to keep linear history.
+
+### Branch-awareness rule (mandatory)
+
+Before starting any work (planning, coding, committing), check the current branch with `git branch --show-current`. Flag to the developer whether the current branch targets stable (`main`) or beta (`beta`) and ask how to proceed before making changes. If the work doesn't match the current branch, offer to switch.
+
 ## Documentation
 
 Update documentation README.md QUICKSTART.md when implementation is changed

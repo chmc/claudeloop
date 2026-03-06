@@ -7,6 +7,16 @@ description: Git and GitHub conventions for this project
 
 Follow these conventions when committing, pushing, or creating PRs in this project.
 
+## Branching model
+
+Two long-lived branches: `main` (stable) and `beta` (experimental). Before any work, check the current branch:
+```sh
+git branch --show-current
+```
+Confirm the target branch matches the intent (stable vs beta) before pushing.
+
+**Rebase-only rule:** Never use `git merge`. Always use `git rebase` for branch synchronization.
+
 ## Commits
 
 - **Conventional commits** are required: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, etc.
@@ -28,8 +38,10 @@ Follow these conventions when committing, pushing, or creating PRs in this proje
 
 ## Pushing
 
-- This project works on `main` directly: `git push origin main`
-- Before pushing, check if you're ahead of remote: `git status` or `git log origin/main..HEAD`
+- Check the current branch before pushing and confirm it matches intent:
+  - `git push origin main` for stable work
+  - `git push origin beta` for beta/experimental work
+- Before pushing, check if you're ahead of remote: `git status` or `git log origin/<branch>..HEAD`
 - Do not force-push unless explicitly asked.
 
 ## Pull Requests

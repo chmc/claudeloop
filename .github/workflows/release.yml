@@ -25,6 +25,19 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
+      - name: Validate branch and release type
+        run: |
+          branch="${GITHUB_REF_NAME}"
+          beta="${{ inputs.beta }}"
+          if [ "$branch" = "main" ] && [ "$beta" = "true" ]; then
+            echo "::error::Beta releases must come from 'beta' branch, not 'main'"
+            exit 1
+          fi
+          if [ "$branch" = "beta" ] && [ "$beta" != "true" ]; then
+            echo "::error::Stable releases must come from 'main', not 'beta'"
+            exit 1
+          fi
+
       - name: Run release script
         run: |
           beta_arg=""

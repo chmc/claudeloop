@@ -11,20 +11,27 @@ Trigger a GitHub Actions release for claudeloop.
 
 ## Pre-checks
 
-Before triggering, check and inform the user (but don't block) if:
-- There are uncommitted changes: `git status --porcelain`
-- There are unpushed commits: `git log origin/main..HEAD --oneline`
+Before triggering, verify:
+1. **Correct branch for release type:**
+   - Beta release: must be on `beta` branch
+   - Stable release: must be on `main` branch
+   - If on the wrong branch, warn and offer to switch.
+2. Check and inform the user (but don't block) if:
+   - There are uncommitted changes: `git status --porcelain`
+   - There are unpushed commits: `git log origin/$(git branch --show-current)..HEAD --oneline`
 
 ## Commands
 
 **Beta release** (default if no argument or `beta`):
 ```sh
-gh workflow run release.yml -f beta=true
+# Must be on the beta branch
+gh workflow run release.yml -r beta -f beta=true
 ```
 
 **Stable release** (if argument is `stable`):
 ```sh
-gh workflow run release.yml
+# Must be on the main branch
+gh workflow run release.yml -r main
 ```
 
 After triggering, show the latest workflow run:
