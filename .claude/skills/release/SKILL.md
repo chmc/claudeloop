@@ -1,7 +1,6 @@
 ---
 name: release
 description: Trigger a GitHub release (beta or stable)
-disable-model-invocation: true
 argument-hint: "[beta|stable]"
 ---
 
