@@ -470,8 +470,8 @@ remove_lock() {
 
 # Signal handler for graceful shutdown
 handle_interrupt() {
-  # Reset scroll region + show cursor immediately (panel may be active)
-  printf '\033[r\033[?25h' >/dev/stderr
+  # Show cursor immediately (panel may be active)
+  printf '\033[?25h' >/dev/stderr
   # Kill running claude pipeline immediately (don't wait for it to clean up)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
@@ -1081,8 +1081,8 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
-  # Clear spinner remnants on current line (panel already cleaned by deactivate_panel)
-  printf '\033[r\033[?25h\033[K\r%-12s\r' '' >/dev/stderr
+  # Clear spinner remnants and show cursor
+  printf '\033[?25h\033[K\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
@@ -1394,7 +1394,7 @@ main() {
   # Set up signal handlers and cleanup
   trap handle_interrupt INT TERM
   trap cleanup EXIT
-  trap 'printf "\033[r" > /dev/tty 2>/dev/null' WINCH
+  trap '' WINCH
 
   # Load config file (defaults → config file)
   load_config
