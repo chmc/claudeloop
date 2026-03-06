@@ -281,52 +281,18 @@ process_stream_json() {
     content_bottom = 0
   }
 
-  function ensure_scroll_region(    _sz, _szp, new_h, old_cb) {
+  function render_panel_content(    _si, new_h, _sz, _szp) {
     if (!panel_active) return
+    # Resize check: deactivate/activate cycle re-establishes DECSTBM with new size
     "stty size </dev/tty 2>/dev/null" | getline _sz
     close("stty size </dev/tty 2>/dev/null")
     split(_sz, _szp, " ")
     new_h = _szp[1] + 0
     if (new_h > 0 && new_h != term_height) {
-      old_cb = content_bottom
       term_height = new_h
-      printf "\033[%d;1H\033[J", (old_cb + 1) > "/dev/stderr"
-      content_bottom = term_height - panel_size
-      if (content_bottom < 5) content_bottom = 5
-      if (old_cb < content_bottom) {
-        printf "\033[%d;1H", old_cb > "/dev/stderr"
-      } else {
-        printf "\033[%d;1H", content_bottom > "/dev/stderr"
-      }
-    }
-    printf "\0337" > "/dev/stderr"
-    printf "\033[1;%dr", content_bottom > "/dev/stderr"
-    printf "\0338" > "/dev/stderr"
-    fflush("/dev/stderr")
-  }
-
-  function release_scroll_region() {
-    if (!panel_active) return
-    printf "\0337" > "/dev/stderr"
-    printf "\033[r" > "/dev/stderr"
-    printf "\0338" > "/dev/stderr"
-    fflush("/dev/stderr")
-  }
-
-  function render_panel_content(    _si, new_h, _sz, _szp, old_cb) {
-    if (!panel_active) return
-    # Lightweight resize check (no DECSTBM changes)
-    "stty size </dev/tty 2>/dev/null" | getline _sz
-    close("stty size </dev/tty 2>/dev/null")
-    split(_sz, _szp, " ")
-    new_h = _szp[1] + 0
-    if (new_h > 0 && new_h != term_height) {
-      old_cb = content_bottom
-      term_height = new_h
-      # Clear stale panel at old position
-      printf "\033[%d;1H\033[J", (old_cb + 1) > "/dev/stderr"
-      content_bottom = term_height - panel_size
-      if (content_bottom < 5) content_bottom = 5
+      deactivate_panel()
+      activate_panel(sticky_count + 1, 1)
+      if (!panel_active) return
     }
     # Use absolute cursor positioning (DECSTBM-independent)
     printf "\0337" > "/dev/stderr"
@@ -360,7 +326,6 @@ process_stream_json() {
 
     if (panel_active) {
       render_panel_content()
-      release_scroll_region()
       return
     }
 
@@ -384,7 +349,6 @@ process_stream_json() {
   function clear_bottom_block() {
     fflush()  # Flush stdout before any stderr cursor operations
     if (panel_active) {
-      ensure_scroll_region()
       if (!at_line_start && spinner_start > 0) {
         printf "\r%-12s\r", "" > "/dev/stderr"
       } else if (!at_line_start) {
