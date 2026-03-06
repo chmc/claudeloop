@@ -15,7 +15,7 @@ Two long-lived branches:
 | `main` | Stable/production code | Always stable (e.g. `0.16.0`) |
 | `beta` | Experimental/beta development | Always beta (e.g. `0.17.0-beta.1`) |
 
-**Rebase-only policy:** No merge commits. All branch synchronization uses `git rebase` to keep linear history.
+**Rebase-only policy:** No merge commits. All branch synchronization uses `git rebase` to keep linear history. After rebasing, always `git push --force-with-lease` to update the remote.
 
 ### Branch-awareness rule (mandatory)
 
