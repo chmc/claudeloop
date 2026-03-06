@@ -1531,6 +1531,62 @@ strip_ansi() {
   [[ "$output" == *"plain text output"* ]]
 }
 
+# --- DECSTBM suspend/release during idle tests ---
+# Use hex (xxd -p) for reliable escape sequence matching (cat -v + UTF-8 = unreliable)
+# Key hex patterns:
+#   1b37         = ESC7 (DECSC)
+#   1b5b72       = ESC[r (DECSTBM reset)
+#   1b38         = ESC8 (DECRC)
+#   1b5b313b     = ESC[1; (DECSTBM set prefix)
+
+@test "DECSTBM released after render_sticky: ESC[r emitted after panel render" {
+  # After sticky panel renders, DECSTBM should be released (ESC7 ESC[r ESC8)
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local hexout
+  hexout=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # release_scroll_region emits: DECSC(1b37) DECSTBM-reset(1b5b72) DECRC(1b38)
+  [[ "$hexout" == *'1b371b5b721b38'* ]]
+}
+
+@test "DECSTBM re-established before content output via ensure_scroll_region" {
+  # On next content event after idle, DECSTBM should be re-set
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local e2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello\n"}]}}'
+  local hexout
+  hexout=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' "$e1" "$e2" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # ensure_scroll_region should emit DECSC(1b37) + DECSTBM-set(1b5b313b...72) + DECRC(1b38)
+  # after the release (1b371b5b721b38) from the first event
+  local after_release="${hexout#*1b371b5b721b38}"
+  # DECSTBM set prefix (1b5b313b = ESC[1;) should appear after release
+  [[ "$after_release" == *'1b5b313b'* ]]
+}
+
+@test "heartbeat keeps DECSTBM off: every set is followed by release" {
+  # During heartbeats, DECSTBM set count must not exceed release count
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local e2='{"type":"heartbeat"}'
+  local e3='{"type":"heartbeat"}'
+  local hexout
+  hexout=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n%s\n' "$e1" "$e2" "$e3" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  local set_count release_count
+  set_count=$(printf '%s' "$hexout" | grep -o '1b5b313b' | wc -l | tr -d ' ')
+  release_count=$(printf '%s' "$hexout" | grep -o '1b5b72' | wc -l | tr -d ' ')
+  # Every DECSTBM set must have a matching release
+  [ "$release_count" -ge "$set_count" ]
+}
+
+@test "render_panel_content uses absolute positioning not newlines" {
+  # Panel content should use ESC[N;1H for each line, not \n between panel lines
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
+  local hexout
+  hexout=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # With STREAM_TERM_HEIGHT=30, 2 items + separator = panel_size=3, content_bottom=27
+  # Row 28 = hex 1b5b32383b3148 (ESC[28;1H)
+  # Row 29 = hex 1b5b32393b3148 (ESC[29;1H)
+  [[ "$hexout" == *'1b5b32383b3148'* ]]
+  [[ "$hexout" == *'1b5b32393b3148'* ]]
+}
+
 @test "duplicate tool_use doesn't double-count tool_active" {
   # Emit same tool_id in embedded assistant then standalone tool_use
   # After single tool_result, tool_active should be 0, and idle timeout should fire

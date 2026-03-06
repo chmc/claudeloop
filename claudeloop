@@ -1395,6 +1395,7 @@ main() {
   # Set up signal handlers and cleanup
   trap handle_interrupt INT TERM
   trap cleanup EXIT
+  trap 'printf "\033[r" > /dev/tty 2>/dev/null' WINCH
 
   # Load config file (defaults → config file)
   load_config
