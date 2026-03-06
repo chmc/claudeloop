@@ -259,7 +259,7 @@ process_stream_json() {
     panel_size = n
     content_bottom = term_height - panel_size
     printf "\0337" > "/dev/stderr"                                    # DECSC: save cursor
-    printf "\033[J" > "/dev/stderr"                                   # Clear from cursor to end (stale text + old panel)
+    printf "\033[%d;1H\033[J", content_bottom + 1 > "/dev/stderr"    # Move to panel area, clear only panel
     printf "\033[1;%dr", content_bottom > "/dev/stderr"               # Set scroll region
     if (clamp_cursor) {
       printf "\033[%d;1H", content_bottom > "/dev/stderr"             # Clamp to content_bottom (resize/size-change safety)
@@ -807,7 +807,10 @@ process_stream_json() {
   END {
     deactivate_panel()
     if (sticky_rendered > 0) {
-      printf "\r\033[%dA\033[J", sticky_rendered > "/dev/stderr"
+      for (_ei = 0; _ei < sticky_rendered; _ei++) {
+        printf "\033[A\033[2K" > "/dev/stderr"
+      }
+      printf "\r" > "/dev/stderr"
     }
     if (simple_mode != "true") {
       printf "\033[?25h" > "/dev/stderr"

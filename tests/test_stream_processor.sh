@@ -1475,12 +1475,13 @@ strip_ansi() {
 @test "activate_panel: uses DECRC not cursor-jump on first activation" {
   # After setting scroll region, activate_panel should use DECRC (ESC8) to restore
   # cursor, NOT jump to content_bottom with ESC[N;1H
-  # New sequence: ESC7 ESC[J ESC[1;28r ESC8
+  # Sequence: ESC7 ESC[29;1H ESC[J ESC[1;28r ESC8
+  # (moves to panel area before clearing, preserving content above)
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
   local output_raw
   output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # The activate_panel sequence should be: ^[7^[[J^[[1;28r^[8
-  [[ "$output_raw" == *'^[7^[[J^[[1;28r^[8'* ]]
+  # The activate_panel sequence should be: ^[7^[[29;1H^[[J^[[1;28r^[8
+  [[ "$output_raw" == *'^[7^[[29;1H^[[J^[[1;28r^[8'* ]]
 }
 
 @test "deactivate_panel: uses direct cursor positioning (no DECSC/DECRC)" {
