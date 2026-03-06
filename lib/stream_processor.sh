@@ -281,29 +281,64 @@ process_stream_json() {
     content_bottom = 0
   }
 
-  function render_panel_content(    _si, new_h, _sz, _szp) {
+  function ensure_scroll_region(    _sz, _szp, new_h, old_cb) {
     if (!panel_active) return
     "stty size </dev/tty 2>/dev/null" | getline _sz
     close("stty size </dev/tty 2>/dev/null")
     split(_sz, _szp, " ")
     new_h = _szp[1] + 0
     if (new_h > 0 && new_h != term_height) {
+      old_cb = content_bottom
       term_height = new_h
-      deactivate_panel()
-      activate_panel(sticky_count + 1, 1)
-      if (!panel_active) return
+      printf "\033[%d;1H\033[J", (old_cb + 1) > "/dev/stderr"
+      content_bottom = term_height - panel_size
+      if (content_bottom < 5) content_bottom = 5
+      if (old_cb < content_bottom) {
+        printf "\033[%d;1H", old_cb > "/dev/stderr"
+      } else {
+        printf "\033[%d;1H", content_bottom > "/dev/stderr"
+      }
     }
     printf "\0337" > "/dev/stderr"
-    printf "\033[%d;1H", (content_bottom + 1) > "/dev/stderr"
-    printf "\033[2K  \033[2m\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\033[0m\n" > "/dev/stderr"
+    printf "\033[1;%dr", content_bottom > "/dev/stderr"
+    printf "\0338" > "/dev/stderr"
+    fflush("/dev/stderr")
+  }
+
+  function release_scroll_region() {
+    if (!panel_active) return
+    printf "\0337" > "/dev/stderr"
+    printf "\033[r" > "/dev/stderr"
+    printf "\0338" > "/dev/stderr"
+    fflush("/dev/stderr")
+  }
+
+  function render_panel_content(    _si, new_h, _sz, _szp, old_cb) {
+    if (!panel_active) return
+    # Lightweight resize check (no DECSTBM changes)
+    "stty size </dev/tty 2>/dev/null" | getline _sz
+    close("stty size </dev/tty 2>/dev/null")
+    split(_sz, _szp, " ")
+    new_h = _szp[1] + 0
+    if (new_h > 0 && new_h != term_height) {
+      old_cb = content_bottom
+      term_height = new_h
+      # Clear stale panel at old position
+      printf "\033[%d;1H\033[J", (old_cb + 1) > "/dev/stderr"
+      content_bottom = term_height - panel_size
+      if (content_bottom < 5) content_bottom = 5
+    }
+    # Use absolute cursor positioning (DECSTBM-independent)
+    printf "\0337" > "/dev/stderr"
+    printf "\033[%d;1H\033[2K  \033[2m\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\033[0m", (content_bottom + 1) > "/dev/stderr"
     for (_si = 1; _si <= sticky_count; _si++) {
-      printf "\033[2K" > "/dev/stderr"
+      printf "\033[%d;1H\033[2K", (content_bottom + 1 + _si) > "/dev/stderr"
       if (sticky_statuses[_si] == "completed")
-        printf "  %s\342\234\223 %s%s\n", C_GREEN, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
+        printf "  %s\342\234\223 %s%s", C_GREEN, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
       else if (sticky_statuses[_si] == "in_progress")
-        printf "  %s\342\227\217 %s%s\n", C_YELLOW, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
+        printf "  %s\342\227\217 %s%s", C_YELLOW, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
       else
-        printf "  \033[2m\342\227\213 %s\033[0m\n", trunc(sticky_contents[_si], 60) > "/dev/stderr"
+        printf "  \033[2m\342\227\213 %s\033[0m", trunc(sticky_contents[_si], 60) > "/dev/stderr"
     }
     printf "\0338" > "/dev/stderr"
     fflush("/dev/stderr")
@@ -325,6 +360,7 @@ process_stream_json() {
 
     if (panel_active) {
       render_panel_content()
+      release_scroll_region()
       return
     }
 
@@ -348,6 +384,7 @@ process_stream_json() {
   function clear_bottom_block() {
     fflush()  # Flush stdout before any stderr cursor operations
     if (panel_active) {
+      ensure_scroll_region()
       if (!at_line_start && spinner_start > 0) {
         printf "\r%-12s\r", "" > "/dev/stderr"
       } else if (!at_line_start) {
@@ -794,6 +831,7 @@ process_stream_json() {
           render_sticky()
           printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
         } else {
+          if (panel_active) render_panel_content()
           printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
         }
         fflush("/dev/stderr")
