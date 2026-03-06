@@ -251,88 +251,42 @@ process_stream_json() {
     return h
   }
 
-  function activate_panel(n, clamp_cursor) {
-    if (n <= 0) return
-    if (term_height < 1) get_term_height()
-    if (term_height < 10) return
-    if (n > term_height - 5) n = term_height - 5
-    panel_size = n
-    content_bottom = term_height - panel_size
-    printf "\0337" > "/dev/stderr"                                    # DECSC: save cursor
-    printf "\033[%d;1H\033[J", content_bottom + 1 > "/dev/stderr"    # Move to panel area, clear only panel
-    printf "\033[1;%dr", content_bottom > "/dev/stderr"               # Set scroll region
-    if (clamp_cursor) {
-      printf "\033[%d;1H", content_bottom > "/dev/stderr"             # Clamp to content_bottom (resize/size-change safety)
-    } else {
-      printf "\0338" > "/dev/stderr"                                  # DECRC: restore cursor (first activation)
-    }
-    fflush("/dev/stderr")
-    panel_active = 1
-  }
-
-  function deactivate_panel() {
-    if (!panel_active) return
-    printf "\033[%d;1H\033[J", (content_bottom + 1) > "/dev/stderr"  # Clear panel area
-    printf "\033[r" > "/dev/stderr"                                   # Reset scroll region
-    printf "\033[%d;1H", content_bottom > "/dev/stderr"               # Cursor to content bottom
-    fflush("/dev/stderr")
-    panel_active = 0
-    panel_size = 0
-    content_bottom = 0
-  }
-
-  function render_panel_content(    _si, new_h, _sz, _szp) {
-    if (!panel_active) return
-    # Resize check: deactivate/activate cycle re-establishes DECSTBM with new size
-    "stty size </dev/tty 2>/dev/null" | getline _sz
-    close("stty size </dev/tty 2>/dev/null")
-    split(_sz, _szp, " ")
-    new_h = _szp[1] + 0
-    if (new_h > 0 && new_h != term_height) {
-      term_height = new_h
-      deactivate_panel()
-      activate_panel(sticky_count + 1, 1)
-      if (!panel_active) return
-    }
-    # Use absolute cursor positioning (DECSTBM-independent)
-    printf "\0337" > "/dev/stderr"
-    printf "\033[%d;1H\033[2K  \033[2m\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\033[0m", (content_bottom + 1) > "/dev/stderr"
-    for (_si = 1; _si <= sticky_count; _si++) {
-      printf "\033[%d;1H\033[2K", (content_bottom + 1 + _si) > "/dev/stderr"
-      if (sticky_statuses[_si] == "completed")
-        printf "  %s\342\234\223 %s%s", C_GREEN, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
-      else if (sticky_statuses[_si] == "in_progress")
-        printf "  %s\342\227\217 %s%s", C_YELLOW, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
-      else
-        printf "  \033[2m\342\227\213 %s\033[0m", trunc(sticky_contents[_si], 60) > "/dev/stderr"
-    }
-    printf "\0338" > "/dev/stderr"
-    fflush("/dev/stderr")
-  }
-
-  function render_sticky(    _si, _sr, needed) {
+  function render_sticky(    _si, _sr, max_vis, vis_start, vis_end, focus, hidden) {
     if (sticky_count == 0 || simple_mode == "true" || got_result) return
-    if (sticky_all_done > 1) { sticky_count = 0; sticky_all_done = 0; deactivate_panel(); at_line_start = 1; return }
+    if (sticky_all_done > 1) { sticky_count = 0; sticky_all_done = 0; at_line_start = 1; return }
     if (sticky_all_done == 1) sticky_all_done = 2
 
-    needed = sticky_count + 1
-
-    if (!panel_active) {
-      activate_panel(needed)
-    } else if (needed != panel_size) {
-      deactivate_panel()
-      activate_panel(needed, 1)
+    # Cap visible items to prevent ghost duplication (panel taller than terminal)
+    if (term_height < 1) get_term_height()
+    max_vis = sticky_count
+    if (term_height >= 10 && sticky_count > term_height - 5) {
+        max_vis = term_height - 5
+        # Find focus: first in_progress or first pending
+        focus = 1
+        for (_si = 1; _si <= sticky_count; _si++) {
+            if (sticky_statuses[_si] == "in_progress") { focus = _si; break }
+            if (sticky_statuses[_si] == "pending" && focus == 1) focus = _si
+        }
+        # Window centered on focus, reserve 1 line for overflow indicator
+        vis_start = focus - int((max_vis - 1) / 2)
+        if (vis_start < 1) vis_start = 1
+        vis_end = vis_start + max_vis - 2
+        if (vis_end > sticky_count) {
+            vis_end = sticky_count
+            vis_start = vis_end - (max_vis - 2)
+            if (vis_start < 1) vis_start = 1
+        }
+    } else {
+        vis_start = 1
+        vis_end = sticky_count
     }
 
-    if (panel_active) {
-      render_panel_content()
-      return
-    }
-
-    # Fallback: old cursor-up approach on stderr (no terminal / too small)
+    # Print separator
     printf "  \033[2m\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\033[0m\n" > "/dev/stderr"
     _sr = 1
-    for (_si = 1; _si <= sticky_count; _si++) {
+
+    # Print visible items
+    for (_si = vis_start; _si <= vis_end; _si++) {
       if (sticky_statuses[_si] == "completed")
         printf "  %s\342\234\223 %s%s\n", C_GREEN, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
       else if (sticky_statuses[_si] == "in_progress")
@@ -341,6 +295,14 @@ process_stream_json() {
         printf "  \033[2m\342\227\213 %s\033[0m\n", trunc(sticky_contents[_si], 60) > "/dev/stderr"
       _sr++
     }
+
+    # Overflow indicator
+    if (vis_end < sticky_count || vis_start > 1) {
+        hidden = sticky_count - (vis_end - vis_start + 1)
+        printf "  \033[2m... %d more items\033[0m\n", hidden > "/dev/stderr"
+        _sr++
+    }
+
     sticky_rendered = _sr
     printf "\033[?25h" > "/dev/stderr"
     fflush("/dev/stderr")
@@ -348,13 +310,7 @@ process_stream_json() {
 
   function clear_bottom_block() {
     fflush()  # Flush stdout before any stderr cursor operations
-    if (panel_active) {
-      if (!at_line_start && spinner_start > 0) {
-        printf "\r%-12s\r", "" > "/dev/stderr"
-      } else if (!at_line_start) {
-        printf "\n"
-      }
-    } else if (sticky_rendered > 0) {
+    if (sticky_rendered > 0) {
       printf "\033[?25l" > "/dev/stderr"
       printf "\r\033[%dA\033[J", sticky_rendered > "/dev/stderr"
       sticky_rendered = 0
@@ -432,9 +388,6 @@ process_stream_json() {
     sticky_rendered = 0
     sticky_source = ""
     sticky_all_done = 0
-    panel_active = 0
-    panel_size = 0
-    content_bottom = 0
     term_height = (override_term_height + 0 > 0) ? override_term_height + 0 : 0
     at_line_start = 1
     live_at_line_start = 1
@@ -679,7 +632,6 @@ process_stream_json() {
     } else if (etype == "result") {
       idle_hb = 0; meaningful_seen = 1
       got_result = 1
-      if (panel_active) deactivate_panel()
       clear_line()
       spinner_start = 0
       total_cost = extract(line, "total_cost_usd") + 0
@@ -795,7 +747,6 @@ process_stream_json() {
           render_sticky()
           printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
         } else {
-          if (panel_active) render_panel_content()
           printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
         }
         fflush("/dev/stderr")
@@ -805,16 +756,13 @@ process_stream_json() {
     }
   }
   END {
-    deactivate_panel()
     if (sticky_rendered > 0) {
-      for (_ei = 0; _ei < sticky_rendered; _ei++) {
+      for (_ei = 0; _ei < sticky_rendered; _ei++)
         printf "\033[A\033[2K" > "/dev/stderr"
-      }
       printf "\r" > "/dev/stderr"
     }
-    if (simple_mode != "true") {
+    if (simple_mode != "true")
       printf "\033[?25h" > "/dev/stderr"
-    }
     fflush("/dev/stderr")
   }
   '

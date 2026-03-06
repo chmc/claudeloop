@@ -29,3 +29,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0021](0021-two-branch-release-strategy.md) | Two-branch beta/stable release strategy | 2026-03-06 | Accepted |
 | [0022](0022-smoke-test-verification.md) | Smoke test and GUI verification skill | 2026-03-07 | Accepted |
 | [0023](0023-fake-claude-cli.md) | Fake Claude CLI for verification & testing | 2026-03-08 | Accepted |
+| [0024](0024-drop-decstbm-sticky-panel.md) | Drop DECSTBM scroll regions for sticky panel | 2026-03-06 | Accepted |

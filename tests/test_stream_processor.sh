@@ -1384,43 +1384,23 @@ strip_ansi() {
   [[ "$output" != *"/"*"0s"* ]]
 }
 
-@test "sticky panel: DECSTBM set when term_height available" {
+@test "sticky panel: renders with cursor-up approach" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  # STREAM_TERM_HEIGHT overrides tput lines in the awk script
   run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
-  # Check stderr output contains scroll region set escape (ESC[1;Nr)
-  [[ "$output" == *$'\033[1;'* ]]
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  [[ "$stripped" == *"Item"* ]]
 }
 
-@test "sticky panel: DECSTBM reset after all done" {
-  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done","status":"completed"}]}}'
-  local e2='{"type":"heartbeat"}'
-  run bash -c "export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  # Should contain scroll region reset (ESC[r)
-  [[ "$output" == *$'\033[r'* ]]
-}
-
-@test "sticky panel: fallback when no terminal height" {
+@test "sticky panel: renders when no terminal height" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  # Without term_height, fallback uses cursor-up approach on stderr
+  # Without term_height, still renders items via cursor-up on stderr
   run run_processor "$event"
   [ "$status" -eq 0 ]
   local stripped
   stripped=$(printf '%s' "$output" | strip_ansi)
-  # Fallback should still show items (captured via run which merges stderr)
   [[ "$stripped" == *"Item"* ]]
-}
-
-@test "sticky panel: absolute positioning in DECSTBM mode" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task X","status":"pending"}]}}'
-  # STREAM_TERM_HEIGHT=30 → panel_size=2, content_bottom=28 → panel at row 29
-  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  # Should use absolute positioning (ESC[row;1H) not cursor-up (ESC[nA)
-  [[ "$output" == *$'\033['*';1H'* ]]
-  [[ "$output" != *$'\033['*'A\033[J'* ]]
 }
 
 @test "sticky panel: uses stty not tput for term height inside AWK" {
@@ -1429,86 +1409,63 @@ strip_ansi() {
   ! grep -q 'tput lines' "$STREAM_PROCESSOR_LIB"
 }
 
-@test "sticky panel: stty size parses rows correctly from AWK" {
-  # Without STREAM_TERM_HEIGHT, get_term_height() calls stty size </dev/tty.
-  # In CI/test (no /dev/tty), stty returns empty → h=0 → panel skipped gracefully.
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run bash -c "unset STREAM_TERM_HEIGHT; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  # Should not crash; output should contain the item text (inline fallback)
+@test "sticky panel: no DECSTBM escapes emitted" {
+  # Verify no scroll region set (ESC[1;Nr) or reset (ESC[r) sequences
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
+  local hexout
+  hexout=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # ESC[1; = 1b5b313b (scroll region set prefix) — must NOT appear
+  [[ "$hexout" != *'1b5b313b'* ]]
+  # ESC[r = 1b5b72 (scroll region reset) — must NOT appear
+  [[ "$hexout" != *'1b5b72'* ]]
+}
+
+@test "sticky panel: capped when many items" {
+  # 50 items with STREAM_TERM_HEIGHT=30 → panel should be capped, overflow indicator shown
+  local items=""
+  for i in $(seq 1 50); do
+    items="${items}{\"content\":\"Task $i\",\"status\":\"pending\"},"
+  done
+  items="${items%,}"  # remove trailing comma
+  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[$items]}}"
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
   local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"Item"* ]]
+  stripped=$(printf '%s' "$output_raw" | strip_ansi)
+  # Should show overflow indicator
+  [[ "$stripped" == *"more items"* ]]
 }
 
-@test "sticky panel: STREAM_TERM_HEIGHT override bypasses stty" {
-  # When STREAM_TERM_HEIGHT is set, AWK uses override_term_height and never
-  # needs stty. Verify DECSTBM activates correctly with the override.
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task","status":"pending"}]}}'
-  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  # DECSTBM scroll region should be set using the override height
-  [[ "$output" == *$'\033[1;'* ]]
-}
-
-# --- DECSC/DECRC and stale text clearing tests ---
-
-@test "activate_panel: DECSC emitted before scroll region set" {
-  # activate_panel should save cursor (DECSC = ESC7) before setting scroll region
-  # This is needed so DECRC can restore cursor position (prevents empty line gaps)
-  # Current code does NOT emit DECSC in activate_panel — only render_panel_content does
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+@test "sticky panel: in-progress item visible when capped" {
+  # 50 items, item 30 is in_progress, STREAM_TERM_HEIGHT=30
+  local items=""
+  for i in $(seq 1 50); do
+    if [ "$i" -eq 30 ]; then
+      items="${items}{\"content\":\"Active task thirty\",\"status\":\"in_progress\"},"
+    else
+      items="${items}{\"content\":\"Task $i\",\"status\":\"pending\"},"
+    fi
+  done
+  items="${items%,}"
+  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[$items]}}"
   local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # DECSC (^[7) must appear BEFORE the scroll region (^[[1;28r)
-  # In current code, the first ^[7 comes from render_panel_content AFTER activate_panel
-  # After fix, ^[7 should be the very first thing from activate_panel
-  # Extract position: ^[7 must come before ^[[1;
-  local first_decsc first_scroll
-  first_decsc=$(printf '%s' "$output_raw" | grep -b -o '\^\[7' | head -1 | cut -d: -f1)
-  first_scroll=$(printf '%s' "$output_raw" | grep -b -o '\^\[\[1;' | head -1 | cut -d: -f1)
-  [ -n "$first_decsc" ]
-  [ -n "$first_scroll" ]
-  [ "$first_decsc" -lt "$first_scroll" ]
+  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
+  local stripped
+  stripped=$(printf '%s' "$output_raw" | strip_ansi)
+  [[ "$stripped" == *"Active task thirty"* ]]
 }
 
-@test "activate_panel: uses DECRC not cursor-jump on first activation" {
-  # After setting scroll region, activate_panel should use DECRC (ESC8) to restore
-  # cursor, NOT jump to content_bottom with ESC[N;1H
-  # Sequence: ESC7 ESC[29;1H ESC[J ESC[1;28r ESC8
-  # (moves to panel area before clearing, preserving content above)
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+@test "sticky panel: no capping when items fit" {
+  # 3 items with large terminal — no overflow indicator
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"},{"content":"C","status":"pending"}]}}'
   local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # The activate_panel sequence should be: ^[7^[[29;1H^[[J^[[1;28r^[8
-  [[ "$output_raw" == *'^[7^[[29;1H^[[J^[[1;28r^[8'* ]]
-}
-
-@test "deactivate_panel: uses direct cursor positioning (no DECSC/DECRC)" {
-  # deactivate_panel should use absolute cursor positioning, not DECSC/DECRC
-  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done","status":"completed"}]}}'
-  local e2='{"type":"heartbeat"}'
-  local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n' "$e1" "$e2" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # deactivate_panel sequence: move to panel area, clear, reset region, cursor to content_bottom
-  # With STREAM_TERM_HEIGHT=30 and 1 todo + 1 separator = panel_size=2, content_bottom=28
-  # So: ^[[29;1H^[[J^[[r^[[28;1H
-  [[ "$output_raw" == *'^[[29;1H^[[J^[[r^[[28;1H'* ]]
-  # Must NOT contain DECSC (^[7) in the deactivation sequence — only in activation
-}
-
-@test "deactivate_panel on result: panel deactivated during result handling" {
-  # When result event arrives with active panel, panel should be deactivated
-  # during result handling (not just in END block)
-  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"in_progress"}]}}'
-  local e2='{"type":"result","duration_ms":5000,"num_turns":3,"total_cost_usd":0.05,"session_id":"s1","input_tokens":100,"output_tokens":50}'
-  local e3='{"type":"heartbeat"}'
-  local e4='{"type":"heartbeat"}'
-  local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; printf '%s\n%s\n%s\n%s\n' "$e1" "$e2" "$e3" "$e4" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
-  # ^[[r (scroll region reset) should appear BEFORE [Session: (the result summary)
-  local before_session="${output_raw%%\[Session:*}"
-  [[ "$before_session" == *'^[[r'* ]]
+  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
+  local stripped
+  stripped=$(printf '%s' "$output_raw" | strip_ansi)
+  [[ "$stripped" != *"more items"* ]]
+  [[ "$stripped" == *"A"* ]]
+  [[ "$stripped" == *"B"* ]]
+  [[ "$stripped" == *"C"* ]]
 }
 
 @test "no ghost spinner after result event" {
@@ -1530,26 +1487,6 @@ strip_ansi() {
   run bash -c "echo '$line' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *"plain text output"* ]]
-}
-
-# --- DECSTBM suspend/release during idle tests ---
-# Use hex (xxd -p) for reliable escape sequence matching (cat -v + UTF-8 = unreliable)
-# Key hex patterns:
-#   1b37         = ESC7 (DECSC)
-#   1b5b72       = ESC[r (DECSTBM reset)
-#   1b38         = ESC8 (DECRC)
-#   1b5b313b     = ESC[1; (DECSTBM set prefix)
-
-@test "render_panel_content uses absolute positioning not newlines" {
-  # Panel content should use ESC[N;1H for each line, not \n between panel lines
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
-  local hexout
-  hexout=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
-  # With STREAM_TERM_HEIGHT=30, 2 items + separator = panel_size=3, content_bottom=27
-  # Row 28 = hex 1b5b32383b3148 (ESC[28;1H)
-  # Row 29 = hex 1b5b32393b3148 (ESC[29;1H)
-  [[ "$hexout" == *'1b5b32383b3148'* ]]
-  [[ "$hexout" == *'1b5b32393b3148'* ]]
 }
 
 @test "duplicate tool_use doesn't double-count tool_active" {
