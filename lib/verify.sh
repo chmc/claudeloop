@@ -123,7 +123,7 @@ Do NOT skip this. Do NOT just end silently.
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
   # Clear spinner remnants on current line (panel already cleaned by deactivate_panel)
-  printf '\033[r\033[?25h\033[K\r%-12s\r' '' >/dev/stderr
+  printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 

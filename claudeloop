@@ -470,8 +470,6 @@ remove_lock() {
 
 # Signal handler for graceful shutdown
 handle_interrupt() {
-  # Show cursor immediately (panel may be active)
-  printf '\033[?25h' >/dev/stderr
   # Kill running claude pipeline immediately (don't wait for it to clean up)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
@@ -1026,10 +1024,6 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
   # not just the last process. Without set -m, kill -TERM $! only kills the last
   # process; with set -m, kill -TERM -- -$PGID kills every process in the job.
-  STREAM_TERM_HEIGHT=$(stty size </dev/tty 2>/dev/null | awk '{print $1}')
-  STREAM_TERM_HEIGHT=${STREAM_TERM_HEIGHT:-0}
-  export STREAM_TERM_HEIGHT
-
   set -m
   {
     _rc=0
@@ -1082,7 +1076,7 @@ Address ALL issues identified above. Make sure tests pass before finishing."
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
   # Clear spinner remnants and show cursor
-  printf '\033[?25h\033[K\r%-12s\r' '' >/dev/stderr
+  printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 
@@ -1394,7 +1388,6 @@ main() {
   # Set up signal handlers and cleanup
   trap handle_interrupt INT TERM
   trap cleanup EXIT
-  trap '' WINCH
 
   # Load config file (defaults → config file)
   load_config

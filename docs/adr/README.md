@@ -27,4 +27,3 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0019](0019-orphan-log-integrity-check.md) | Orphan log integrity check | 2026-03-03 | Accepted |
 | [0020](0020-orphan-interactive-recovery.md) | Wire orphan detection to intelligent recovery | 2026-03-03 | Accepted |
 | [0021](0021-two-branch-release-strategy.md) | Two-branch beta/stable release strategy | 2026-03-06 | Accepted |
-| [0022](0022-drop-decstbm-sticky-panel.md) | Drop DECSTBM scroll regions for sticky panel | 2026-03-06 | Accepted |

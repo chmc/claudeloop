@@ -44,8 +44,7 @@ process_stream_json() {
       -v hooks_enabled="$hooks_enabled" \
       -v live_log="$live_log" \
       -v simple_mode="$simple_mode" \
-      -v idle_timeout_s="$idle_timeout" \
-      -v override_term_height="${STREAM_TERM_HEIGHT:-0}" '
+      -v idle_timeout_s="$idle_timeout" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -139,15 +138,7 @@ process_stream_json() {
       task_active_forms[task_count] = taf
       task_statuses[task_count] = "pending"
       if (taf != "") current_active_form = taf
-      if (simple_mode == "true") {
-        print_task_summary()
-      } else {
-        # live_log only
-        visible = task_count - task_deleted
-        msg = "[Tasks: " task_completed "/" visible " done]"
-        if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
-        if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
-      }
+      print_task_summary()
     } else if (tname == "TaskUpdate") {
       tid = extract(src, "taskId") + 0
       tst = extract(src, "status")
@@ -159,7 +150,7 @@ process_stream_json() {
         old_st = (tid in task_statuses) ? task_statuses[tid] : ""
         if (tst == "completed" && old_st != "completed") {
           task_completed++
-          if (simple_mode == "true") print_task_completed(tid)
+          print_task_completed(tid)
         } else if (tst == "deleted") {
           if (old_st == "completed") task_completed--
           task_deleted++
@@ -174,17 +165,8 @@ process_stream_json() {
           break
         }
       }
-      if (simple_mode == "true") {
-        print_task_summary()
-      } else {
-        visible = task_count - task_deleted
-        msg = "[Tasks: " task_completed "/" visible " done]"
-        if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
-        if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
-      }
+      print_task_summary()
     }
-    sync_tasks_to_sticky()
-    check_all_done()
   }
 
   function print_todo_summary() {
@@ -200,141 +182,14 @@ process_stream_json() {
     if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
   }
 
-  function parse_todo_items(src,    parts, n, i, chunk, content, status, c, j) {
-    n = split(src, parts, "\"content\":\"") - 1
-    sticky_count = 0
-    for (i = 2; i <= n + 1; i++) {
-      chunk = parts[i]
-      content = ""; j = 1
-      while (j <= length(chunk)) {
-        c = substr(chunk, j, 1)
-        if (c == "\\") { content = content substr(chunk, j+1, 1); j += 2; continue }
-        if (c == "\"") break
-        content = content c; j++
-      }
-      status = extract(chunk, "status")
-      if (status == "") status = "pending"
-      sticky_count++
-      sticky_contents[sticky_count] = content
-      sticky_statuses[sticky_count] = status
-    }
-    sticky_source = "todo"
-  }
-
-  function sync_tasks_to_sticky(    _si) {
-    sticky_count = 0
-    for (_si = 1; _si <= task_count; _si++) {
-      if ((_si in task_statuses) && task_statuses[_si] == "deleted") continue
-      sticky_count++
-      sticky_contents[sticky_count] = (_si in task_subjects) ? task_subjects[_si] : "Task " _si
-      sticky_statuses[sticky_count] = (_si in task_statuses) ? task_statuses[_si] : "pending"
-    }
-    sticky_source = "task"
-  }
-
-  function check_all_done(    _si, _done) {
-    if (sticky_count == 0) return
-    _done = 0
-    for (_si = 1; _si <= sticky_count; _si++)
-      if (sticky_statuses[_si] == "completed") _done++
-    if (_done == sticky_count) sticky_all_done = 1
-    else sticky_all_done = 0
-  }
-
-  function get_term_height(    _sz, _sp, h) {
-    "stty size </dev/tty 2>/dev/null" | getline _sz
-    close("stty size </dev/tty 2>/dev/null")
-    split(_sz, _sp, " ")
-    h = _sp[1] + 0
-    if (h < 1) h = 0
-    term_height = h
-    return h
-  }
-
-  function render_sticky(    _si, _sr, max_vis, vis_start, vis_end, focus, hidden) {
-    if (sticky_count == 0 || simple_mode == "true" || got_result) return
-    if (sticky_all_done > 1) { sticky_count = 0; sticky_all_done = 0; at_line_start = 1; return }
-    if (sticky_all_done == 1) sticky_all_done = 2
-
-    # Cap visible items to prevent ghost duplication (panel taller than terminal)
-    if (term_height < 1) get_term_height()
-    max_vis = sticky_count
-    if (term_height >= 10 && sticky_count > term_height - 5) {
-        max_vis = term_height - 5
-        # Find focus: first in_progress or first pending
-        focus = 1
-        for (_si = 1; _si <= sticky_count; _si++) {
-            if (sticky_statuses[_si] == "in_progress") { focus = _si; break }
-            if (sticky_statuses[_si] == "pending" && focus == 1) focus = _si
-        }
-        # Window centered on focus, reserve 1 line for overflow indicator
-        vis_start = focus - int((max_vis - 1) / 2)
-        if (vis_start < 1) vis_start = 1
-        vis_end = vis_start + max_vis - 2
-        if (vis_end > sticky_count) {
-            vis_end = sticky_count
-            vis_start = vis_end - (max_vis - 2)
-            if (vis_start < 1) vis_start = 1
-        }
-    } else {
-        vis_start = 1
-        vis_end = sticky_count
-    }
-
-    # Print separator
-    printf "  \033[2m\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\342\224\200\033[0m\n" > "/dev/stderr"
-    _sr = 1
-
-    # Print visible items
-    for (_si = vis_start; _si <= vis_end; _si++) {
-      if (sticky_statuses[_si] == "completed")
-        printf "  %s\342\234\223 %s%s\n", C_GREEN, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
-      else if (sticky_statuses[_si] == "in_progress")
-        printf "  %s\342\227\217 %s%s\n", C_YELLOW, trunc(sticky_contents[_si], 60), C_RESET > "/dev/stderr"
-      else
-        printf "  \033[2m\342\227\213 %s\033[0m\n", trunc(sticky_contents[_si], 60) > "/dev/stderr"
-      _sr++
-    }
-
-    # Overflow indicator
-    if (vis_end < sticky_count || vis_start > 1) {
-        hidden = sticky_count - (vis_end - vis_start + 1)
-        printf "  \033[2m... %d more items\033[0m\n", hidden > "/dev/stderr"
-        _sr++
-    }
-
-    sticky_rendered = _sr
-    printf "\033[?25h" > "/dev/stderr"
-    fflush("/dev/stderr")
-  }
-
-  function clear_bottom_block() {
-    fflush()  # Flush stdout before any stderr cursor operations
-    if (sticky_rendered > 0) {
-      printf "\033[?25l" > "/dev/stderr"
-      printf "\r\033[%dA\033[J", sticky_rendered > "/dev/stderr"
-      sticky_rendered = 0
-    } else if (!at_line_start && spinner_start > 0) {
-      printf "\r%-12s\r", "" > "/dev/stderr"
-    } else if (!at_line_start) {
-      printf "\n"
-    }
-    fflush("/dev/stderr")
-    fflush()
-    if (live_log != "" && !live_at_line_start) {
-      printf "\n" >> live_log
-      fflush(live_log)
-      live_at_line_start = 1
-    }
-    at_line_start = 1
-  }
-
-  function handle_todo_event(src,    _nt, _nd, af, pos, chunk, p, i, c, nxt) {
-    parse_todo_items(src)
+  function handle_todo_event(src,    _nt, _nd, af, pos, chunk, p, i, c, nxt, parts) {
+    _nt = split(src, parts, "\"content\":\"") - 1
     _nd = 0
-    for (i = 1; i <= sticky_count; i++)
-      if (sticky_statuses[i] == "completed") _nd++
-    todo_count = sticky_count
+    for (i = 2; i <= _nt + 1; i++) {
+      chunk = parts[i]
+      if (index(chunk, "\"status\":\"completed\"") > 0) _nd++
+    }
+    todo_count = _nt
     todo_completed = _nd
     todo_active_form = ""
     pos = index(src, "\"status\":\"in_progress\"")
@@ -354,23 +209,35 @@ process_stream_json() {
         todo_active_form = af
       }
     }
-    if (simple_mode == "true") {
-      print_todo_summary()
-    } else {
-      # live_log only
-      if (todo_count == 0) {
-        msg = "[Todos: empty]"
-      } else {
-        msg = "[Todos: " todo_completed "/" todo_count " done]"
-      }
-      if (todo_active_form != "") msg = msg " \342\226\270 \"" todo_active_form "\""
-      if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_todo_summary()
+  }
+
+  function print_spinner(elapsed) {
+    _sp = sprintf("%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), elapsed)
+    if (todo_count > 0) _sp = _sp " Todo " todo_completed "/" todo_count
+    else if (task_count > 0) {
+      _vis = task_count - task_deleted
+      _sp = _sp " Task " task_completed "/" _vis
     }
-    check_all_done()
+    printf "\r%-40s\r%s", "", _sp > "/dev/stderr"
+    fflush("/dev/stderr")
   }
 
   function clear_line() {
-    clear_bottom_block()
+    if (!at_line_start) {
+      if (spinner_start > 0) {
+        printf "\r%-12s\r", "" > "/dev/stderr"
+      } else {
+        printf "\n"
+      }
+      fflush()
+      if (live_log != "" && !live_at_line_start) {
+        printf "\n" >> live_log
+        fflush(live_log)
+        live_at_line_start = 1
+      }
+      at_line_start = 1
+    }
   }
 
   BEGIN {
@@ -384,11 +251,6 @@ process_stream_json() {
     task_completed = 0
     task_deleted = 0
     current_active_form = ""
-    sticky_count = 0
-    sticky_rendered = 0
-    sticky_source = ""
-    sticky_all_done = 0
-    term_height = (override_term_height + 0 > 0) ? override_term_height + 0 : 0
     at_line_start = 1
     live_at_line_start = 1
     spinner = "|/-\\"
@@ -414,12 +276,10 @@ process_stream_json() {
     print line >> raw_log
 
     if (substr(line, 1, 1) != "{") {
-      clear_bottom_block()
       print line
-      print line >> log_file
       fflush()
+      print line >> log_file
       if (live_log != "") { printf "[%s] %s\n", get_time(), line >> live_log; fflush(live_log) }
-      render_sticky()
       next
     }
 
@@ -447,7 +307,6 @@ process_stream_json() {
         printf "%s", text >> log_file
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
-        if (at_line_start) render_sticky()
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
         idle_hb = 0; meaningful_seen = 1
         n_tools = split(line, tool_segs, "\"type\":\"tool_use\"")
@@ -505,26 +364,20 @@ process_stream_json() {
           else if (name == "TodoWrite") handle_todo_event(seg)
         }
         if (live_log != "") fflush(live_log)
-        render_sticky()
       } else {
         # Thinking-only assistant event — update spinner but do NOT reset idle timer
         now = get_epoch()
         if (idle_timeout_s > 0 && tool_active == 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
-          clear_bottom_block()
           printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
           printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
           if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
           exit
         }
         if (spinner_start == 0) {
-          clear_bottom_block()
+          clear_line()
           spinner_start = now
-          render_sticky()
-          printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
-        } else {
-          printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
         }
-        fflush("/dev/stderr")
+        print_spinner(now - spinner_start)
         at_line_start = 0
         spinner_idx++
       }
@@ -585,7 +438,6 @@ process_stream_json() {
       }
       if (name == "TaskCreate" || name == "TaskUpdate") handle_task_event(name, line)
       else if (name == "TodoWrite") handle_todo_event(line)
-      render_sticky()
 
     } else if (etype == "tool_result") {
       idle_hb = 0; meaningful_seen = 1
@@ -614,7 +466,6 @@ process_stream_json() {
       }
       printf "  %s[Tool result: %d chars] %s%s\n", C_CYAN, total, trunc(preview, 200), C_RESET > "/dev/stderr"
       if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
-      render_sticky()
 
     } else if (etype == "user") {
       idle_hb = 0; meaningful_seen = 1
@@ -626,7 +477,6 @@ process_stream_json() {
         _c = (is_err != "") ? C_RED : C_CYAN
         printf "  %s[Result%s: %d chars] %s%s\n", _c, is_err, length(tool_result), trunc(tool_result, 200), C_RESET > "/dev/stderr"
         if (live_log != "") { printf "  [%s] [Result%s: %d chars] %s\n", get_time(), is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
-        render_sticky()
       }
 
     } else if (etype == "result") {
@@ -691,7 +541,6 @@ process_stream_json() {
           printf "  %s[Rate limit: %d%% of 7-day quota used]%s\n", C_YELLOW, pct, C_RESET > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Rate limit: %d%% of 7-day quota used]\n", get_time(), pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
-          render_sticky()
         }
       }
 
@@ -707,7 +556,6 @@ process_stream_json() {
         fflush("/dev/stderr")
         if (model_s != "" && live_log != "") { printf "[%s] model=%s\n", get_time(), model_s >> live_log; fflush(live_log) }
       }
-      render_sticky()
 
     } else {
       now = get_epoch()
@@ -724,7 +572,6 @@ process_stream_json() {
         if (max_idle_hb > 0 && tool_active == 0) {
           idle_hb++
           if (idle_hb >= max_idle_hb) {
-            clear_bottom_block()
             printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
             printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
             if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
@@ -734,7 +581,6 @@ process_stream_json() {
       }
       # Wall-clock idle check (catches stuck sessions even without heartbeats)
       if (idle_timeout_s > 0 && tool_active == 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
-        clear_bottom_block()
         printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
         printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
         if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
@@ -742,28 +588,14 @@ process_stream_json() {
       }
       if (!got_result) {
         if (spinner_start == 0) {
-          clear_bottom_block()
+          clear_line()
           spinner_start = now
-          render_sticky()
-          printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
-        } else {
-          printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
         }
-        fflush("/dev/stderr")
+        print_spinner(now - spinner_start)
         at_line_start = 0
         spinner_idx++
       }
     }
-  }
-  END {
-    if (sticky_rendered > 0) {
-      for (_ei = 0; _ei < sticky_rendered; _ei++)
-        printf "\033[A\033[2K" > "/dev/stderr"
-      printf "\r" > "/dev/stderr"
-    }
-    if (simple_mode != "true")
-      printf "\033[?25h" > "/dev/stderr"
-    fflush("/dev/stderr")
   }
   '
 }
