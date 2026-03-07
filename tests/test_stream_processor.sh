@@ -735,9 +735,9 @@ JSON"
 
 # --- Task list display ---
 
-@test "TaskCreate standalone: shows [Tasks: 0/1 done] summary on stderr (simple_mode)" {
+@test "TaskCreate standalone: shows [Tasks: 0/1 done] summary on stderr" {
   local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tasks: 0/1 done]"* ]]
 }
@@ -749,27 +749,27 @@ JSON"
   [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
 }
 
-@test "TaskCreate nested in assistant: shows tool preview AND [Tasks:] summary (simple_mode)" {
+@test "TaskCreate nested in assistant: shows tool preview AND [Tasks:] summary" {
   local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"Detailed desc","activeForm":"Fixing auth bug"}}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tool: TaskCreate] Fix auth bug"* ]]
   [[ "$output" == *"[Tasks: 0/1 done]"* ]]
 }
 
-@test "Two sequential standalone TaskCreate: second shows [Tasks: 0/2 done] (simple_mode)" {
+@test "Two sequential standalone TaskCreate: second shows [Tasks: 0/2 done]" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task one","description":"d","activeForm":"Doing one"}}'
   local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task two","description":"d","activeForm":"Doing two"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tasks: 0/1 done]"* ]]
   [[ "$output" == *"[Tasks: 0/2 done]"* ]]
 }
 
-@test "TaskUpdate status=in_progress: shows activeForm in summary (simple_mode)" {
+@test "TaskUpdate status=in_progress: shows activeForm in summary" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
   local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"in_progress"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Fixing bug"* ]]
 }
@@ -784,20 +784,20 @@ JSON"
   [[ "$output" == *"in_progress"* ]]
 }
 
-@test "TaskUpdate status=completed: shows [Task completed] line (simple_mode)" {
+@test "TaskUpdate status=completed: shows [Task completed] line" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"d","activeForm":"Fixing auth bug"}}'
   local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Task completed]"* ]]
   [[ "$output" == *"Fix auth bug"* ]]
 }
 
-@test "TaskUpdate status=completed: updates done count in summary (simple_mode)" {
+@test "TaskUpdate status=completed: updates done count in summary" {
   local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d","activeForm":"A"}}'
   local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task B","description":"d","activeForm":"B"}}'
   local e3='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
-  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tasks: 1/2 done]"* ]]
 }
@@ -826,17 +826,17 @@ JSON"
   [[ "$output" != *"[Tasks:"* ]]
 }
 
-@test "TaskUpdate without prior TaskCreate: shows fallback subject (simple_mode)" {
+@test "TaskUpdate without prior TaskCreate: shows fallback subject" {
   local event='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"5","status":"in_progress"}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tasks:"* ]]
 }
 
-@test "Same TaskCreate in assistant and standalone: both paths call handler (simple_mode)" {
+@test "Same TaskCreate in assistant and standalone: both paths call handler" {
   local assistant='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tc1","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}]}}'
   local standalone='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix bug","description":"d","activeForm":"Fixing bug"}}'
-  run bash -c "printf '%s\n%s\n' '$assistant' '$standalone' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n' '$assistant' '$standalone' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   # Both paths fire handler (in production only one path fires per tool call)
   count=$(printf '%s' "$output" | grep -c '\[Tasks:')
@@ -863,9 +863,9 @@ JSON"
 
 # --- TodoWrite display ---
 
-@test "TodoWrite standalone: shows [Todos: 0/3 done] summary on stderr (simple_mode)" {
+@test "TodoWrite standalone: shows [Todos: 0/3 done] summary on stderr" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"},{"content":"Task C","status":"pending"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Todos: 0/3 done]"* ]]
 }
@@ -877,24 +877,24 @@ JSON"
   [[ "$output" == *"[Tool: TodoWrite] 3 items"* ]]
 }
 
-@test "TodoWrite with completed items: shows correct done count (simple_mode)" {
+@test "TodoWrite with completed items: shows correct done count" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed"},{"content":"Task B","status":"completed"},{"content":"Task C","status":"pending"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Todos: 2/3 done]"* ]]
 }
 
-@test "TodoWrite nested in assistant: shows [Todos:] summary AND preview (simple_mode)" {
+@test "TodoWrite nested in assistant: shows [Todos:] summary AND preview" {
   local event='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_tw1","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"completed"}]}}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Tool: TodoWrite] 2 items"* ]]
   [[ "$output" == *"[Todos: 1/2 done]"* ]]
 }
 
-@test "TodoWrite: active form of in_progress item shown in summary (simple_mode)" {
+@test "TodoWrite: active form of in_progress item shown in summary" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed","activeForm":"Doing A"},{"content":"Task B","status":"in_progress","activeForm":"Doing B"},{"content":"Task C","status":"pending","activeForm":"Doing C"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *'[Todos: 1/3 done]'* ]]
   [[ "$output" == *'"Doing B"'* ]]
@@ -908,9 +908,9 @@ JSON"
   [[ "$output" != *"Doing"* ]]
 }
 
-@test "TodoWrite: empty todos shows [Todos: empty] (simple_mode)" {
+@test "TodoWrite: empty todos shows [Todos: empty]" {
   local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Todos: empty]"* ]]
 }
@@ -931,10 +931,10 @@ JSON"
   [[ "$output" != *"[Todos:"* ]]
 }
 
-@test "Two sequential TodoWrite: second replaces counts (not additive) (simple_mode)" {
+@test "Two sequential TodoWrite: second replaces counts (not additive)" {
   local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'
   local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"completed"},{"content":"B","status":"pending"},{"content":"C","status":"pending"}]}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[Todos: 0/2 done]"* ]]
   [[ "$output" == *"[Todos: 1/3 done]"* ]]
@@ -1210,169 +1210,7 @@ JSON"
   [ "$lines_consumed" -eq 4 ]
 }
 
-# --- Sticky panel tests ---
-
-# Helper to strip ANSI escape codes
-strip_ansi() {
-  sed 's/\033\[[0-9;]*[a-zA-Z]//g'
-}
-
-@test "sticky panel: TodoWrite renders individual items" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Add tests","status":"completed"},{"content":"Fix bug","status":"in_progress"},{"content":"Write docs","status":"pending"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"Add tests"* ]]
-  [[ "$stripped" == *"Fix bug"* ]]
-  [[ "$stripped" == *"Write docs"* ]]
-}
-
-@test "sticky panel: completed items show checkmark" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Done item","status":"completed"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  # ✓ is UTF-8 \xe2\x9c\x93
-  [[ "$output" == *$'\xe2\x9c\x93 Done item'* ]]
-}
-
-@test "sticky panel: in_progress items show filled circle" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Working","status":"in_progress"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  # ● is UTF-8 \xe2\x97\x8f
-  [[ "$output" == *$'\xe2\x97\x8f Working'* ]]
-}
-
-@test "sticky panel: pending items show empty circle" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Waiting","status":"pending"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  # ○ is UTF-8 \xe2\x97\x8b
-  [[ "$output" == *$'\xe2\x97\x8b Waiting'* ]]
-}
-
-@test "sticky panel: separator line rendered" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"────"* ]]
-}
-
-@test "sticky panel: not rendered in simple_mode" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>/dev/null"
-  [ "$status" -eq 0 ]
-  # stdout should NOT contain individual items (only inline summary goes to stderr)
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" != *"Item A"* ]]
-  [[ "$stripped" != *"Item B"* ]]
-}
-
-@test "sticky panel: simple_mode still shows inline summary on stderr" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"[Todos: 0/1 done]"* ]]
-}
-
-@test "sticky panel: TaskCreate renders task in panel" {
-  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Run tests","activeForm":"Running tests","description":"run all tests"}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"Run tests"* ]]
-}
-
-@test "sticky panel: TaskUpdate completed shows checkmark" {
-  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Build","activeForm":"Building","description":"build project"}}'
-  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
-  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *$'\xe2\x9c\x93 Build'* ]]
-}
-
-@test "sticky panel: deleted tasks excluded from panel" {
-  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"a"}}'
-  local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task B","description":"b"}}'
-  local e3='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"deleted"}}'
-  run bash -c "printf '%s\n%s\n%s\n' '$e1' '$e2' '$e3' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  # Task B should be present
-  [[ "$stripped" == *"Task B"* ]]
-  # Get content after last separator — that's the final panel render
-  local last_panel
-  last_panel=$(printf '%s\n' "$stripped" | awk '/────/{found=NR; content=""} found{content=content "\n" $0} END{print content}')
-  [[ "$last_panel" == *"Task B"* ]]
-  [[ "$last_panel" != *"Task A"* ]]
-}
-
-@test "sticky panel: not rendered after result event" {
-  local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  local result='{"type":"result","duration_ms":1000,"num_turns":1,"is_error":false,"total_cost_usd":0.01,"usage":{"input_tokens":100,"output_tokens":50}}'
-  run bash -c "printf '%s\n%s\n' '$todo' '$result' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  # Count separator lines - should only have one (from todo event), not two (would mean re-rendered after result)
-  local sep_count
-  sep_count=$(printf '%s' "$stripped" | grep -c '────' || true)
-  [ "$sep_count" -le 1 ]
-}
-
-@test "sticky panel: inline todo summary suppressed on stderr in non-simple mode" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
-  [ "$status" -eq 0 ]
-  # In non-simple mode, [Todos:] inline summary should NOT appear on stderr
-  [[ "$output" != *"[Todos:"* ]]
-}
-
-@test "sticky panel: inline task summary suppressed on stderr in non-simple mode" {
-  local event='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Do thing","description":"do it"}}'
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"[Tasks:"* ]]
-}
-
-@test "sticky panel: long item text truncated" {
-  local long_text="This is a very long task description that exceeds sixty characters and should be truncated by the panel"
-  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[{\"content\":\"$long_text\",\"status\":\"pending\"}]}}"
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"..."* ]]
-}
-
-@test "sticky panel: cursor visibility restored in END block" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  # \033[?25h should appear (show cursor)
-  [[ "$output" == *$'\033[?25h'* ]]
-}
-
 # --- stderr migration tests ---
-
-@test "sticky panel: not rendered on stdout" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
-  # Capture stdout only (discard stderr)
-  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  # Panel items and separator should NOT appear on stdout
-  [[ "$stripped" != *"Item A"* ]]
-  [[ "$stripped" != *"Item B"* ]]
-  [[ "$stripped" != *"────"* ]]
-}
 
 @test "spinner: not rendered on stdout" {
   local event='{"type":"unknown_event"}'
@@ -1382,90 +1220,6 @@ strip_ansi() {
   # Spinner chars should NOT appear on stdout
   [[ "$output" != *"|"*"0s"* ]]
   [[ "$output" != *"/"*"0s"* ]]
-}
-
-@test "sticky panel: renders with cursor-up approach" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  run bash -c "export STREAM_TERM_HEIGHT=30; echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"Item"* ]]
-}
-
-@test "sticky panel: renders when no terminal height" {
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
-  # Without term_height, still renders items via cursor-up on stderr
-  run run_processor "$event"
-  [ "$status" -eq 0 ]
-  local stripped
-  stripped=$(printf '%s' "$output" | strip_ansi)
-  [[ "$stripped" == *"Item"* ]]
-}
-
-@test "sticky panel: uses stty not tput for term height inside AWK" {
-  # Verify the AWK code calls 'stty size' not 'tput lines' for terminal height
-  grep -q 'stty size </dev/tty' "$STREAM_PROCESSOR_LIB"
-  ! grep -q 'tput lines' "$STREAM_PROCESSOR_LIB"
-}
-
-@test "sticky panel: no DECSTBM escapes emitted" {
-  # Verify no scroll region set (ESC[1;Nr) or reset (ESC[r) sequences
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"},{"content":"Item B","status":"completed"}]}}'
-  local hexout
-  hexout=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
-  # ESC[1; = 1b5b313b (scroll region set prefix) — must NOT appear
-  [[ "$hexout" != *'1b5b313b'* ]]
-  # ESC[r = 1b5b72 (scroll region reset) — must NOT appear
-  [[ "$hexout" != *'1b5b72'* ]]
-}
-
-@test "sticky panel: capped when many items" {
-  # 50 items with STREAM_TERM_HEIGHT=30 → panel should be capped, overflow indicator shown
-  local items=""
-  for i in $(seq 1 50); do
-    items="${items}{\"content\":\"Task $i\",\"status\":\"pending\"},"
-  done
-  items="${items%,}"  # remove trailing comma
-  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[$items]}}"
-  local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
-  local stripped
-  stripped=$(printf '%s' "$output_raw" | strip_ansi)
-  # Should show overflow indicator
-  [[ "$stripped" == *"more items"* ]]
-}
-
-@test "sticky panel: in-progress item visible when capped" {
-  # 50 items, item 30 is in_progress, STREAM_TERM_HEIGHT=30
-  local items=""
-  for i in $(seq 1 50); do
-    if [ "$i" -eq 30 ]; then
-      items="${items}{\"content\":\"Active task thirty\",\"status\":\"in_progress\"},"
-    else
-      items="${items}{\"content\":\"Task $i\",\"status\":\"pending\"},"
-    fi
-  done
-  items="${items%,}"
-  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[$items]}}"
-  local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
-  local stripped
-  stripped=$(printf '%s' "$output_raw" | strip_ansi)
-  [[ "$stripped" == *"Active task thirty"* ]]
-}
-
-@test "sticky panel: no capping when items fit" {
-  # 3 items with large terminal — no overflow indicator
-  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"},{"content":"C","status":"pending"}]}}'
-  local output_raw
-  output_raw=$(export STREAM_TERM_HEIGHT=30; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
-  local stripped
-  stripped=$(printf '%s' "$output_raw" | strip_ansi)
-  [[ "$stripped" != *"more items"* ]]
-  [[ "$stripped" == *"A"* ]]
-  [[ "$stripped" == *"B"* ]]
-  [[ "$stripped" == *"C"* ]]
 }
 
 @test "no ghost spinner after result event" {
@@ -1481,7 +1235,7 @@ strip_ansi() {
   [[ "$after_session" != *'| 0s'* ]]
 }
 
-@test "non-JSON stdout line: fflush before render_sticky" {
+@test "non-JSON stdout line: fflush after print" {
   # Verify that non-JSON lines produce output (basic regression test for fflush)
   local line="plain text output"
   run bash -c "echo '$line' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
@@ -1506,4 +1260,35 @@ strip_ansi() {
   # After result, tool_active=0 → heartbeats trigger timeout after 2
   # Should consume assistant + standalone + result + 2 hb = 5, not all 7
   [ "$lines_consumed" -le 6 ]
+}
+
+# --- Spinner + todo/task count tests ---
+
+@test "spinner shows Todo count when todos active" {
+  local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"completed"},{"content":"B","status":"pending"},{"content":"C","status":"pending"}]}}'
+  local hb='{"type":"heartbeat"}'
+  run bash -c "printf '%s\n%s\n' '$todo' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Todo 1/3"* ]]
+}
+
+@test "spinner shows Task count when tasks active" {
+  local tc1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d"}}'
+  local tc2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task B","description":"d"}}'
+  local tu='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
+  local hb='{"type":"heartbeat"}'
+  run bash -c "printf '%s\n%s\n%s\n%s\n' '$tc1' '$tc2' '$tu' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Task 1/2"* ]]
+}
+
+@test "spinner shows Todo count (not Task) when both present" {
+  local tc='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d"}}'
+  local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'
+  local hb='{"type":"heartbeat"}'
+  run bash -c "printf '%s\n%s\n%s\n' '$tc' '$todo' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Todo 0/2"* ]]
+  # Spinner should NOT show "Task X/Y" (the [Tasks: 0/1 done] summary is different)
+  [[ "$output" != *"s Task "* ]]
 }

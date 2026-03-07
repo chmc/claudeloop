@@ -228,16 +228,12 @@ claudeloop/
 
 Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`. ClaudeLoop also writes a combined live log to `.claudeloop/live.log`.
 
-When Claude uses task lists or todo lists to track its progress, a sticky panel is shown at the bottom of the terminal with individual item status:
+When Claude uses task lists or todo lists, a compact summary is shown on the spinner line:
 
-```
-  ────────────────────────────────
-  ✓ Fix authentication bug
-  ● Implementing auth flow
-  ○ Write integration tests
-```
+    / 30s Todo 3/8
+    - 12s Task 2/5
 
-The panel persists across tool calls and thinking periods, and auto-clears after all items complete. In `--simple` mode, a compact inline summary is shown instead (`[Tasks: 1/3 done]`).
+Inline summaries also appear as `[Tasks: 1/3 done]` and `[Todos: 3/8 done]`.
 
 To watch progress live from a second terminal, use:
 
