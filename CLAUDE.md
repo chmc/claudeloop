@@ -43,6 +43,7 @@ bats tests/test_parser.sh             # run one test file
 shellcheck -s sh lib/retry.sh         # lint (SC3043 local warnings are acceptable)
 ./claudeloop --plan examples/PLAN.md.example --dry-run
 claudeloop --monitor  # watch live output from a second terminal
+./tests/smoke.sh                      # smoke test (stub-based, no bats)
 ./tests/mutate.sh                     # mutation testing (all lib files)
 ./tests/mutate.sh lib/retry.sh        # mutation testing (single file)
 ```
@@ -115,6 +116,7 @@ All `print_*` output (via `lib/ui.sh`) and stream processor output are teed to `
 
 - `/github` — Git/GitHub conventions (commit, push, PR)
 - `/release beta|stable` — Trigger GitHub release workflow
+- `/verify` — Verify claudeloop after code changes (smoke + GUI screenshots)
 
 ## Testing
 
