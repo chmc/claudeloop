@@ -1,6 +1,6 @@
 # /verify — Verification skill
 
-Verify claudeloop works after code changes. Run from the repo root.
+Verify claudeloop works after code changes by **observing it run**. Automated tests catch crashes; this skill catches everything else.
 
 Every verification run creates a **session folder** under `.verification-sessions/` that serves as a persistent audit trail.
 
@@ -34,34 +34,45 @@ changed_files: [<list from git diff --stat>]
 <git diff --stat output>
 ```
 
-## Step 1: Quick smoke
+## Step 1: Smoke gate
 
 ```sh
 ./tests/smoke.sh 2>&1 | tee "$SESSION/smoke.log"
 ```
 
-If it fails, stop and fix before proceeding. Update README with:
+If smoke fails, stop and fix before proceeding. Smoke passing does NOT complete verification — proceed to observation.
 
-```markdown
-## Smoke Test
-- Result: PASS/FAIL
-- Output: see smoke.log
-```
+## Step 2: Observation Focus Matrix
 
-## Step 2: Decision matrix
+Map changed files to functional categories. Pick the row(s) that match, then follow the specified execution mode and observation targets.
 
-| Changed files | Verification |
-|---|---|
-| `lib/parser.sh`, `lib/dependencies.sh` | Smoke sufficient |
-| `lib/ui.sh`, `lib/stream_processor.sh` | Smoke + GUI screenshots |
-| `lib/retry.sh` | Stub configured to fail/succeed |
-| `lib/verify.sh` | Stub with `--verify` |
-| `lib/progress.sh` | Stub, read PROGRESS.md |
-| `claudeloop` | Depends on area — check matrix above |
+| Category | Examples | Execution mode | What to observe |
+|---|---|---|---|
+| **Plan parsing / dependencies** | Parser, dependency resolver, plan validation | `--dry-run` + stub execution | Phase ordering, dependency display, parsed plan output |
+| **UI / display / stream processing** | Terminal output, colors, spinners, progress display, live log | GUI screenshots (Terminal.app) | Logo, header, spinners, colors, phase icons, scrollback integrity |
+| **Retry / error handling** | Backoff, retry logic, quota handling, failure detection | Stub with configured failures | Retry messages, backoff timing, error display |
+| **Verification logic** | Post-phase verification, verdict parsing | Stub with `--verify` | Verification verdict output, pass/fail display |
+| **State / progress** | Progress tracking, resume, state persistence | Stub execution | PROGRESS.md content + progress display during run |
+| **Orchestration / main loop** | Arg parsing, execution flow, lock files, config | Depends on area — pick from above | At minimum: `--dry-run` output + stub run observation |
 
-Log which verification path was chosen in the README Investigations section.
+Key principles:
+- Map changed files to categories (no hardcoded file paths in the matrix)
+- Every row specifies both what to run AND what to look for
+- No "sufficient" exit ramps — every path ends with observation
+
+Log which category/path was chosen in the README.
 
 ## Step 3: Execute verification
+
+### `--dry-run` observation
+
+Lightweight baseline for parsing/dependency changes:
+
+```sh
+./claudeloop --plan tests/fixtures/smoke-plans/two-phase-deps.md --dry-run 2>&1 | tee "$SESSION/dry-run.log"
+```
+
+Read the output. Describe what you saw (phase ordering, dependency resolution, parsed structure).
 
 ### GUI screenshot protocol
 
@@ -157,16 +168,16 @@ screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
 ```
 
-## Step 4: Investigate and log
+## Step 4: Record observation and investigate
 
-Write observations to `$SESSION/README.md` incrementally:
+Write to `$SESSION/README.md` incrementally:
 
 ```markdown
+## Observation
+<!-- MANDATORY: Describe what you saw when claudeloop ran. Reference screenshots or log files. "None" is not valid. -->
+
 ## Investigations
 <what was checked, observations, anomalies>
-
-## Screenshots
-<descriptions of each screenshot, visual observations>
 
 ## Issues Found
 <problems discovered, or "None">
@@ -174,6 +185,8 @@ Write observations to `$SESSION/README.md` incrementally:
 ## Fixes Applied
 <what was fixed, file paths, descriptions — or "None">
 ```
+
+The **Observation** section is mandatory and must describe what the verifier actually saw — command output, screenshot contents, or log file observations. A verification without observation is not a verification.
 
 ## Step 5: Finalize
 
