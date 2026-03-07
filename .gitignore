@@ -24,3 +24,6 @@ tests/fixtures/.tmp/
 
 exp_plan.md
 exp_result.md
+
+# Verification session audit logs
+.verification-sessions/

@@ -2,15 +2,53 @@
 
 Verify claudeloop works after code changes. Run from the repo root.
 
-## 1. Quick smoke
+Every verification run creates a **session folder** under `.verification-sessions/` that serves as a persistent audit trail.
+
+## Step 0: Create session
 
 ```sh
-./tests/smoke.sh
+BRANCH=$(git branch --show-current)
+GIT_SHA=$(git rev-parse --short HEAD)
+CONTEXT="<kebab-case-slug-describing-what-changed>"  # max ~40 chars
+SESSION=".verification-sessions/$(date +%Y%m%d-%H%M%S)-${BRANCH}-${CONTEXT}"
+mkdir -p "$SESSION"
 ```
 
-If it fails, stop and fix before proceeding.
+Write initial `$SESSION/README.md` with YAML frontmatter:
 
-## 2. Decision matrix
+```markdown
+---
+date: <ISO 8601 timestamp>
+git_sha: <short sha>
+branch: <branch>
+result: TBD
+changed_files: [<list from git diff --stat>]
+---
+
+# Verification: <context>
+
+## Trigger
+<what change prompted this, one sentence>
+
+## Changed Files
+<git diff --stat output>
+```
+
+## Step 1: Quick smoke
+
+```sh
+./tests/smoke.sh 2>&1 | tee "$SESSION/smoke.log"
+```
+
+If it fails, stop and fix before proceeding. Update README with:
+
+```markdown
+## Smoke Test
+- Result: PASS/FAIL
+- Output: see smoke.log
+```
+
+## Step 2: Decision matrix
 
 | Changed files | Verification |
 |---|---|
@@ -21,7 +59,11 @@ If it fails, stop and fix before proceeding.
 | `lib/progress.sh` | Stub, read PROGRESS.md |
 | `claudeloop` | Depends on area — check matrix above |
 
-## 3. GUI screenshot protocol
+Log which verification path was chosen in the README Investigations section.
+
+## Step 3: Execute verification
+
+### GUI screenshot protocol
 
 **Prerequisite:** macOS Screen Recording permission must be granted for `screencapture` (one-time system prompt on first use).
 
@@ -38,10 +80,10 @@ WINDOW_ID=$(osascript -e 'tell application "Terminal"
     return id of front window
 end tell')
 
-# 2. Take screenshot(s)
-screencapture -l "$WINDOW_ID" /tmp/cl-verify-1.png
+# 2. Take screenshot(s) — saved to session folder
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
 # For spinners: take multiple at 1-2s intervals
-# sleep 2 && screencapture -l "$WINDOW_ID" /tmp/cl-verify-2.png
+# sleep 2 && screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
 
 # 3. Read screenshots with Read tool to verify:
 #    - Logo, header formatting, phase icons
@@ -49,12 +91,11 @@ screencapture -l "$WINDOW_ID" /tmp/cl-verify-1.png
 #    - Scrollback integrity (no duplicate/overwritten lines)
 #    - Final summary correct
 
-# 4. Cleanup
+# 4. Close Terminal window (no file cleanup — artifacts are the audit trail)
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
-rm -f /tmp/cl-verify*.png
 ```
 
-## 4. Stub execution for logic verification
+### Stub execution for logic verification
 
 For non-UI changes, run claudeloop with a stub claude directly from the Bash tool:
 
@@ -82,20 +123,19 @@ printf 'BASE_DELAY=0\nMAX_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
 cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
 git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
 
-# Run
-(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$PWD/claudeloop" --plan PLAN.md -y)
+# Run and capture output
+(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$PWD/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-run.log"
 
-# Inspect results
-cat "$tmpdir/.claudeloop/PROGRESS.md"
-ls "$tmpdir/.claudeloop/logs/"
+# Copy PROGRESS.md from stub run
+cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
 
-# Cleanup
+# Cleanup tmpdir (session artifacts already saved)
 rm -rf "$tmpdir"
 ```
 
 Pattern from `tests/test_integration.sh` — see `_write_claude_stub()` for configurable exit codes.
 
-## 5. Live execution (real Claude)
+### Live execution (real Claude)
 
 Same GUI screenshot pattern but without the stub:
 
@@ -108,18 +148,44 @@ WINDOW_ID=$(osascript -e 'tell application "Terminal"
 end tell')
 
 # Monitor with multiple screenshots during execution
-screencapture -l "$WINDOW_ID" /tmp/cl-verify-1.png
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
 sleep 10
-screencapture -l "$WINDOW_ID" /tmp/cl-verify-2.png
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
 # Read both screenshots to verify progress
-```
 
-## 6. Cleanup
-
-Always clean up after verification:
-
-```sh
+# Close Terminal window when done
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
-rm -f /tmp/cl-verify*.png
-rm -rf "$tmpdir"
 ```
+
+## Step 4: Investigate and log
+
+Write observations to `$SESSION/README.md` incrementally:
+
+```markdown
+## Investigations
+<what was checked, observations, anomalies>
+
+## Screenshots
+<descriptions of each screenshot, visual observations>
+
+## Issues Found
+<problems discovered, or "None">
+
+## Fixes Applied
+<what was fixed, file paths, descriptions — or "None">
+```
+
+## Step 5: Finalize
+
+Update `$SESSION/README.md` frontmatter — change `result: TBD` to `result: PASS` or `result: FAIL`.
+
+Write final Result section:
+
+```markdown
+## Result
+PASS/FAIL — <one-line summary>
+```
+
+## Browsing past sessions
+
+Before starting, optionally scan recent sessions in `.verification-sessions/` to check for recurring issues or compare with past results.
