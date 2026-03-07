@@ -445,6 +445,25 @@ PROGRESS
   [ ! -f "$TEST_DIR/.gitignore" ]
 }
 
+@test "setup_project: --yes auto-creates .gitignore without prompting" {
+  rm -f "$TEST_DIR/.gitignore"
+  # exec </dev/null closes stdin; if code tries to prompt, read gets empty input
+  # --yes should bypass prompts entirely
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --yes"
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.gitignore" ]
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
+}
+
+@test "setup_project: --yes auto-patches existing .gitignore without prompting" {
+  printf '*.log\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --yes"
+  [ "$status" -eq 0 ]
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
+}
+
 # =============================================================================
 # Scenario 15: Stale in_progress (SIGKILL) — phase retried on resume
 # =============================================================================

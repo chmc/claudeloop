@@ -775,7 +775,7 @@ handle_orphan_recovery() {
   update_conf_key ".claudeloop/.claudeloop.conf" PLAN_FILE "$PLAN_FILE"
 
   # Prompt user to verify runtime settings
-  if [ -t 0 ]; then
+  if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
     run_config_wizard
     # Persist any changes
     update_conf_key ".claudeloop/.claudeloop.conf" MAX_RETRIES "$MAX_RETRIES"
@@ -792,7 +792,7 @@ handle_orphan_recovery() {
 setup_project() {
   if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
     if [ ! -f ".gitignore" ]; then
-      if [ -t 0 ]; then
+      if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
         printf 'No .gitignore found. Create one? (Y/n) '
         read -r response || true
         case "$response" in
@@ -803,7 +803,7 @@ setup_project() {
       print_success "Created .gitignore"
       _add_platform_gitignore silent
     else
-      if [ -t 0 ]; then
+      if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
         printf 'Add .claudeloop/ to .gitignore? (Y/n) '
         read -r response || true
         case "$response" in
