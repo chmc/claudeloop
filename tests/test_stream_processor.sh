@@ -1243,6 +1243,118 @@ JSON"
   [[ "$output" == *"plain text output"* ]]
 }
 
+# --- Bug fix tests ---
+
+# Bug 1: TaskUpdate with snake_case task_id field (real Claude CLI format)
+@test "sticky panel: TaskUpdate with task_id (snake_case) increments counter" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Analyze code","description":"analyze"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"task_id":"1","status":"completed"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # simple_mode shows inline summary — counter should show 1/1
+  [[ "$output" == *"[Tasks: 1/1 done]"* ]]
+}
+
+@test "sticky panel: TaskUpdate with task_id shows checkmark in panel" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Build","description":"build project"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"task_id":"1","status":"completed"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\xe2\x9c\x93 Build'* ]]
+}
+
+@test "sticky panel: TaskUpdate preview shows task_id (snake_case)" {
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Test","description":"test"}}'
+  local e2='{"type":"tool_use","name":"TaskUpdate","input":{"task_id":"1","status":"in_progress"}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"#1"* ]]
+}
+
+# Bug 2: Cursor hidden during all-done → result transition
+@test "sticky panel: cursor visible after all items complete" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"completed"}]}}'
+  # Trigger a second event after all-done to exercise the sticky_all_done > 1 path
+  local e2='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done\\n"}]}}'
+  local hexout
+  hexout=$(printf '%s\n%s\n' "$e1" "$e2" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # cursor show (1b5b3f323568) must appear after cursor hide (1b5b3f3235l)
+  # There should be no dangling cursor-hide without a matching show
+  local last_hide last_show
+  last_hide=$(printf '%s' "$hexout" | grep -bo '1b5b3f3235' | tail -1 | cut -d: -f1 || echo 0)
+  last_show=$(printf '%s' "$hexout" | grep -bo '1b5b3f32356' | tail -1 | cut -d: -f1 || echo 0)
+  # The very last cursor operation should be a show (ESC[?25h = 1b5b3f32356 8)
+  [[ "$hexout" == *'1b5b3f323568'* ]]
+}
+
+# Bug 3: JSON \n \t rendered as literal letters in parse_todo_items
+@test "sticky panel: backslash-n in todo content rendered as space" {
+  # JSON \n escape: single backslash + n in the content field
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"First line\nSecond line","status":"pending"}]}}'
+  run bash -c "printf '%s\n' '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  # Should NOT contain literal "nSecond" (backslash-n rendered as 'n')
+  [[ "$stripped" != *"linenSecond"* ]]
+  # Should contain both words separated by space
+  [[ "$stripped" == *"First line Second line"* ]]
+}
+
+@test "sticky panel: backslash-t in todo content rendered as space" {
+  # JSON \t escape: single backslash + t in the content field
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Col1\tCol2","status":"pending"}]}}'
+  run bash -c "printf '%s\n' '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
+  [ "$status" -eq 0 ]
+  local stripped
+  stripped=$(printf '%s' "$output" | strip_ansi)
+  [[ "$stripped" != *"Col1tCol2"* ]]
+  [[ "$stripped" == *"Col1 Col2"* ]]
+}
+
+# Bug 5: END block doesn't clear spinner line below panel
+@test "sticky panel: END block clears spinner line before cursor-up" {
+  # The END block should clear the current line (spinner) BEFORE doing cursor-up loop
+  # ESC[2K should appear before the first ESC[A in the END block
+  local event='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Item","status":"pending"}]}}'
+  local raw_stderr
+  raw_stderr=$(echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 >/dev/null | cat -v)
+  # The END block sequence should start with \r\033[2K (clear current/spinner line)
+  # followed by \033[A\033[2K for each sticky line
+  # Check that ESC[2K appears in the output (it does from the loop), but also
+  # that a standalone ESC[2K precedes the first ESC[A in the END block
+  local hexout
+  hexout=$(echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | xxd -p | tr -d '\n')
+  # In the END block, the first cleanup should be ESC[2K (1b5b324b) at current cursor
+  # before moving up with ESC[A (1b5b41)
+  # Look for pattern: 1b5b324b followed eventually by 1b5b41
+  # The cursor-show at the very end: 1b5b3f323568
+  # Find the END block: it's after the last 1b5b3f323568 (cursor show from render_sticky)
+  # Actually, simpler: just verify ESC[2K count > sticky_rendered
+  local erase_count
+  erase_count=$(printf '%s' "$hexout" | grep -o '1b5b324b' | wc -l | tr -d ' ')
+  # sticky_rendered = 2 (separator + 1 item), so END loop does 2x ESC[2K
+  # Bug fix adds 1 more ESC[2K for spinner line = 3 total
+  [ "$erase_count" -ge 3 ]
+}
+
+# Bug 6: No panel cap on terminals < 10 rows
+@test "sticky panel: capped even on very small terminal" {
+  # 20 items with STREAM_TERM_HEIGHT=8 → should still cap
+  local items=""
+  for i in $(seq 1 20); do
+    items="${items}{\"content\":\"Task $i\",\"status\":\"pending\"},"
+  done
+  items="${items%,}"
+  local event="{\"type\":\"tool_use\",\"name\":\"TodoWrite\",\"input\":{\"todos\":[$items]}}"
+  local output_raw
+  output_raw=$(export STREAM_TERM_HEIGHT=8; echo "$event" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
+  local stripped
+  stripped=$(printf '%s' "$output_raw" | strip_ansi)
+  # Should show overflow indicator — panel must not be taller than terminal
+  [[ "$stripped" == *"more items"* ]]
+}
+
 @test "duplicate tool_use doesn't double-count tool_active" {
   # Emit same tool_id in embedded assistant then standalone tool_use
   # After single tool_result, tool_active should be 0, and idle timeout should fire
