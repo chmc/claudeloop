@@ -100,12 +100,29 @@ Use **absolute paths** — Terminal.app's `do script` opens in `~`.
 
 This is the most valuable verification mode. It exercises the full stream processor pipeline with realistic Claude output in a real TTY, catching bugs that the Bash tool cannot see (TTY prompts, ANSI rendering, spinner timing).
 
+##### Timing model
+
+With `success_verbose` and `FAKE_CLAUDE_THINK=2`, each phase has 3 thinking pauses of 2×2s = ~12s per phase. For a 2-phase plan, total runtime is ~26-30s (including startup overhead). Plan screenshot timing around these key moments:
+
+| Capture point | When | What to verify |
+|---|---|---|
+| **Logo/header** | ~1s after start (use AppleScript `delay 1`) | Logo art, version, plan name, phase listing with pending icons |
+| **Phase 1 mid** | ~8-10s | Spinner line with todo counts, tool call formatting, colors |
+| **Phase transition** | ~16-18s | Phase 1 completion message, Phase 2 header starting |
+| **Phase 2 mid** | ~22-24s | Spinner resets for new phase, todo counts restart |
+| **Final banner** | ~32-35s (wait for completion) | Completion summary, all phases with checkmarks, session line |
+
+Adjust timing if using different scenarios or `FAKE_CLAUDE_THINK` values.
+
+##### Execution
+
 ```sh
 # 1. Prepare stub environment
 tmpdir=$(mktemp -d)
 git -C "$tmpdir" init -q
 git -C "$tmpdir" config user.email "test@test.com"
 git -C "$tmpdir" config user.name "Test"
+mkdir -p "$tmpdir/bin"
 cp tests/fake_claude "$tmpdir/bin/claude"
 chmod +x "$tmpdir/bin/claude"
 export FAKE_CLAUDE_DIR="$tmpdir"
@@ -120,26 +137,65 @@ git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
 WINDOW_ID=$(osascript -e 'tell application "Terminal"
     activate
     do script "export FAKE_CLAUDE_THINK=2 && export FAKE_CLAUDE_DIR='"$tmpdir"' && cd '"$tmpdir"' && PATH='"$tmpdir"'/bin:$PATH '"$PWD"'/claudeloop --plan PLAN.md -y"
-    delay 3
+    delay 1
     return id of front window
 end tell')
 
-# 3. Take screenshot(s) — saved to session folder
-screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
-# For spinners/progress: take multiple at intervals
-# sleep 2 && screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
+# 3. Take phase-aware screenshots at key moments
+# Logo/header — capture immediately (delay 1 above gives startup time)
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1-header.png"
 
-# 4. Read screenshots with Read tool to verify:
-#    - Logo, header formatting, phase icons
-#    - Spinner behavior (compare multiple captures)
-#    - Todo/Task summaries, session summary with cache tokens
-#    - Scrollback integrity (no duplicate/overwritten lines)
-#    - Final summary correct
+# Phase 1 mid-execution — spinner + tool calls streaming
+sleep 8
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2-phase1-mid.png"
 
-# 5. Close Terminal window
+# Phase transition — Phase 1 completing, Phase 2 starting
+sleep 8
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-3-transition.png"
+
+# Phase 2 mid-execution — verify spinner resets, new todo counts
+sleep 6
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-4-phase2-mid.png"
+
+# Wait for completion, then capture final banner
+sleep 12
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-5-final.png"
+
+# 4. Scroll to top to capture logo if it scrolled off
+osascript -e 'tell application "System Events" to key code 115' 2>/dev/null  # Home key
+sleep 0.5
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
+
+# 5. Read ALL screenshots with Read tool and verify each capture point:
+#    - screenshot-1-header: Logo art, version string, plan name, pending phase icons
+#    - screenshot-2-phase1-mid: Spinner line (format: "<spinner> Ns Todo X/Y"),
+#      tool call formatting (cyan names, green summaries), scrollback intact
+#    - screenshot-3-transition: Phase 1 "✓ completed" message, Phase 2 header
+#    - screenshot-4-phase2-mid: Spinner reset (timer back to 0s), todo counts restarted
+#    - screenshot-5-final: "All phases completed", checkmark icons on all phases,
+#      session summary line (model, cost, duration, tokens, cache)
+#    - screenshot-6-scrolltop: Logo art visible (fallback if header was missed early)
+
+# 6. Close Terminal window
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
 rm -rf "$tmpdir"
 ```
+
+##### Screenshot verification checklist
+
+After reading screenshots, confirm ALL of the following. Mark each as observed or not:
+
+- [ ] **Logo/header**: Logo art renders, version string correct, plan name shown
+- [ ] **Phase listing**: All phases shown with pending icons before execution starts
+- [ ] **Spinner line**: Format `<spinner> <elapsed>s Todo <done>/<total>` visible during execution
+- [ ] **Tool formatting**: Cyan tool names, green todo/task summaries, blue phase headers
+- [ ] **Phase transition**: Phase N completion message followed by Phase N+1 header
+- [ ] **Spinner reset**: Timer and counts reset when new phase starts
+- [ ] **Scrollback integrity**: No duplicated or overwritten lines across captures
+- [ ] **Final banner**: "All phases completed" with checkmark icons, progress N/N
+- [ ] **Session summary**: model, cost, duration, turns, tokens, cache all present
+
+If any capture point was missed (e.g., timing was off), note the gap and either re-run with adjusted timing or explain why it's acceptable.
 
 #### GUI + dry-run (secondary — for parser changes)
 
