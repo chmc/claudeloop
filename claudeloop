@@ -199,6 +199,7 @@ run_setup_wizard() {
   [ -f "$conf_file" ] && return 0
   $DRY_RUN && return 0
   [ -z "$_WIZARD_FORCE" ] && ! [ -t 0 ] && return 0
+  [ -z "$_WIZARD_FORCE" ] && [ "$YES_MODE" = "true" ] && return 0
 
   printf '\nWelcome to claudeloop! Let'"'"'s configure your project.\n'
   printf 'Press Enter to accept the default [shown in brackets].\n\n'
