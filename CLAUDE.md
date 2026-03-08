@@ -46,6 +46,7 @@ claudeloop --monitor  # watch live output from a second terminal
 ./tests/smoke.sh                      # smoke test (stub-based, no bats)
 ./tests/mutate.sh                     # mutation testing (all lib files)
 ./tests/mutate.sh lib/retry.sh        # mutation testing (single file)
+bats tests/test_fake_claude.sh        # fake CLI scenario tests
 ```
 
 ## Architecture

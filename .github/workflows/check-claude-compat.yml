@@ -1,0 +1,61 @@
+name: Check Claude Code Compatibility
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest Claude Code version
+        id: latest
+        run: |
+          latest=$(curl -s https://registry.npmjs.org/@anthropic-ai/claude-code/latest | jq -r '.version')
+          echo "version=$latest" >> "$GITHUB_OUTPUT"
+
+      - name: Get tracked version
+        id: tracked
+        run: |
+          tracked=$(cat tests/fixtures/claude_code_version.txt | tr -d '[:space:]')
+          echo "version=$tracked" >> "$GITHUB_OUTPUT"
+
+      - name: Compare versions
+        if: steps.latest.outputs.version != steps.tracked.outputs.version
+        run: |
+          echo "Claude Code version changed: ${{ steps.tracked.outputs.version }} -> ${{ steps.latest.outputs.version }}"
+          echo "Review fake_claude scenarios for compatibility."
+
+      - name: Open issue if version changed
+        if: steps.latest.outputs.version != steps.tracked.outputs.version
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Claude Code updated: ${context.payload.inputs?.version || '${{ steps.latest.outputs.version }}'}`;
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'claude-compat'
+            });
+            if (existing.data.some(i => i.title.includes('Claude Code updated'))) {
+              console.log('Issue already open, skipping.');
+              return;
+            }
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body: [
+                `The tracked Claude Code version (\`${{ steps.tracked.outputs.version }}\`) differs from the latest release (\`${{ steps.latest.outputs.version }}\`).`,
+                '',
+                '**Action required:**',
+                '1. Review `tests/fake_claude` scenarios against new CLI output format',
+                '2. Update `tests/fixtures/claude_code_version.txt`',
+                '3. Update the compatibility comment in `tests/fake_claude`'
+              ].join('\n'),
+              labels: ['claude-compat']
+            });

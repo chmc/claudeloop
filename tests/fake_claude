@@ -1,0 +1,231 @@
+#!/bin/sh
+# Fake Claude CLI for testing and verification.
+# Compatible with: claude-code v2.1.71 (checked 2026-03-08)
+#
+# Emits realistic stream-json events without API calls.
+# Configuration via $FAKE_CLAUDE_DIR (required).
+#
+# Files:
+#   scenario         - default scenario name (default: success)
+#   scenarios        - per-call scenario (line N = call N, overrides default)
+#   exit_codes       - per-call exit code (line N = call N)
+#   call_count       - auto-incremented call counter
+#   prompts/prompt_N - captured stdin for call N
+#   args/args_N      - captured CLI args for call N
+#   custom_output    - extra lines for custom scenario
+#   custom_output_N  - per-call custom output
+
+FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+
+# --- Call counting & capture ---
+count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+
+mkdir -p "$FAKE_CLAUDE_DIR/prompts" "$FAKE_CLAUDE_DIR/args"
+cat > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+printf '%s\n' "$@" > "$FAKE_CLAUDE_DIR/args/args_$count"
+
+# --- Scenario selection ---
+scenario=""
+if [ -f "$FAKE_CLAUDE_DIR/scenarios" ]; then
+  scenario=$(sed -n "${count}p" "$FAKE_CLAUDE_DIR/scenarios" 2>/dev/null)
+fi
+[ -z "$scenario" ] && scenario=$(cat "$FAKE_CLAUDE_DIR/scenario" 2>/dev/null)
+[ -z "$scenario" ] && scenario="success"
+
+# --- Scenario functions ---
+# Each emits hardcoded NDJSON matching the real Claude CLI stream-json format.
+
+scenario_success() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make the requested changes."}]}}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_fake_001"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_fake_001"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Changes applied successfully.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
+}
+
+scenario_success_multi() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will read, edit, and test the code.\\n"}]}}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.sh"},"id":"toolu_fake_010"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\necho old","id":"toolu_fake_010"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo new"},"id":"toolu_fake_011"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_fake_011"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"sh /tmp/test.sh"},"id":"toolu_fake_012"}\n'
+  printf '{"type":"tool_result","content":"new","id":"toolu_fake_012"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All changes applied and verified.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.03,"duration_ms":8000,"num_turns":4,"usage":{"input_tokens":1500,"output_tokens":600},"modelUsage":{"fake-claude-v1":{"input_tokens":1500,"output_tokens":600}}}\n'
+}
+
+scenario_failure() {
+  default_exit=1
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Error encountered: unable to proceed.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.005,"duration_ms":1000,"num_turns":0,"usage":{"input_tokens":200,"output_tokens":50},"modelUsage":{"fake-claude-v1":{"input_tokens":200,"output_tokens":50}}}\n'
+}
+
+scenario_empty() {
+  default_exit=0
+}
+
+scenario_quota_error() {
+  default_exit=1
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"rate limit exceeded - too many requests, please try again later\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"fake-claude-v1":{"input_tokens":100,"output_tokens":20}}}\n'
+}
+
+scenario_permission_error() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"write permissions haven'"'"'t been granted for this directory\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.005,"duration_ms":2000,"num_turns":1,"usage":{"input_tokens":300,"output_tokens":80},"modelUsage":{"fake-claude-v1":{"input_tokens":300,"output_tokens":80}}}\n'
+}
+
+scenario_verify_pass() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Running verification checks...\\n"}]}}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff HEAD~1"},"id":"toolu_fake_020"}\n'
+  printf '{"type":"tool_result","content":"diff --git a/test.sh b/test.sh\\n+echo hello","id":"toolu_fake_020"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"bats tests/"},"id":"toolu_fake_021"}\n'
+  printf '{"type":"tool_result","content":"ok 1 test passes","id":"toolu_fake_021"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All checks pass.\\nVERIFICATION_PASSED\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.02,"duration_ms":5000,"num_turns":3,"usage":{"input_tokens":800,"output_tokens":300},"modelUsage":{"fake-claude-v1":{"input_tokens":800,"output_tokens":300}}}\n'
+}
+
+scenario_verify_fail() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"bats tests/"},"id":"toolu_fake_030"}\n'
+  printf '{"type":"tool_result","content":"not ok 1 test fails","id":"toolu_fake_030"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Tests failed.\\nVERIFICATION_FAILED\\nTest suite has 1 failure.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.015,"duration_ms":4000,"num_turns":2,"usage":{"input_tokens":700,"output_tokens":250},"modelUsage":{"fake-claude-v1":{"input_tokens":700,"output_tokens":250}}}\n'
+}
+
+scenario_verify_skip() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Everything looks good.\\nVERIFICATION_PASSED\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.005,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":200,"output_tokens":50},"modelUsage":{"fake-claude-v1":{"input_tokens":200,"output_tokens":50}}}\n'
+}
+
+scenario_slow() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  sleep "${FAKE_CLAUDE_SLEEP:-30}"
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Done after delay.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.01,"duration_ms":30000,"num_turns":1,"usage":{"input_tokens":200,"output_tokens":50},"modelUsage":{"fake-claude-v1":{"input_tokens":200,"output_tokens":50}}}\n'
+}
+
+scenario_rate_limit() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"rate_limit_event","utilization":0.85}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_fake_040"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_fake_040"}\n'
+  printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
+}
+
+scenario_success_verbose() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will analyze the codebase, make changes across multiple files, and run the test suite.\\n"}]}}\n'
+  # TodoWrite: initial task plan
+  printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"pending"},{"content":"Find TODOs","status":"pending"},{"content":"Implement fixes","status":"pending"},{"content":"Run tests","status":"pending"}]},"id":"toolu_v_todo1"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_todo1"}\n'
+  # TaskCreate: subagent task
+  printf '{"type":"tool_use","name":"TaskCreate","input":{"description":"Analyze test coverage gaps"},"id":"toolu_v_task1"}\n'
+  printf '{"type":"tool_result","content":"task_id: task_001","id":"toolu_v_task1"}\n'
+  # Round 1: Read existing files
+  printf '{"type":"tool_use","name":"Glob","input":{"pattern":"src/**/*.sh"},"id":"toolu_v_001"}\n'
+  printf '{"type":"tool_result","content":"src/main.sh\\nsrc/lib/utils.sh\\nsrc/lib/config.sh\\nsrc/lib/parser.sh\\nsrc/lib/runner.sh","id":"toolu_v_001"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/main.sh"},"id":"toolu_v_002"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\n# Main entry point\\n. ./src/lib/utils.sh\\n. ./src/lib/config.sh\\nmain() {\\n  parse_args \\\"$@\\\"\\n  load_config\\n  run_phases\\n}\\nmain \\\"$@\\\"","id":"toolu_v_002"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/lib/utils.sh"},"id":"toolu_v_003"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\n# Utility functions\\nlog() { printf \\\"[%%s] %%s\\\\n\\\" \\\"$(date +%%H:%%M:%%S)\\\" \\\"$1\\\"; }\\ndie() { log \\\"ERROR: $1\\\"; exit 1; }","id":"toolu_v_003"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/lib/config.sh"},"id":"toolu_v_004"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\n# Configuration loader\\nload_config() {\\n  CONFIG_FILE=\\\".config\\\"\\n  [ -f \\\"$CONFIG_FILE\\\" ] && . \\\"$CONFIG_FILE\\\"\\n}","id":"toolu_v_004"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/lib/parser.sh"},"id":"toolu_v_005"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\n# Argument parser\\nparse_args() {\\n  while [ $# -gt 0 ]; do\\n    case \\\"$1\\\" in\\n      --verbose) VERBOSE=true ;;\\n      --dry-run) DRY_RUN=true ;;\\n      *) PLAN_FILE=\\\"$1\\\" ;;\\n    esac\\n    shift\\n  done\\n}","id":"toolu_v_005"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I have read the source files. Now I will implement the changes.\\n"}]}}\n'
+  # TodoWrite: mark reads done
+  printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Find TODOs","status":"in_progress"},{"content":"Implement fixes","status":"pending"},{"content":"Run tests","status":"pending"}]},"id":"toolu_v_todo2"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_todo2"}\n'
+  # Thinking pause — triggers spinner in stream processor
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  # Round 2: Search for patterns
+  printf '{"type":"tool_use","name":"Grep","input":{"pattern":"TODO|FIXME|HACK"},"id":"toolu_v_006"}\n'
+  printf '{"type":"tool_result","content":"src/lib/runner.sh:12:  # TODO: add retry logic\\nsrc/lib/runner.sh:25:  # FIXME: handle edge case\\nsrc/lib/config.sh:8:  # TODO: validate config values","id":"toolu_v_006"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/lib/runner.sh"},"id":"toolu_v_007"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\n# Phase runner\\nrun_phases() {\\n  for phase in $PHASES; do\\n    log \\\"Running phase $phase\\\"\\n    execute_phase \\\"$phase\\\"\\n  done\\n}\\nexecute_phase() {\\n  local phase=\\\"$1\\\"\\n  # TODO: add retry logic\\n  run_command \\\"$phase\\\"\\n  rc=$?\\n  if [ $rc -ne 0 ]; then\\n    die \\\"Phase $phase failed\\\"\\n  fi\\n}","id":"toolu_v_007"}\n'
+  # TodoWrite: mark search done
+  printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Find TODOs","status":"completed"},{"content":"Implement fixes","status":"in_progress"},{"content":"Run tests","status":"pending"}]},"id":"toolu_v_todo3"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_todo3"}\n'
+  # Thinking pause — triggers spinner in stream processor
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  # Round 3: Make edits
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Found 3 TODOs. I will now implement the retry logic and config validation.\\n"}]}}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/lib/runner.sh","new_string":"  local attempts=0 max_retries=3"},"id":"toolu_v_008"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_008"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/lib/config.sh","new_string":"  [ -z \\\"$MAX_RETRIES\\\" ] && MAX_RETRIES=10"},"id":"toolu_v_009"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_009"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/lib/utils.sh","new_string":"warn() { printf \\\"[WARN] %%s\\\\n\\\" \\\"$1\\\" >&2; }"},"id":"toolu_v_010"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_010"}\n'
+  printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/lib/retry.sh"},"id":"toolu_v_011"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_011"}\n'
+  # TodoWrite: mark edits done
+  printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Find TODOs","status":"completed"},{"content":"Implement fixes","status":"completed"},{"content":"Run tests","status":"in_progress"}]},"id":"toolu_v_todo4"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_todo4"}\n'
+  # Thinking pause — triggers spinner in stream processor
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+  sleep "${FAKE_CLAUDE_THINK:-0.3}"
+  # Round 4: Run tests
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Changes applied. Running the test suite to verify.\\n"}]}}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"shellcheck -s sh src/lib/runner.sh src/lib/config.sh src/lib/utils.sh src/lib/retry.sh"},"id":"toolu_v_012"}\n'
+  printf '{"type":"tool_result","content":"","id":"toolu_v_012"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"bats tests/test_runner.sh tests/test_config.sh tests/test_utils.sh tests/test_retry.sh"},"id":"toolu_v_013"}\n'
+  printf '{"type":"tool_result","content":"1..18\\nok 1 run_phases: executes all phases in order\\nok 2 run_phases: stops on first failure\\nok 3 execute_phase: retries on failure\\nok 4 execute_phase: respects max_retries\\nok 5 execute_phase: exponential backoff\\nok 6 load_config: reads config file\\nok 7 load_config: validates MAX_RETRIES\\nok 8 load_config: defaults when file missing\\nok 9 log: formats with timestamp\\nok 10 warn: outputs to stderr\\nok 11 die: exits with code 1\\nok 12 retry: attempt 1 succeeds\\nok 13 retry: attempt 2 after failure\\nok 14 retry: gives up after max\\nok 15 retry: backoff increases\\nok 16 retry: jitter applied\\nok 17 parse_args: --verbose flag\\nok 18 parse_args: --dry-run flag","id":"toolu_v_013"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff --stat"},"id":"toolu_v_014"}\n'
+  printf '{"type":"tool_result","content":" src/lib/config.sh |  3 ++-\\n src/lib/retry.sh  | 22 ++++++++++++++++++++++\\n src/lib/runner.sh | 15 +++++++++------\\n src/lib/utils.sh  |  3 ++-\\n 4 files changed, 36 insertions(+), 7 deletions(-)","id":"toolu_v_014"}\n'
+  # TodoWrite: all done
+  printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Find TODOs","status":"completed"},{"content":"Implement fixes","status":"completed"},{"content":"Run tests","status":"completed"}]},"id":"toolu_v_todo5"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_todo5"}\n'
+  # TaskUpdate: subagent task completed
+  printf '{"type":"tool_use","name":"TaskUpdate","input":{"task_id":"task_001","status":"completed"},"id":"toolu_v_task2"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_v_task2"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All 18 tests pass, shellcheck clean. Summary of changes:\\n- Added retry logic to execute_phase with exponential backoff (src/lib/runner.sh)\\n- Added config validation for MAX_RETRIES (src/lib/config.sh)\\n- Added warn() helper function (src/lib/utils.sh)\\n- Created new retry library (src/lib/retry.sh)\\n4 files changed, 36 insertions, 7 deletions.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.08,"duration_ms":25000,"num_turns":9,"usage":{"input_tokens":6500,"output_tokens":2800,"cache_read_input_tokens":3200,"cache_creation_input_tokens":800},"modelUsage":{"fake-claude-v1":{"input_tokens":6500,"output_tokens":2800}}}\n'
+}
+
+scenario_custom() {
+  default_exit=0
+  if [ -f "$FAKE_CLAUDE_DIR/custom_output_$count" ]; then
+    cat "$FAKE_CLAUDE_DIR/custom_output_$count"
+  elif [ -f "$FAKE_CLAUDE_DIR/custom_output" ]; then
+    cat "$FAKE_CLAUDE_DIR/custom_output"
+  fi
+}
+
+# --- Run scenario ---
+default_exit=0
+"scenario_$scenario"
+
+# --- Exit code ---
+exit_code=""
+if [ -f "$FAKE_CLAUDE_DIR/exit_codes" ]; then
+  exit_code=$(sed -n "${count}p" "$FAKE_CLAUDE_DIR/exit_codes" 2>/dev/null)
+fi
+exit "${exit_code:-$default_exit}"

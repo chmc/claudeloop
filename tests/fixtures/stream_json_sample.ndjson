@@ -1,0 +1,12 @@
+{"type":"system","subtype":"init","model":"claude-sonnet-4-20250514"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make the requested changes.\n"}]}}
+{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/example.sh"},"id":"toolu_example_001"}
+{"type":"tool_result","content":"#!/bin/sh\necho hello","id":"toolu_example_001"}
+{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/example.sh","new_string":"echo world"},"id":"toolu_example_002"}
+{"type":"tool_result","content":"ok","id":"toolu_example_002"}
+{"type":"tool_use","name":"Bash","input":{"command":"sh /tmp/example.sh"},"id":"toolu_example_003"}
+{"type":"tool_result","content":"world","id":"toolu_example_003"}
+{"type":"user","tool_use_result":"file contents here","is_error":false}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Changes applied successfully.\n"}]},"stop_reason":"end_turn"}
+{"type":"rate_limit_event","utilization":0.42}
+{"type":"result","total_cost_usd":0.0234,"duration_ms":12500,"num_turns":4,"usage":{"input_tokens":2000,"output_tokens":800,"cache_read_input_tokens":500,"cache_creation_input_tokens":100},"modelUsage":{"claude-sonnet-4-20250514":{"input_tokens":2000,"output_tokens":800}}}

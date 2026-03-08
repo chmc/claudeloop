@@ -49,7 +49,7 @@ Map changed files to functional categories. Pick the row(s) that match, then fol
 | Category | Examples | Execution mode | What to observe |
 |---|---|---|---|
 | **Plan parsing / dependencies** | Parser, dependency resolver, plan validation | `--dry-run` + stub execution | Phase ordering, dependency display, parsed plan output |
-| **UI / display / stream processing** | Terminal output, colors, spinners, progress display, live log | GUI screenshots (Terminal.app) | Logo, header, spinners, colors, phase icons, scrollback integrity |
+| **UI / display / stream processing** | Terminal output, colors, spinners, progress display, live log | GUI + stub (Terminal.app with fake_claude `success_verbose`) | Logo, header, spinners, colors, phase icons, scrollback integrity, todo/task summaries, session summaries with cache tokens |
 | **Retry / error handling** | Backoff, retry logic, quota handling, failure detection | Stub with configured failures | Retry messages, backoff timing, error display |
 | **Verification logic** | Post-phase verification, verdict parsing | Stub with `--verify` | Verification verdict output, pass/fail display |
 | **State / progress** | Progress tracking, resume, state persistence | Stub execution | PROGRESS.md content + progress display during run |
@@ -59,6 +59,20 @@ Key principles:
 - Map changed files to categories (no hardcoded file paths in the matrix)
 - Every row specifies both what to run AND what to look for
 - No "sufficient" exit ramps — every path ends with observation
+
+### fake_claude scenario reference
+
+Map verification goals to `tests/fake_claude` scenarios and env vars:
+
+| Goal | Scenario | Env vars | Notes |
+|------|----------|----------|-------|
+| Full UI (spinners, todos, tasks, cache) | `success_verbose` | `FAKE_CLAUDE_THINK=2` for GUI | 14 tool calls, 35+ JSON lines |
+| Basic tool flow | `success_multi` | — | Read/Edit/Bash, fast |
+| Retry behavior | `failure` → `success_multi` | — | Use per-call `scenarios` file |
+| Verification flow | `verify_pass` / `verify_fail` | — | Tests verdict parsing |
+| Rate limiting | `rate_limit` | — | Shows `[Rate limit: N%]` |
+| Quota exhaustion | `quota_error` → `success_multi` | — | Tests quota recovery |
+| Long-running (timeout) | `slow` | `FAKE_CLAUDE_SLEEP=N` | |
 
 Log which category/path was chosen in the README.
 
@@ -80,10 +94,58 @@ Read the output. Describe what you saw (phase ordering, dependency resolution, p
 
 For UI changes (spinners, colors, formatting), use Terminal.app screenshots to see what users actually see. The Bash tool captures raw bytes, not rendered terminal output.
 
-Use **absolute paths** — Terminal.app's `do script` opens in `~`:
+Use **absolute paths** — Terminal.app's `do script` opens in `~`.
+
+#### GUI + stub (primary — for UI and stream processor changes)
+
+This is the most valuable verification mode. It exercises the full stream processor pipeline with realistic Claude output in a real TTY, catching bugs that the Bash tool cannot see (TTY prompts, ANSI rendering, spinner timing).
 
 ```sh
-# 1. Open Terminal.app, run claudeloop, get window ID
+# 1. Prepare stub environment
+tmpdir=$(mktemp -d)
+git -C "$tmpdir" init -q
+git -C "$tmpdir" config user.email "test@test.com"
+git -C "$tmpdir" config user.name "Test"
+cp tests/fake_claude "$tmpdir/bin/claude"
+chmod +x "$tmpdir/bin/claude"
+export FAKE_CLAUDE_DIR="$tmpdir"
+printf 'success_verbose\n' > "$tmpdir/scenario"
+mkdir -p "$tmpdir/.claudeloop"
+printf 'BASE_DELAY=0\nMAX_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
+cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
+git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
+
+# 2. Open Terminal.app with stub, get window ID
+#    FAKE_CLAUDE_THINK=2 adds delay so spinners are visible in screenshots
+WINDOW_ID=$(osascript -e 'tell application "Terminal"
+    activate
+    do script "export FAKE_CLAUDE_THINK=2 && export FAKE_CLAUDE_DIR='"$tmpdir"' && cd '"$tmpdir"' && PATH='"$tmpdir"'/bin:$PATH '"$PWD"'/claudeloop --plan PLAN.md -y"
+    delay 3
+    return id of front window
+end tell')
+
+# 3. Take screenshot(s) — saved to session folder
+screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
+# For spinners/progress: take multiple at intervals
+# sleep 2 && screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
+
+# 4. Read screenshots with Read tool to verify:
+#    - Logo, header formatting, phase icons
+#    - Spinner behavior (compare multiple captures)
+#    - Todo/Task summaries, session summary with cache tokens
+#    - Scrollback integrity (no duplicate/overwritten lines)
+#    - Final summary correct
+
+# 5. Close Terminal window
+osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
+rm -rf "$tmpdir"
+```
+
+#### GUI + dry-run (secondary — for parser changes)
+
+When changes only affect plan parsing or dependency resolution, `--dry-run` is sufficient:
+
+```sh
 WINDOW_ID=$(osascript -e 'tell application "Terminal"
     activate
     do script "'"$PWD"'/claudeloop --plan '"$PWD"'/tests/fixtures/smoke-plans/two-phase-deps.md --dry-run"
@@ -91,24 +153,14 @@ WINDOW_ID=$(osascript -e 'tell application "Terminal"
     return id of front window
 end tell')
 
-# 2. Take screenshot(s) — saved to session folder
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
-# For spinners: take multiple at 1-2s intervals
-# sleep 2 && screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
 
-# 3. Read screenshots with Read tool to verify:
-#    - Logo, header formatting, phase icons
-#    - Spinner behavior (compare multiple captures)
-#    - Scrollback integrity (no duplicate/overwritten lines)
-#    - Final summary correct
-
-# 4. Close Terminal window (no file cleanup — artifacts are the audit trail)
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
 ```
 
 ### Stub execution for logic verification
 
-For non-UI changes, run claudeloop with a stub claude directly from the Bash tool:
+For non-UI changes, run claudeloop with fake_claude directly from the Bash tool. Use `success_verbose` for full stream processor exercise, `success_multi` for fast basic flow:
 
 ```sh
 tmpdir=$(mktemp -d)
@@ -116,15 +168,13 @@ git -C "$tmpdir" init -q
 git -C "$tmpdir" config user.email "test@test.com"
 git -C "$tmpdir" config user.name "Test"
 
-# Write stub claude
-mkdir -p "$tmpdir/bin"
-cat > "$tmpdir/bin/claude" << 'STUB'
-#!/bin/sh
-printf 'stub output\n'
-printf '{"type":"tool_use","name":"Edit","input":{}}\n'
-exit 0
-STUB
+# Copy fake_claude as stub (realistic stream-json output)
+cp tests/fake_claude "$tmpdir/bin/claude"
 chmod +x "$tmpdir/bin/claude"
+export FAKE_CLAUDE_DIR="$tmpdir"
+# success_verbose: full UI with todos, tasks, cache (14 tool calls)
+# success_multi: basic Read/Edit/Bash flow (fast)
+printf 'success_verbose\n' > "$tmpdir/scenario"
 
 # Zero-delay config
 mkdir -p "$tmpdir/.claudeloop"
@@ -143,8 +193,6 @@ cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
 # Cleanup tmpdir (session artifacts already saved)
 rm -rf "$tmpdir"
 ```
-
-Pattern from `tests/test_integration.sh` — see `_write_claude_stub()` for configurable exit codes.
 
 ### Live execution (real Claude)
 
