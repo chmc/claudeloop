@@ -116,6 +116,7 @@ All `print_*` output (via `lib/ui.sh`) and stream processor output are teed to `
 ## Skills
 
 - `/github` — Git/GitHub conventions (commit, push, PR)
+- `/rebase sync|promote` — Safe branch rebasing (sync beta from main, promote beta to main)
 - `/release beta|stable` — Trigger GitHub release workflow
 - `/verify` — Verify claudeloop after code changes (smoke + GUI screenshots)
 
