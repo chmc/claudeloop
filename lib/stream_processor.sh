@@ -146,15 +146,7 @@ process_stream_json() {
       task_active_forms[task_count] = taf
       task_statuses[task_count] = "pending"
       if (taf != "") current_active_form = taf
-      if (simple_mode == "true") {
-        print_task_summary()
-      } else {
-        # live_log only
-        visible = task_count - task_deleted
-        msg = "[Tasks: " task_completed "/" visible " done]"
-        if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
-        if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
-      }
+      print_task_summary()
     } else if (tname == "TaskUpdate") {
       tid = extract_task_id(src) + 0
       tst = extract(src, "status")
@@ -181,14 +173,7 @@ process_stream_json() {
           break
         }
       }
-      if (simple_mode == "true") {
-        print_task_summary()
-      } else {
-        visible = task_count - task_deleted
-        msg = "[Tasks: " task_completed "/" visible " done]"
-        if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
-        if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
-      }
+      print_task_summary()
     }
     sync_tasks_to_sticky()
     check_all_done()
@@ -265,6 +250,7 @@ process_stream_json() {
 
   function render_sticky(    _si, _sr, max_vis, vis_start, vis_end, focus, hidden) {
     if (sticky_count == 0 || simple_mode == "true" || got_result) return
+    if (sticky_rendered > 0) clear_bottom_block()
     if (sticky_all_done > 1) {
       clear_bottom_block()
       printf "\033[?25h" > "/dev/stderr"
@@ -371,19 +357,14 @@ process_stream_json() {
         todo_active_form = af
       }
     }
-    if (simple_mode == "true") {
-      print_todo_summary()
-    } else {
-      # live_log only
-      if (todo_count == 0) {
-        msg = "[Todos: empty]"
-      } else {
-        msg = "[Todos: " todo_completed "/" todo_count " done]"
-      }
-      if (todo_active_form != "") msg = msg " \342\226\270 \"" todo_active_form "\""
-      if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
-    }
+    print_todo_summary()
     check_all_done()
+  }
+
+  function spinner_suffix() {
+    if (todo_count > 0) return " Todo " todo_completed "/" todo_count
+    if (task_count > 0) return " Task " task_completed "/" task_count
+    return ""
   }
 
   function clear_line() {
@@ -522,6 +503,7 @@ process_stream_json() {
           else if (name == "TodoWrite") handle_todo_event(seg)
         }
         if (live_log != "") fflush(live_log)
+        clear_bottom_block()
         render_sticky()
       } else {
         # Thinking-only assistant event — update spinner but do NOT reset idle timer
@@ -537,9 +519,9 @@ process_stream_json() {
           clear_bottom_block()
           spinner_start = now
           render_sticky()
-          printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
+          printf "%s 0s%s", substr(spinner, (spinner_idx % 4) + 1, 1), spinner_suffix() > "/dev/stderr"
         } else {
-          printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
+          printf "\r%s %ds%s", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start, spinner_suffix() > "/dev/stderr"
         }
         fflush("/dev/stderr")
         at_line_start = 0
@@ -724,6 +706,7 @@ process_stream_json() {
         fflush("/dev/stderr")
         if (model_s != "" && live_log != "") { printf "[%s] model=%s\n", get_time(), model_s >> live_log; fflush(live_log) }
       }
+      clear_bottom_block()
       render_sticky()
 
     } else {
@@ -762,9 +745,9 @@ process_stream_json() {
           clear_bottom_block()
           spinner_start = now
           render_sticky()
-          printf "%s 0s", substr(spinner, (spinner_idx % 4) + 1, 1) > "/dev/stderr"
+          printf "%s 0s%s", substr(spinner, (spinner_idx % 4) + 1, 1), spinner_suffix() > "/dev/stderr"
         } else {
-          printf "\r%s %ds", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start > "/dev/stderr"
+          printf "\r%s %ds%s", substr(spinner, (spinner_idx % 4) + 1, 1), now - spinner_start, spinner_suffix() > "/dev/stderr"
         }
         fflush("/dev/stderr")
         at_line_start = 0

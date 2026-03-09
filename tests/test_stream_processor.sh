@@ -5,6 +5,11 @@
 
 STREAM_PROCESSOR_LIB="${BATS_TEST_DIRNAME}/../lib/stream_processor.sh"
 
+# Helper: strip ANSI escape sequences from input
+strip_ansi() {
+  sed $'s/\033\[[0-9;]*[A-Za-z]//g' | sed $'s/\033\[?[0-9]*[hl]//g'
+}
+
 setup() {
   _log="$(mktemp)"
   _raw="$(mktemp)"
@@ -1392,6 +1397,55 @@ JSON"
   run bash -c "printf '%s\n%s\n%s\n%s\n' '$tc1' '$tc2' '$tu' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Task 1/2"* ]]
+}
+
+# Bug 7: Ghost duplication — render_sticky without clear_bottom_block
+@test "sticky panel: no ghost when all tool_use IDs are duplicates" {
+  # When assistant event contains only already-seen tool IDs, the loop skips
+  # all tools via continue, bypassing clear_line(). render_sticky() must still
+  # be preceded by clear_bottom_block() to avoid double-rendering the panel.
+  local todo='{"type":"tool_use","id":"toolu_abc","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"}]}}'
+  local dup_assistant='{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_abc","name":"TodoWrite","input":{"todos":[{"content":"Item A","status":"pending"}]}}]}}'
+  local hb='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(printf '%s\n%s\n%s\n' "$todo" "$dup_assistant" "$hb" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
+  # In captured output, cursor-up + erase-below (ESC[J) doesn't actually remove
+  # bytes. So we verify that every re-render of the panel is preceded by a
+  # clear sequence (ESC[<n>A ESC[J), meaning clear_bottom_block was called.
+  local sep_count
+  sep_count=$(printf '%s' "$output_raw" | grep -c '─────' || true)
+  # With a panel present, the duplicate assistant event triggers a re-render.
+  # Each re-render must have a cursor-up-erase (ESC[J) before it.
+  if [ "$sep_count" -ge 2 ]; then
+    printf '%s' "$output_raw" | grep -q $'\033\[J' || {
+      echo "FAIL: panel re-rendered without clear_bottom_block (no ESC[J found)"
+      return 1
+    }
+  fi
+  # Also: the number of ESC[J sequences must be >= sep_count - 1
+  # (each re-render after the first must be preceded by a clear)
+  local clear_count
+  clear_count=$(printf '%s' "$output_raw" | grep -c $'\033\[J' || true)
+  [ "$clear_count" -ge "$((sep_count - 1))" ]
+}
+
+@test "sticky panel: system event clears before re-rendering" {
+  # System events should call clear_bottom_block before render_sticky
+  local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task 1","status":"pending"}]}}'
+  local sys='{"type":"system","subtype":"info","message":"test"}'
+  local hb='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(printf '%s\n%s\n%s\n' "$todo" "$sys" "$hb" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1)
+  local sep_count
+  sep_count=$(printf '%s' "$output_raw" | grep -c '─────' || true)
+  # With the fix, clear_bottom_block removes the old panel before re-rendering
+  # So we should see erase sequences between separator blocks
+  if [ "$sep_count" -ge 2 ]; then
+    printf '%s' "$output_raw" | grep -q $'\033\[J' || {
+      echo "FAIL: system event rendered panel without clearing previous one"
+      return 1
+    }
+  fi
 }
 
 @test "spinner shows Todo count (not Task) when both present" {
