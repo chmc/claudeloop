@@ -1100,12 +1100,13 @@ EOF
   # Call 4: verify phase 1 (exit 0)
   # Call 5: execute phase 2 (exit 0)
   # Call 6: verify phase 2 (exit 0)
+  # Use max-retries 5 so attempt 2 still gets full verification (tier 1)
   printf '0\n1\n0\n0\n0\n0\n' > "$TEST_DIR/claude_exit_codes"
-  _cl --plan PLAN.md --verify --max-retries 2
+  _cl --plan PLAN.md --verify --max-retries 5
   [ "$status" -eq 0 ]
-  # The retry prompt (call 3) must mention verification failure
+  # The retry prompt (call 3) must mention the previous attempt failure
   [ -f "$TEST_DIR/claude_stdin_3" ]
-  grep -q "Verification Failed" "$TEST_DIR/claude_stdin_3"
+  grep -q "Previous Attempt Failed" "$TEST_DIR/claude_stdin_3"
 }
 
 # =============================================================================

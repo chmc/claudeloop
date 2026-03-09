@@ -96,7 +96,7 @@ done
 | `lib/parser.sh` | `parse_plan` → sets all `PHASE_*_N` vars and `PHASE_COUNT` |
 | `lib/dependencies.sh` | `find_next_phase`, `is_phase_runnable`, `detect_dependency_cycles` (DFS, space-separated visited/stack strings) |
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
-| `lib/retry.sh` | `calculate_backoff` (exponential + jitter), `should_retry_phase`, `has_write_actions` (raw JSON log write-action check), `power`, `get_random` |
+| `lib/retry.sh` | `calculate_backoff`, `should_retry_phase`, `has_write_actions`, `retry_strategy`, `verify_mode`, `extract_error_context`, `extract_verify_error`, `build_retry_context`, `power`, `get_random` |
 | `lib/stream_processor.sh` | `process_stream_json` (AWK-based stream parser), `inject_heartbeats` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning` |
 | `lib/verify.sh` | `verify_phase` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
@@ -107,7 +107,7 @@ done
 ```
 main → parse_plan → init_progress → main_loop
   find_next_phase → execute_phase → verify_phase → update_phase_status → write_progress
-  on failure:  should_retry_phase → calculate_backoff → sleep → retry
+  on failure:  should_retry_phase → retry_strategy → calculate_backoff → sleep → retry (standard/stripped/targeted)
   on Ctrl+C:   handle_interrupt → write_progress → save_state → exit 130
   --monitor:   run_monitor → tail -f .claudeloop/live.log
 ```

@@ -140,9 +140,9 @@ has_write_actions() {
 fail_reason_hint() {
   case "$1" in
     no_write_actions)
-      echo "You made no file changes in the previous attempt (no Edit/Write/NotebookEdit calls). You MUST write code changes to complete this phase." ;;
+      echo "You MUST use Edit or Write tools to modify files. Start by reading the most relevant file, then edit it." ;;
     empty_log)
-      echo "You produced no output at all in the previous attempt. Make sure to actively work on the task." ;;
+      echo "You must actively use tools. Start with Read, then Edit." ;;
     no_session)
       echo "The previous attempt crashed or was killed before completing. Start fresh and work through the task methodically." ;;
     verification_failed)
@@ -160,6 +160,144 @@ past_retry_midpoint() {
   [ "$max_retries" -gt 0 ] 2>/dev/null || return 1
   local half=$(( (max_retries + 1) / 2 ))
   [ "$attempt" -ge "$half" ]
+}
+
+# Determine retry strategy tier based on attempt number
+# Args: $1 - current attempt, $2 - max retries
+# Returns: "standard" (first 1/3), "stripped" (middle 1/3), or "targeted" (final 1/3)
+retry_strategy() {
+  local attempt="$1" max="$2"
+  local third=$(( (max + 2) / 3 ))
+  if [ "$attempt" -le "$third" ]; then
+    echo "standard"
+  elif [ "$attempt" -le $((third * 2)) ]; then
+    echo "stripped"
+  else
+    echo "targeted"
+  fi
+}
+
+# Determine verification mode based on attempt number
+# Args: $1 - current attempt, $2 - max retries
+# Returns: "full" (first 1/3), "quick" (middle 1/3), or "skip" (final 1/3)
+verify_mode() {
+  local attempt="$1" max="$2"
+  local third=$(( (max + 2) / 3 ))
+  if [ "$attempt" -le "$third" ]; then
+    echo "full"
+  elif [ "$attempt" -le $((third * 2)) ]; then
+    echo "quick"
+  else
+    echo "skip"
+  fi
+}
+
+# Extract error-relevant lines from a phase log's response section
+# Searches for error patterns (error:, FAIL, SyntaxError, exit code, etc.)
+# Falls back to tail of response section when no patterns match
+# Args: $1 - path to log file, $2 - max lines to return
+# Returns: focused error snippet (stdout), empty for missing/empty logs
+extract_error_context() {
+  local log_file="$1" max_lines="$2"
+  [ -f "$log_file" ] && [ -s "$log_file" ] || return 0
+
+  # Extract response section
+  local response
+  response=$(awk '
+    /^=== RESPONSE ===$/ { found=1; next }
+    /^=== EXECUTION END/ { exit }
+    found { print }
+  ' "$log_file")
+  [ -n "$response" ] || return 0
+
+  # Search for error patterns with surrounding context
+  local errors
+  errors=$(printf '%s\n' "$response" | grep -n -i -E \
+    'error:|Error:|ERROR|FAIL|SyntaxError|TypeError|RuntimeError|exit code|not ok|assertion|traceback|panic' \
+    2>/dev/null | head -n "$max_lines")
+
+  if [ -n "$errors" ]; then
+    # Get lines around the first error match
+    local first_line
+    first_line=$(printf '%s\n' "$errors" | head -1 | cut -d: -f1)
+    local start=$((first_line - 3))
+    [ "$start" -lt 1 ] && start=1
+    printf '%s\n' "$response" | sed -n "${start},$((first_line + max_lines - 1))p" | head -n "$max_lines"
+  else
+    # No error patterns found — return tail of response
+    printf '%s\n' "$response" | tail -n "$max_lines"
+  fi
+}
+
+# Extract failure-relevant portion from a verification log
+# Looks for VERIFICATION_FAILED marker and surrounding context
+# Falls back to tail of log when no marker found
+# Args: $1 - path to verify log file, $2 - max lines to return
+# Returns: verification error snippet (stdout), empty for missing logs
+extract_verify_error() {
+  local log_file="$1" max_lines="$2"
+  [ -f "$log_file" ] && [ -s "$log_file" ] || return 0
+
+  # Search for VERIFICATION_FAILED marker
+  local marker_line
+  marker_line=$(grep -n 'VERIFICATION_FAILED' "$log_file" 2>/dev/null | head -1 | cut -d: -f1)
+
+  if [ -n "$marker_line" ]; then
+    local start=$((marker_line - max_lines / 2))
+    [ "$start" -lt 1 ] && start=1
+    sed -n "${start},$((marker_line + max_lines / 2))p" "$log_file" | head -n "$max_lines"
+  else
+    tail -n "$max_lines" "$log_file"
+  fi
+}
+
+# Build strategy-aware retry context text for injection into prompts
+# Args: $1 - strategy (standard|stripped|targeted)
+#        $2 - current attempt, $3 - max retries
+#        $4 - fail reason code, $5 - phase log path, $6 - verify log path
+# Returns: formatted retry context section (stdout)
+build_retry_context() {
+  local strategy="$1" attempt="$2" max="$3" reason="$4" log_file="$5" verify_log="$6"
+  local prev_attempt=$((attempt - 1))
+  local hint
+  hint=$(fail_reason_hint "$reason")
+
+  case "$strategy" in
+    standard)
+      local error_ctx
+      error_ctx=$(extract_error_context "$log_file" 30)
+      printf '## Previous Attempt Failed (attempt %s of %s)\n\n' "$prev_attempt" "$max"
+      printf 'The previous attempt exited without completing the phase.\n'
+      [ -n "$hint" ] && printf '%s\n' "$hint"
+      if [ -n "$error_ctx" ]; then
+        printf '\nHere is the relevant output from the previous attempt:\n\n```\n%s\n```\n' "$error_ctx"
+      fi
+      printf '\nAddress any errors shown before proceeding.\n'
+      ;;
+    stripped)
+      local error_ctx
+      error_ctx=$(extract_error_context "$log_file" 15)
+      printf '## Previous Attempt Failed (attempt %s of %s)\n\n' "$prev_attempt" "$max"
+      [ -n "$hint" ] && printf '%s\n' "$hint"
+      if [ -n "$error_ctx" ]; then
+        printf '\n```\n%s\n```\n' "$error_ctx"
+      fi
+      ;;
+    targeted)
+      local ctx=""
+      if [ -n "$verify_log" ] && [ -f "$verify_log" ]; then
+        ctx=$(extract_verify_error "$verify_log" 10)
+      fi
+      if [ -z "$ctx" ]; then
+        ctx=$(extract_error_context "$log_file" 10)
+      fi
+      printf '## Fix This Error (attempt %s of %s)\n\n' "$prev_attempt" "$max"
+      if [ -n "$ctx" ]; then
+        printf '```\n%s\n```\n' "$ctx"
+      fi
+      printf '\nFix the error. Test. Commit.\n'
+      ;;
+  esac
 }
 
 # Check if phase should be retried

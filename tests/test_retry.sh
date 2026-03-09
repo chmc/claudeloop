@@ -417,16 +417,17 @@ teardown() { rm -f "$_log"; }
 
 # --- fail_reason_hint() ---
 
-@test "fail_reason_hint: no_write_actions returns hint about file changes" {
+@test "fail_reason_hint: no_write_actions returns hint about Edit/Write tools" {
   run fail_reason_hint "no_write_actions"
   [ "$status" -eq 0 ]
-  echo "$output" | grep -qi "no file changes"
+  echo "$output" | grep -q "Edit"
+  echo "$output" | grep -q "Write"
 }
 
-@test "fail_reason_hint: empty_log returns hint about no output" {
+@test "fail_reason_hint: empty_log returns hint about using tools" {
   run fail_reason_hint "empty_log"
   [ "$status" -eq 0 ]
-  echo "$output" | grep -qi "no output"
+  echo "$output" | grep -qi "tool\|Read\|Edit"
 }
 
 @test "fail_reason_hint: no_session returns hint about crash" {
@@ -511,4 +512,226 @@ teardown() { rm -f "$_log"; }
   printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$_log"
   run has_write_actions "$_log"
   [ "$status" -eq 1 ]
+}
+
+# --- retry_strategy() ---
+
+@test "retry_strategy: MAX_RETRIES=15, attempts 1-5 return standard" {
+  for i in 1 2 3 4 5; do
+    run retry_strategy "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "standard" ]
+  done
+}
+
+@test "retry_strategy: MAX_RETRIES=15, attempts 6-10 return stripped" {
+  for i in 6 7 8 9 10; do
+    run retry_strategy "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "stripped" ]
+  done
+}
+
+@test "retry_strategy: MAX_RETRIES=15, attempts 11-15 return targeted" {
+  for i in 11 12 13 14 15; do
+    run retry_strategy "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "targeted" ]
+  done
+}
+
+@test "retry_strategy: MAX_RETRIES=3, attempt 1=standard, 2=stripped, 3=targeted" {
+  run retry_strategy 1 3
+  [ "$output" = "standard" ]
+  run retry_strategy 2 3
+  [ "$output" = "stripped" ]
+  run retry_strategy 3 3
+  [ "$output" = "targeted" ]
+}
+
+@test "retry_strategy: MAX_RETRIES=1, attempt 1=standard" {
+  run retry_strategy 1 1
+  [ "$output" = "standard" ]
+}
+
+@test "retry_strategy: MAX_RETRIES=2, attempt 1=standard, 2=stripped" {
+  run retry_strategy 1 2
+  [ "$output" = "standard" ]
+  run retry_strategy 2 2
+  [ "$output" = "stripped" ]
+}
+
+# --- verify_mode() ---
+
+@test "verify_mode: MAX_RETRIES=15, attempts 1-5 return full" {
+  for i in 1 2 3 4 5; do
+    run verify_mode "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "full" ]
+  done
+}
+
+@test "verify_mode: MAX_RETRIES=15, attempts 6-10 return quick" {
+  for i in 6 7 8 9 10; do
+    run verify_mode "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "quick" ]
+  done
+}
+
+@test "verify_mode: MAX_RETRIES=15, attempts 11-15 return skip" {
+  for i in 11 12 13 14 15; do
+    run verify_mode "$i" 15
+    [ "$status" -eq 0 ]
+    [ "$output" = "skip" ]
+  done
+}
+
+@test "verify_mode: MAX_RETRIES=3, attempt 1=full, 2=quick, 3=skip" {
+  run verify_mode 1 3
+  [ "$output" = "full" ]
+  run verify_mode 2 3
+  [ "$output" = "quick" ]
+  run verify_mode 3 3
+  [ "$output" = "skip" ]
+}
+
+# --- extract_error_context() ---
+
+@test "extract_error_context: finds SyntaxError in log" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'Some output here\n' >> "$_log"
+  printf 'File: test.py\n' >> "$_log"
+  printf 'SyntaxError: unexpected indent at line 42\n' >> "$_log"
+  printf 'More output\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run extract_error_context "$_log" 15
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "SyntaxError"
+}
+
+@test "extract_error_context: finds test FAIL in log" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'Running tests...\n' >> "$_log"
+  printf 'FAIL: test_something\n' >> "$_log"
+  printf 'Expected 1 but got 2\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run extract_error_context "$_log" 15
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "FAIL"
+}
+
+@test "extract_error_context: falls back to tail when no patterns match" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'Line one\n' >> "$_log"
+  printf 'Line two\n' >> "$_log"
+  printf 'Line three\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run extract_error_context "$_log" 15
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Line three"
+}
+
+@test "extract_error_context: handles missing log" {
+  run extract_error_context "/nonexistent/file" 15
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "extract_error_context: handles empty log" {
+  printf '' > "$_log"
+  run extract_error_context "$_log" 15
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- extract_verify_error() ---
+
+@test "extract_verify_error: extracts VERIFICATION_FAILED context" {
+  printf 'Checking tests...\n' > "$_log"
+  printf 'test_foo: PASS\n' >> "$_log"
+  printf 'test_bar: FAIL - expected 1 got 2\n' >> "$_log"
+  printf 'VERIFICATION_FAILED\n' >> "$_log"
+  printf 'Issues found: test_bar assertion failed\n' >> "$_log"
+  run extract_verify_error "$_log" 10
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "VERIFICATION_FAILED"
+}
+
+@test "extract_verify_error: falls back to tail when no VERIFICATION marker" {
+  printf 'Some verify output line 1\n' > "$_log"
+  printf 'Some verify output line 2\n' >> "$_log"
+  printf 'Some verify output line 3\n' >> "$_log"
+  run extract_verify_error "$_log" 10
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "line 3"
+}
+
+@test "extract_verify_error: handles missing log" {
+  run extract_verify_error "/nonexistent/file" 10
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# --- build_retry_context() ---
+
+@test "build_retry_context: standard includes tail and fail hint" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'Some error happened\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run build_retry_context "standard" 2 10 "no_write_actions" "$_log" ""
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Previous Attempt Failed"
+  echo "$output" | grep -q "MUST"
+}
+
+@test "build_retry_context: stripped has shorter context, no generic advice" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'Some error happened\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run build_retry_context "stripped" 5 10 "no_write_actions" "$_log" ""
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Previous Attempt Failed"
+  # Should NOT contain generic advice
+  ! echo "$output" | grep -q "do not repeat"
+}
+
+@test "build_retry_context: targeted is minimal, just error" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'error: something broke\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run build_retry_context "targeted" 9 10 "" "$_log" ""
+  [ "$status" -eq 0 ]
+  # Should be concise
+  local line_count
+  line_count=$(echo "$output" | wc -l)
+  [ "$line_count" -le 20 ]
+}
+
+@test "build_retry_context: targeted with verify log uses verify error" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'did some work\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 ===\n' >> "$_log"
+  local _vlog
+  _vlog="$(mktemp)"
+  printf 'test_foo: FAIL\nVERIFICATION_FAILED\n' > "$_vlog"
+  run build_retry_context "targeted" 9 10 "verification_failed" "$_log" "$_vlog"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "VERIFICATION_FAILED"
+  rm -f "$_vlog"
+}
+
+# --- updated fail_reason_hint() ---
+
+@test "fail_reason_hint: no_write_actions mentions Edit or Write tools" {
+  run fail_reason_hint "no_write_actions"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Edit"
+  echo "$output" | grep -q "Write"
+}
+
+@test "fail_reason_hint: empty_log mentions tools" {
+  run fail_reason_hint "empty_log"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "tool\|Read\|Edit"
 }

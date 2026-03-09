@@ -192,7 +192,7 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 3. Spawn a fresh `claude` CLI instance with the phase description
 4. Optionally verify with a fresh read-only Claude instance (`--verify`)
 5. Save result to `PROGRESS.md`
-6. On failure: retry with exponential backoff (up to `--max-retries`)
+6. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
 6. Repeat until all phases complete
 
 Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
@@ -249,7 +249,7 @@ Or to tail the raw log directly:
 
 **`Not in a git repository`** — run `git init && git add . && git commit -m "init"` in your project
 
-**Phase keeps failing** — check `.claudeloop/logs/phase-N.log`, break complex phases into smaller ones
+**Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
 
 **Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings. ClaudeLoop also detects when Claude exits successfully but made no write actions (Edit, Write, NotebookEdit, or Agent tool calls) and treats the phase as failed for automatic retry.
 
