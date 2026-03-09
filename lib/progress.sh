@@ -37,31 +37,31 @@ read_progress() {
       case "$line" in
         "Status: "*)
           local status_value
-          status_value=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          status_value=$(printf '%s\n' "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$status_value" = "in_progress" ] && status_value="pending"
           phase_set STATUS "$current_phase" "$status_value"
           ;;
         "Started: "*)
           local time_value
-          time_value=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          time_value=$(printf '%s\n' "$line" | sed 's/^Started:[[:space:]]*//')
           phase_set START_TIME "$current_phase" "$time_value"
           ;;
         "Completed: "*)
           local time_value
-          time_value=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          time_value=$(printf '%s\n' "$line" | sed 's/^Completed:[[:space:]]*//')
           phase_set END_TIME "$current_phase" "$time_value"
           ;;
         "Attempts: "*)
           local attempts_value
-          attempts_value=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          attempts_value=$(printf '%s\n' "$line" | sed 's/^Attempts:[[:space:]]*//')
           printf '%s' "$attempts_value" | grep -qE '^[0-9]+$' || attempts_value=0
           phase_set ATTEMPTS "$current_phase" "$attempts_value"
           ;;
         "Attempt "[0-9]*)
           local _anum _atime
-          _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
-          _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          _anum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
+          _atime=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
           phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
           ;;
       esac
@@ -140,7 +140,7 @@ generate_phase_details() {
       pending)     icon="⏳" ;;
     esac
 
-    echo "### $icon Phase $_phase: $title"
+    printf '### %s Phase %s: %s\n' "$icon" "$_phase" "$title"
     echo "Status: $status"
 
     local start_time
@@ -223,36 +223,36 @@ read_old_phase_list() {
       case "$line" in
         "Status: "*)
           local sv
-          sv=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
+          sv=$(printf '%s\n' "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$sv" = "in_progress" ] && sv="pending"
           old_phase_set STATUS "$current_phase" "$sv"
           ;;
         "Started: "*)
           local tv
-          tv=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
+          tv=$(printf '%s\n' "$line" | sed 's/^Started:[[:space:]]*//')
           old_phase_set START_TIME "$current_phase" "$tv"
           ;;
         "Completed: "*)
           local tv
-          tv=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
+          tv=$(printf '%s\n' "$line" | sed 's/^Completed:[[:space:]]*//')
           old_phase_set END_TIME "$current_phase" "$tv"
           ;;
         "Attempts: "*)
           local av
-          av=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
+          av=$(printf '%s\n' "$line" | sed 's/^Attempts:[[:space:]]*//')
           printf '%s' "$av" | grep -qE '^[0-9]+$' || av=0
           old_phase_set ATTEMPTS "$current_phase" "$av"
           ;;
         "Attempt "[0-9]*)
           local _anum _atime
-          _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
-          _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          _anum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
+          _atime=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
           old_phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
           ;;
         "Depends on:"*)
           local dv
-          dv=$(echo "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+          dv=$(printf '%s\n' "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
           old_phase_set DEPS "$current_phase" "$dv"
           ;;
       esac

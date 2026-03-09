@@ -114,7 +114,7 @@ print_phase_status() {
       ;;
   esac
 
-  printf '%b\n' "${color}${icon} Phase $phase_num: $title${COLOR_RESET}"
+  printf '%b%s%b\n' "${color}${icon} Phase $phase_num: " "$title" "${COLOR_RESET}"
 }
 
 # Print all phases
@@ -140,7 +140,7 @@ print_phase_exec_header() {
   log_live ""
   echo "───────────────────────────────────────────────────────────"
   log_live "───────────────────────────────────────────────────────────"
-  printf '%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: $title${COLOR_RESET}"
+  printf '%b%s%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: " "$title" "${COLOR_RESET}"
   log_live "▶ Executing Phase $phase_num/$PHASE_COUNT: $title"
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}[$timestamp] Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"

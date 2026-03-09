@@ -38,11 +38,11 @@ parse_plan() {
     line_num=$((line_num + 1))
 
     # Check if this is a phase header (flexible: 1-3 hashes or bare, case-insensitive, separator optional)
-    if echo "$line" | grep -iqE '^#{1,3}[[:space:]]+[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]+[^-[:space:]]|[[:space:]]*$)|^[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]*$)'; then
+    if printf '%s\n' "$line" | grep -iqE '^#{1,3}[[:space:]]+[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]+[^-[:space:]]|[[:space:]]*$)|^[Pp]hase[[:space:]]+[0-9]+(\.[0-9]+)?([[:space:]]*:|[[:space:]]+-|[[:space:]]*$)'; then
       local phase_num
-      phase_num=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\).*/\1/p')
+      phase_num=$(printf '%s\n' "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\).*/\1/p')
       local phase_title
-      phase_title=$(echo "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p' | sed 's/[[:space:]]*$//')
+      phase_title=$(printf '%s\n' "$line" | sed -n 's/^[#]*[[:space:]]*[Pp][Hh][Aa][Ss][Ee][[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}[[:space:]]*[-:]*[[:space:]]*\(.*\)/\2/p' | sed 's/[[:space:]]*$//')
       if [ -z "$phase_title" ]; then
         phase_title="Phase $phase_num"
       fi
@@ -74,9 +74,9 @@ parse_plan() {
       case "$line" in
         "**Depends on:**"*)
           local deps_line
-          deps_line=$(echo "$line" | sed 's/^\*\*Depends[[:space:]]*on:[[:space:]]*\*\*[[:space:]]*//')
+          deps_line=$(printf '%s\n' "$line" | sed 's/^\*\*Depends[[:space:]]*on:[[:space:]]*\*\*[[:space:]]*//')
           local deps
-          deps=$(echo "$deps_line" | grep -oE 'Phase [0-9]+(\.[0-9]+)?' | sed 's/Phase //g' | xargs echo)
+          deps=$(printf '%s\n' "$deps_line" | grep -oE 'Phase [0-9]+(\.[0-9]+)?' | sed 's/Phase //g' | xargs echo)
           phase_set DEPENDENCIES "$current_phase" "$deps"
           ;;
         *)
@@ -155,21 +155,21 @@ get_all_phases() {
 # Args: $1 - line to check
 # Returns: 0 if match, 1 otherwise
 is_progress_phase_header() {
-  echo "$1" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'
+  printf '%s\n' "$1" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'
 }
 
 # Extract phase number from a progress phase header
 # Args: $1 - line
 # Prints phase number (e.g. "2.5") or empty string
 extract_progress_phase_num() {
-  echo "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p'
+  printf '%s\n' "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p'
 }
 
 # Extract title from a progress phase header
 # Args: $1 - line
 # Prints title or empty string
 extract_progress_phase_title() {
-  echo "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p'
+  printf '%s\n' "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p'
 }
 
 # Extract phase number from a log filename
