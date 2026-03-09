@@ -31,8 +31,8 @@ read_progress() {
   local current_phase=""
   while IFS= read -r line || [ -n "$line" ]; do
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
-    if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
-      current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')
+    if is_progress_phase_header "$line"; then
+      current_phase=$(extract_progress_phase_num "$line")
     elif [ -n "$current_phase" ]; then
       case "$line" in
         "Status: "*)
@@ -207,10 +207,10 @@ read_old_phase_list() {
   local current_phase=""
   while IFS= read -r line || [ -n "$line" ]; do
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
-    if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
-      current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')
+    if is_progress_phase_header "$line"; then
+      current_phase=$(extract_progress_phase_num "$line")
       local title
-      title=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p')
+      title=$(extract_progress_phase_title "$line")
       old_phase_set TITLE "$current_phase" "$title"
       old_phase_set STATUS "$current_phase" "pending"
       old_phase_set ATTEMPTS "$current_phase" "0"
@@ -456,7 +456,7 @@ detect_orphan_logs() {
       *.attempt-*.log|*.verify.log|*.raw.json|*.formatted.log) continue ;;
     esac
     local _lnum
-    _lnum=$(printf '%s' "$_lf" | sed -n 's|.*/phase-\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)\.log$|\1|p')
+    _lnum=$(extract_log_phase_num "$_lf")
     [ -z "$_lnum" ] && continue
     local _found=false
     for _p in $PHASE_NUMBERS; do
@@ -627,7 +627,7 @@ recover_progress_from_logs() {
         *.attempt-*.log|*.verify.log|*.raw.json) continue ;;
       esac
       local _lnum
-      _lnum=$(printf '%s' "$_lf" | sed -n 's|.*/phase-\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)\.log$|\1|p')
+      _lnum=$(extract_log_phase_num "$_lf")
       [ -z "$_lnum" ] && continue
       local _found=false
       for _p in $PHASE_NUMBERS; do

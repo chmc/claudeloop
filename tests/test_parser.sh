@@ -779,3 +779,76 @@ EOF
   echo "$output" | grep -q "^2.5$"
   echo "$output" | grep -q "^3$"
 }
+
+# --- Progress header regex helpers ---
+
+@test "is_progress_phase_header: matches '### ✅ Phase 1: Title'" {
+  run is_progress_phase_header "### ✅ Phase 1: Setup"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_progress_phase_header: matches '### ⏳ Phase 2.5: Hotfix'" {
+  run is_progress_phase_header "### ⏳ Phase 2.5: Hotfix"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_progress_phase_header: matches '### 🔄 Phase 10: Deploy'" {
+  run is_progress_phase_header "### 🔄 Phase 10: Deploy"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_progress_phase_header: rejects plain text" {
+  run is_progress_phase_header "This is not a phase header"
+  [ "$status" -ne 0 ]
+}
+
+@test "is_progress_phase_header: rejects plan header '## Phase 1: Setup'" {
+  run is_progress_phase_header "## Phase 1: Setup"
+  [ "$status" -ne 0 ]
+}
+
+@test "extract_progress_phase_num: extracts '1' from '### ✅ Phase 1: Setup'" {
+  run extract_progress_phase_num "### ✅ Phase 1: Setup"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "extract_progress_phase_num: extracts '2.5' from '### ⏳ Phase 2.5: Hotfix'" {
+  run extract_progress_phase_num "### ⏳ Phase 2.5: Hotfix"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5" ]
+}
+
+@test "extract_progress_phase_num: returns empty for non-header" {
+  run extract_progress_phase_num "This is not a header"
+  [ "$output" = "" ]
+}
+
+@test "extract_progress_phase_title: extracts 'Setup' from '### ✅ Phase 1: Setup'" {
+  run extract_progress_phase_title "### ✅ Phase 1: Setup"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Setup" ]
+}
+
+@test "extract_progress_phase_title: extracts 'Hot Fix' from '### ⏳ Phase 2.5: Hot Fix'" {
+  run extract_progress_phase_title "### ⏳ Phase 2.5: Hot Fix"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Hot Fix" ]
+}
+
+@test "extract_log_phase_num: extracts '1' from '/path/phase-1.log'" {
+  run extract_log_phase_num "/some/dir/phase-1.log"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "extract_log_phase_num: extracts '2.5' from '/path/phase-2.5.log'" {
+  run extract_log_phase_num "/some/dir/phase-2.5.log"
+  [ "$status" -eq 0 ]
+  [ "$output" = "2.5" ]
+}
+
+@test "extract_log_phase_num: returns empty for non-matching path" {
+  run extract_log_phase_num "/some/dir/other-file.txt"
+  [ "$output" = "" ]
+}

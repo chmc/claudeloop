@@ -147,3 +147,34 @@ get_phase_dependencies() { phase_get DEPENDENCIES "$1"; }
 get_all_phases() {
   for _phase in $PHASE_NUMBERS; do echo "$_phase"; done
 }
+
+# --- Progress file regex helpers ---
+# These match the PROGRESS.md header format: ### <icon> Phase <num>: <title>
+
+# Check if a line is a progress phase header
+# Args: $1 - line to check
+# Returns: 0 if match, 1 otherwise
+is_progress_phase_header() {
+  echo "$1" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'
+}
+
+# Extract phase number from a progress phase header
+# Args: $1 - line
+# Prints phase number (e.g. "2.5") or empty string
+extract_progress_phase_num() {
+  echo "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p'
+}
+
+# Extract title from a progress phase header
+# Args: $1 - line
+# Prints title or empty string
+extract_progress_phase_title() {
+  echo "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p'
+}
+
+# Extract phase number from a log filename
+# Args: $1 - file path (e.g. "/path/phase-2.5.log")
+# Prints phase number or empty string
+extract_log_phase_num() {
+  printf '%s' "$1" | sed -n 's|.*/phase-\([0-9][0-9]*\(\.[0-9][0-9]*\)*\)\.log$|\1|p'
+}
