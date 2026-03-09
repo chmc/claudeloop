@@ -32,6 +32,12 @@ changed_files: [<list from git diff --stat>]
 
 ## Changed Files
 <git diff --stat output>
+
+## Must-Verify
+<!-- Write BEFORE running anything. Primary success criteria for this specific change. -->
+- [ ] <what the change does, with expected observable values>
+- [ ] <what was removed — confirm absence>
+- [ ] <what should NOT happen anymore>
 ```
 
 ## Step 1: Smoke gate
@@ -100,21 +106,9 @@ Use **absolute paths** — Terminal.app's `do script` opens in `~`.
 
 This is the most valuable verification mode. It exercises the full stream processor pipeline with realistic Claude output in a real TTY, catching bugs that the Bash tool cannot see (TTY prompts, ANSI rendering, spinner timing).
 
-##### Timing model
-
-With `success_verbose` and `FAKE_CLAUDE_THINK=2`, each phase has 3 thinking pauses of 2×2s = ~12s per phase. For a 2-phase plan, total runtime is ~26-30s (including startup overhead). Plan screenshot timing around these key moments:
-
-| Capture point | When | What to verify |
-|---|---|---|
-| **Logo/header** | ~1s after start (use AppleScript `delay 1`) | Logo art, version, plan name, phase listing with pending icons |
-| **Phase 1 mid** | ~8-10s | Spinner line with todo counts, tool call formatting, colors |
-| **Phase transition** | ~16-18s | Phase 1 completion message, Phase 2 header starting |
-| **Phase 2 mid** | ~22-24s | Spinner resets for new phase, todo counts restart |
-| **Final banner** | ~32-35s (wait for completion) | Completion summary, all phases with checkmarks, session line |
-
-Adjust timing if using different scenarios or `FAKE_CLAUDE_THINK` values.
-
 ##### Execution
+
+<!-- Timing: sleeps below are tuned for success_verbose + FAKE_CLAUDE_THINK=2 (~30s total) -->
 
 ```sh
 # 1. Prepare stub environment
@@ -166,15 +160,7 @@ osascript -e 'tell application "System Events" to key code 115' 2>/dev/null  # H
 sleep 0.5
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
 
-# 5. Read ALL screenshots with Read tool and verify each capture point:
-#    - screenshot-1-header: Logo art, version string, plan name, pending phase icons
-#    - screenshot-2-phase1-mid: Spinner line (format: "<spinner> Ns Todo X/Y"),
-#      tool call formatting (cyan names, green summaries), scrollback intact
-#    - screenshot-3-transition: Phase 1 "✓ completed" message, Phase 2 header
-#    - screenshot-4-phase2-mid: Spinner reset (timer back to 0s), todo counts restarted
-#    - screenshot-5-final: "All phases completed", checkmark icons on all phases,
-#      session summary line (model, cost, duration, tokens, cache)
-#    - screenshot-6-scrolltop: Logo art visible (fallback if header was missed early)
+# 5. Read ALL screenshots with Read tool and verify against checklist below
 
 # 6. Close Terminal window
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
@@ -182,6 +168,8 @@ rm -rf "$tmpdir"
 ```
 
 ##### Screenshot verification checklist
+
+This is a regression checklist for UI changes. Your must-verify assertions (from Step 0) are the primary success criteria.
 
 After reading screenshots, confirm ALL of the following. Mark each as observed or not:
 
@@ -196,23 +184,6 @@ After reading screenshots, confirm ALL of the following. Mark each as observed o
 - [ ] **Session summary**: model, cost, duration, turns, tokens, cache all present
 
 If any capture point was missed (e.g., timing was off), note the gap and either re-run with adjusted timing or explain why it's acceptable.
-
-#### GUI + dry-run (secondary — for parser changes)
-
-When changes only affect plan parsing or dependency resolution, `--dry-run` is sufficient:
-
-```sh
-WINDOW_ID=$(osascript -e 'tell application "Terminal"
-    activate
-    do script "'"$PWD"'/claudeloop --plan '"$PWD"'/tests/fixtures/smoke-plans/two-phase-deps.md --dry-run"
-    delay 3
-    return id of front window
-end tell')
-
-screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
-
-osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
-```
 
 ### Stub execution for logic verification
 
@@ -250,27 +221,51 @@ cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
 rm -rf "$tmpdir"
 ```
 
-### Live execution (real Claude)
+### Stub execution with configured failures
 
-Same GUI screenshot pattern but without the stub:
+For retry/error-handling changes, use per-call scenarios to simulate failure→retry→success:
 
 ```sh
-WINDOW_ID=$(osascript -e 'tell application "Terminal"
-    activate
-    do script "'"$PWD"'/claudeloop --plan '"$PWD"'/tests/fixtures/smoke-plans/single-phase.md --dangerously-skip-permissions --max-retries 1 --idle-timeout 60 -y"
-    delay 5
-    return id of front window
-end tell')
+tmpdir=$(mktemp -d)
+git -C "$tmpdir" init -q
+git -C "$tmpdir" config user.email "test@test.com"
+git -C "$tmpdir" config user.name "Test"
 
-# Monitor with multiple screenshots during execution
-screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1.png"
-sleep 10
-screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2.png"
-# Read both screenshots to verify progress
+# Copy fake_claude as stub
+mkdir -p "$tmpdir/bin"
+cp tests/fake_claude "$tmpdir/bin/claude"
+chmod +x "$tmpdir/bin/claude"
+export FAKE_CLAUDE_DIR="$tmpdir"
 
-# Close Terminal window when done
-osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
+# Per-call scenarios: first call fails, second succeeds (per phase)
+printf 'failure\nsuccess_multi\nfailure\nsuccess_multi\n' > "$tmpdir/scenarios"
+
+# Non-zero delay so retry timing is observable
+mkdir -p "$tmpdir/.claudeloop"
+printf 'BASE_DELAY=2\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
+
+# Copy plan and commit
+cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
+git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
+
+# Run and capture output
+(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$OLDPWD/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-failure-run.log"
+
+# Inspect retry prompts for correct context
+ls "$tmpdir/prompts/" 2>/dev/null | tee "$SESSION/prompt-files.log"
+for f in "$tmpdir/prompts/"*; do cat "$f"; echo "---"; done > "$SESSION/prompt-contents.log" 2>/dev/null
+
+# Copy progress
+cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
+
+rm -rf "$tmpdir"
 ```
+
+After running, verify:
+- [ ] Each phase fails once then succeeds on retry
+- [ ] Retry delay matches `BASE_DELAY` (not exponential)
+- [ ] Retry prompts contain error context from the failure
+- [ ] Final result: all phases completed
 
 ## Step 4: Record observation and investigate
 
