@@ -1,7 +1,7 @@
 ---
 name: rebase
 description: Safe branch rebasing (sync beta from main, promote beta to main)
-disable-model-invocation: true
+disable-model-invocation: false
 argument-hint: "[sync|promote]"
 ---
 
