@@ -236,7 +236,8 @@ EOF
   done
 }
 
-@test "FUZZ: calculate_backoff survives adversarial inputs" {
+@test "FUZZ: calculate_backoff survives adversarial inputs and returns BASE_DELAY" {
+  BASE_DELAY=3
   local inputs="0 1 2 5 10 50 100 -1 999999"
   for val in $inputs; do
     run calculate_backoff "$val"
@@ -244,6 +245,7 @@ EOF
       echo "CRASH on input '$val': exit status $status, output: $output"
       return 1
     fi
+    [ "$output" = "3" ]
   done
   # Also test empty string
   run calculate_backoff ""
@@ -251,6 +253,7 @@ EOF
     echo "CRASH on empty string: exit status $status, output: $output"
     return 1
   fi
+  [ "$output" = "3" ]
 }
 
 @test "FUZZ: phase_less_than survives adversarial inputs" {

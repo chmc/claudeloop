@@ -107,8 +107,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `MAX_RETRIES` | `--max-retries` | `10` |
 | `SIMPLE_MODE` | `--simple` | `false` |
 | `SKIP_PERMISSIONS` | `--dangerously-skip-permissions` | `false` |
-| `BASE_DELAY` | — | `5` |
-| `MAX_DELAY` | — | `60` |
+| `BASE_DELAY` | — | `3` |
 | `PHASE_PROMPT_FILE` | `--phase-prompt` | _(empty)_ |
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |

@@ -66,7 +66,6 @@ PLAN
   mkdir -p "$TEST_DIR/.claudeloop"
   cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
-MAX_DELAY=0
 CONF
 
   git -C "$TEST_DIR" add PLAN.md
@@ -1165,13 +1164,13 @@ EOF
 
 @test "integration: load_config reads last line without trailing newline" {
   # Write conf without trailing newline — AI_PARSE=true is last line
-  printf 'BASE_DELAY=0\nMAX_DELAY=0\nAI_PARSE=true' > "$TEST_DIR/.claudeloop/.claudeloop.conf"
+  printf 'BASE_DELAY=0\nAI_PARSE=true' > "$TEST_DIR/.claudeloop/.claudeloop.conf"
   local _parser="${BATS_TEST_DIRNAME}/../lib/parser.sh"
   run sh -c "
     cd '$TEST_DIR'
     AI_PARSE=''
     PLAN_FILE='' PROGRESS_FILE='' MAX_RETRIES='' SIMPLE_MODE=''
-    PHASE_PROMPT_FILE='' BASE_DELAY='' MAX_DELAY='' QUOTA_RETRY_INTERVAL=''
+    PHASE_PROMPT_FILE='' BASE_DELAY='' QUOTA_RETRY_INTERVAL=''
     SKIP_PERMISSIONS='' STREAM_TRUNCATE_LEN='' HOOKS_ENABLED='' MAX_PHASE_TIME=''
     IDLE_TIMEOUT='' GRANULARITY='' VERIFY_PHASES=''
     . '$_parser'

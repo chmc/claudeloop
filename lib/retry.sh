@@ -1,68 +1,20 @@
 #!/bin/sh
 
 # Retry Logic Library
-# Handles retry attempts and exponential backoff
+# Handles retry attempts and fixed-delay retries
 
 # Configuration
 MAX_RETRIES="${MAX_RETRIES:-10}"
-BASE_DELAY="${BASE_DELAY:-5}"
-MAX_DELAY="${MAX_DELAY:-60}"
+BASE_DELAY="${BASE_DELAY:-3}"
 QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
 
-# Calculate integer power: base^exp
-power() {
-  local base="$1"
-  local exp="$2"
-  local result=1
-  local i=0
-  while [ "$i" -lt "$exp" ]; do
-    # Overflow guard: if result > MAX_INT / base, stop early
-    if [ "$base" -gt 0 ] && [ "$result" -gt $((9223372036854775807 / base)) ]; then
-      echo "$result"
-      return 0
-    fi
-    result=$((result * base))
-    i=$((i + 1))
-  done
-  echo "$result"
-}
-
-# Get a random integer in [0, max)
-get_random() {
-  local max="$1"
-  if [ "$max" -le 0 ]; then
-    echo 0
-    return 0
-  fi
-  if [ -r /dev/urandom ]; then
-    local random_bytes
-    random_bytes=$(od -An -N2 -tu2 < /dev/urandom | tr -d ' ')
-    echo $((random_bytes % max))
-  else
-    local seed
-    seed=$(($(date +%s) + $$))
-    echo $((seed % max))
-  fi
-}
-
-# Calculate backoff delay
+# Calculate backoff delay (fixed delay between retries)
 # Args: $1 - attempt number
 # Returns: delay in seconds (stdout)
 calculate_backoff() {
   local attempt="$1"
-  case "$attempt" in ''|*[!0-9]*) echo "$BASE_DELAY"; return 0 ;; esac
-  local exp_value
-  exp_value=$(power 2 $((attempt - 1)))
-  local delay=$((BASE_DELAY * exp_value))
-
-  if [ "$delay" -lt 0 ] || [ "$delay" -gt "$MAX_DELAY" ]; then
-    delay=$MAX_DELAY
-  fi
-
-  # Add jitter (0-25% of delay)
-  local jitter
-  jitter=$(get_random $((delay / 4 + 1)))
-  echo $((delay + jitter))
+  case "$attempt" in ''|*[!0-9]*) ;; esac
+  echo "$BASE_DELAY"
 }
 
 # Check if a phase log contains quota/rate-limit error output

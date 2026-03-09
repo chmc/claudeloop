@@ -59,7 +59,7 @@ teardown() {
 # substitution strips trailing newlines, breaking the wizard's read calls.
 _cl_wizard() {
   local input="$1"; shift
-  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 MAX_DELAY=0 _WIZARD_FORCE=1 \"$CLAUDELOOP\" $*"
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 _WIZARD_FORCE=1 \"$CLAUDELOOP\" $*"
 }
 
 # =============================================================================
@@ -83,7 +83,7 @@ _cl_wizard() {
 
 @test "wizard: does not run when stdin is not a tty; conf still created with defaults" {
   # exec </dev/null ensures stdin is not a tty — wizard should skip
-  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   [[ "$output" != *"Welcome to claudeloop!"* ]]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
@@ -91,7 +91,7 @@ _cl_wizard() {
 
 @test "wizard: does not run in YES_MODE (-y)" {
   # -y should skip the wizard even when _WIZARD_FORCE=1 simulates a tty
-  run sh -c "cd '$TEST_DIR' && printf '\n\n\n\n\n\n\n' | BASE_DELAY=0 MAX_DELAY=0 _WIZARD_FORCE=1 '$CLAUDELOOP' --plan PLAN.md -y"
+  run sh -c "cd '$TEST_DIR' && printf '\n\n\n\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 '$CLAUDELOOP' --plan PLAN.md -y"
   [ "$status" -eq 0 ]
   [[ "$output" != *"Welcome to claudeloop!"* ]]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
@@ -318,7 +318,7 @@ _reset_gitignore_without_claudeloop() {
 
 @test "setup_project: auto-adds .claudeloop/ to existing .gitignore (non-interactive)" {
   _reset_gitignore_without_claudeloop
-  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
 }
@@ -326,7 +326,7 @@ _reset_gitignore_without_claudeloop() {
 @test "setup_project: auto-creates .gitignore when none exists (non-interactive)" {
   git -C "$TEST_DIR" rm -q .gitignore
   git -C "$TEST_DIR" commit -q -m "remove gitignore"
-  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
 }
@@ -336,7 +336,7 @@ _reset_gitignore_without_claudeloop() {
   # setup() pre-creates .gitignore with .claudeloop/ — should remain exactly as-is
   local before
   before=$(cat "$TEST_DIR/.gitignore")
-  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 MAX_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   [ "$(cat "$TEST_DIR/.gitignore")" = "$before" ]
 }

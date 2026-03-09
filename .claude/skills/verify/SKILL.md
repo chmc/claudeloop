@@ -128,7 +128,7 @@ chmod +x "$tmpdir/bin/claude"
 export FAKE_CLAUDE_DIR="$tmpdir"
 printf 'success_verbose\n' > "$tmpdir/scenario"
 mkdir -p "$tmpdir/.claudeloop"
-printf 'BASE_DELAY=0\nMAX_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
+printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
 cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
 git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
 
@@ -234,7 +234,7 @@ printf 'success_verbose\n' > "$tmpdir/scenario"
 
 # Zero-delay config
 mkdir -p "$tmpdir/.claudeloop"
-printf 'BASE_DELAY=0\nMAX_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
+printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
 
 # Copy plan and commit
 cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"

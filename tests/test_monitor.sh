@@ -27,7 +27,6 @@ PLAN
   mkdir -p "$TEST_DIR/.claudeloop"
   cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
-MAX_DELAY=0
 CONF
 }
 

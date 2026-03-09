@@ -66,7 +66,6 @@ setup_test_dir() {
   mkdir -p "$td/.claudeloop"
   cat > "$td/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
-MAX_DELAY=0
 CONF
   printf '%s' "$td"
 }

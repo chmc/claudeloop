@@ -15,7 +15,6 @@ _CL_PLAN_FILE="${PLAN_FILE:-}"
 _CL_PROGRESS_FILE="${PROGRESS_FILE:-}"
 _CL_MAX_RETRIES="${MAX_RETRIES:-}"
 _CL_BASE_DELAY="${BASE_DELAY:-}"
-_CL_MAX_DELAY="${MAX_DELAY:-}"
 _CL_SIMPLE_MODE="${SIMPLE_MODE:-}"
 _CL_PHASE_PROMPT_FILE="${PHASE_PROMPT_FILE:-}"
 _CL_QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-}"
@@ -107,7 +106,6 @@ load_config() {
       SIMPLE_MODE)       SIMPLE_MODE="$value" ;;
       PHASE_PROMPT_FILE) PHASE_PROMPT_FILE="$value" ;;
       BASE_DELAY)             BASE_DELAY="$value" ;;
-      MAX_DELAY)              MAX_DELAY="$value" ;;
       QUOTA_RETRY_INTERVAL)   QUOTA_RETRY_INTERVAL="$value" ;;
       SKIP_PERMISSIONS)       SKIP_PERMISSIONS="$value" ;;
       STREAM_TRUNCATE_LEN)    STREAM_TRUNCATE_LEN="$value" ;;
@@ -156,7 +154,6 @@ write_config() {
       printf 'SIMPLE_MODE=%s\n'      "$SIMPLE_MODE"
       printf 'SKIP_PERMISSIONS=%s\n' "$SKIP_PERMISSIONS"
       printf 'BASE_DELAY=%s\n'       "$BASE_DELAY"
-      printf 'MAX_DELAY=%s\n'        "$MAX_DELAY"
       printf 'STREAM_TRUNCATE_LEN=%s\n' "$STREAM_TRUNCATE_LEN"
       printf 'MAX_PHASE_TIME=%s\n'      "$MAX_PHASE_TIME"
       printf 'IDLE_TIMEOUT=%s\n'       "$IDLE_TIMEOUT"
@@ -1398,7 +1395,6 @@ main() {
   [ -n "$_CL_PROGRESS_FILE" ]     && PROGRESS_FILE="$_CL_PROGRESS_FILE"
   [ -n "$_CL_MAX_RETRIES" ]       && MAX_RETRIES="$_CL_MAX_RETRIES"
   [ -n "$_CL_BASE_DELAY" ]        && BASE_DELAY="$_CL_BASE_DELAY"
-  [ -n "$_CL_MAX_DELAY" ]         && MAX_DELAY="$_CL_MAX_DELAY"
   [ -n "$_CL_SIMPLE_MODE" ]       && SIMPLE_MODE="$_CL_SIMPLE_MODE"
   [ -n "$_CL_PHASE_PROMPT_FILE" ]       && PHASE_PROMPT_FILE="$_CL_PHASE_PROMPT_FILE"
   [ -n "$_CL_QUOTA_RETRY_INTERVAL" ]    && QUOTA_RETRY_INTERVAL="$_CL_QUOTA_RETRY_INTERVAL"
