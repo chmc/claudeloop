@@ -31,3 +31,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0023](0023-fake-claude-cli.md) | Fake Claude CLI for verification & testing | 2026-03-08 | Accepted |
 | [0024](0024-retry-strategy-rotation.md) | Retry strategy rotation for model-agnostic resilience | 2026-03-09 | Accepted |
 | [0025](0025-fixed-retry-delay.md) | Fixed retry delay replacing exponential backoff | 2026-03-09 | Accepted |
+| [0026](0026-phase-state-abstraction.md) | Phase state abstraction layer | 2026-03-09 | Accepted |

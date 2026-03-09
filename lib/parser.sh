@@ -49,10 +49,7 @@ parse_plan() {
 
       # Save previous phase description if exists
       if [ "$in_phase" = true ] && [ -n "$current_phase" ]; then
-        _desc="$current_description"
-        local _prev_var
-        _prev_var=$(phase_to_var "$current_phase")
-        eval "PHASE_DESCRIPTION_${_prev_var}=\"\${_desc}\""
+        phase_set DESCRIPTION "$current_phase" "$current_description"
       fi
 
       # Validate ascending order
@@ -62,16 +59,9 @@ parse_plan() {
         return 1
       fi
 
-      local phase_var
-      phase_var=$(phase_to_var "$phase_num")
-
-      # Store phase title (escape single quotes for eval safety)
-      local phase_title_escaped
-      phase_title_escaped=$(printf '%s' "$phase_title" | sed "s/'/'\\\\''/g")
-      eval "PHASE_TITLE_${phase_var}='${phase_title_escaped}'"
-
-      # Initialize dependencies to empty
-      eval "PHASE_DEPENDENCIES_${phase_var}=''"
+      # Store phase title and initialize dependencies
+      phase_set TITLE "$phase_num" "$phase_title"
+      phase_set DEPENDENCIES "$phase_num" ""
 
       current_phase="$phase_num"
       current_description=""
@@ -87,9 +77,7 @@ parse_plan() {
           deps_line=$(echo "$line" | sed 's/^\*\*Depends[[:space:]]*on:[[:space:]]*\*\*[[:space:]]*//')
           local deps
           deps=$(echo "$deps_line" | grep -oE 'Phase [0-9]+(\.[0-9]+)?' | sed 's/Phase //g' | xargs echo)
-          local _cur_var
-          _cur_var=$(phase_to_var "$current_phase")
-          eval "PHASE_DEPENDENCIES_${_cur_var}='$deps'"
+          phase_set DEPENDENCIES "$current_phase" "$deps"
           ;;
         *)
           # Accumulate description
@@ -106,24 +94,17 @@ ${line}"
 
   # Save last phase description
   if [ "$in_phase" = true ] && [ -n "$current_phase" ]; then
-    _desc="$current_description"
-    local _last_var
-    _last_var=$(phase_to_var "$current_phase")
-    eval "PHASE_DESCRIPTION_${_last_var}=\"\${_desc}\""
+    phase_set DESCRIPTION "$current_phase" "$current_description"
   fi
 
   # Validate dependencies
   for i in $PHASE_NUMBERS; do
-    local i_var
-    i_var=$(phase_to_var "$i")
     local deps
-    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${i_var}\"")
+    deps=$(get_phase_dependencies "$i")
     if [ -n "$deps" ]; then
       for dep in $deps; do
-        local dep_var
-        dep_var=$(phase_to_var "$dep")
         local dep_title
-        dep_title=$(eval "echo \"\${PHASE_TITLE_${dep_var}:-}\"")
+        dep_title=$(get_phase_title "$dep")
         if [ -z "$dep_title" ]; then
           echo "Error: Phase $i depends on non-existent Phase $dep" >&2
           return 1
@@ -151,31 +132,16 @@ get_phase_count() {
 
 # Get title of a specific phase
 # Args: $1 - phase number
-get_phase_title() {
-  local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
-  eval "echo \"\$PHASE_TITLE_${phase_var}\""
-}
+get_phase_title() { phase_get TITLE "$1"; }
 
 # Get description of a specific phase
 # Args: $1 - phase number
-get_phase_description() {
-  local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
-  eval "echo \"\$PHASE_DESCRIPTION_${phase_var}\""
-}
+get_phase_description() { phase_get DESCRIPTION "$1"; }
 
 # Get dependencies of a specific phase
 # Args: $1 - phase number
 # Returns: space-separated list of phase numbers
-get_phase_dependencies() {
-  local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
-  eval "echo \"\$PHASE_DEPENDENCIES_${phase_var}\""
-}
+get_phase_dependencies() { phase_get DEPENDENCIES "$1"; }
 
 # Get all phase numbers
 get_all_phases() {

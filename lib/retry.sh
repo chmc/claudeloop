@@ -258,7 +258,7 @@ build_retry_context() {
 should_retry_phase() {
   local phase_num="$1"
   local attempts
-  attempts=$(eval "echo \"\$PHASE_ATTEMPTS_$(phase_to_var "$phase_num")\"")
+  attempts=$(get_phase_attempts "$phase_num")
 
   # Guard against non-numeric attempts or MAX_RETRIES
   case "$attempts" in ''|*[!0-9]*) return 1 ;; esac

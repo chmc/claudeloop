@@ -11,6 +11,7 @@ setup() {
 
   # Source libraries in the right order (verify.sh depends on ui.sh, stream_processor.sh)
   . "$CLAUDELOOP_DIR/lib/parser.sh"
+  . "$CLAUDELOOP_DIR/lib/phase_state.sh"
   . "$CLAUDELOOP_DIR/lib/ui.sh"
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"

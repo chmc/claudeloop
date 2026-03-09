@@ -53,9 +53,7 @@ print_header() {
   local status
 
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
-    status=$(eval "echo \"\${PHASE_STATUS_${_pv}:-}\"")
+    status=$(get_phase_status "$_phase")
     status="${status:-pending}"
     if [ "$status" = "completed" ]; then
       completed=$((completed + 1))
@@ -74,13 +72,11 @@ print_header() {
 # Print phase status
 print_phase_status() {
   local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
   local status
-  status=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
+  status=$(get_phase_status "$phase_num")
   status="${status:-pending}"
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
+  title=$(get_phase_title "$phase_num")
   title="${title:-Unknown}"
   local icon="⏳"
   local color="$COLOR_RESET"
@@ -118,12 +114,10 @@ print_all_phases() {
 # Print phase execution header
 print_phase_exec_header() {
   local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
+  title=$(get_phase_title "$phase_num")
   local attempt
-  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_${phase_var}\"")
+  attempt=$(get_phase_attempts "$phase_num")
 
   local timestamp
   timestamp=$(date "+%H:%M:%S")
@@ -140,7 +134,7 @@ print_phase_exec_header() {
     local _pi=1
     while [ "$_pi" -lt "$attempt" ]; do
       local _pt
-      _pt=$(eval "echo \"\${PHASE_ATTEMPT_TIME_${phase_var}_${_pi}:-}\"")
+      _pt=$(get_phase_attempt_time "$phase_num" "$_pi")
       [ -n "$_pt" ] && printf '%b\n' "${COLOR_YELLOW}  Attempt $_pi started: $_pt${COLOR_RESET}"
       _pi=$((_pi + 1))
     done

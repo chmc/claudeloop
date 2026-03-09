@@ -854,7 +854,7 @@ PROGRESS
 # =============================================================================
 @test "default MAX_RETRIES is 10" {
   # Source retry.sh in a clean env (no MAX_RETRIES set) and verify the default
-  result=$(unset MAX_RETRIES; sh -c ". '$CLAUDELOOP_DIR/lib/parser.sh'; . '$CLAUDELOOP_DIR/lib/retry.sh'; printf '%s' \"\$MAX_RETRIES\"")
+  result=$(unset MAX_RETRIES; sh -c ". '$CLAUDELOOP_DIR/lib/parser.sh'; . '$CLAUDELOOP_DIR/lib/phase_state.sh'; . '$CLAUDELOOP_DIR/lib/retry.sh'; printf '%s' \"\$MAX_RETRIES\"")
   [ "$result" = "10" ]
 }
 

@@ -5,6 +5,7 @@
 
 setup() {
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/dependencies.sh"
   # 3-phase chain: 1 (no deps), 2 (dep: 1), 3 (deps: 1 2)
   PHASE_COUNT=3

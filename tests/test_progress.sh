@@ -6,6 +6,7 @@
 setup() {
   export TEST_DIR="$(mktemp -d)"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
   PHASE_COUNT=3
   PHASE_NUMBERS="1 2 3"

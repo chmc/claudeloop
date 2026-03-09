@@ -5,6 +5,7 @@
 
 setup() {
   source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
 
   PHASE_COUNT=3

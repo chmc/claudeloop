@@ -11,11 +11,9 @@ verify_phase() {
 
   [ "$VERIFY_PHASES" = "true" ] || return 0
 
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
   local title description
-  title=$(eval "echo \"\$PHASE_TITLE_${phase_var}\"")
-  description=$(eval "echo \"\$PHASE_DESCRIPTION_${phase_var}\"")
+  title=$(get_phase_title "$phase_num")
+  description=$(get_phase_description "$phase_num")
 
   printf '[%s] Verifying phase %s...\n' "$(date '+%H:%M:%S')" "$phase_num" >&2
   log_live "Verifying phase $phase_num..."

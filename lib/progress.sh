@@ -10,12 +10,7 @@ init_progress() {
 
   # Initialize status for all phases as pending
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
-    eval "PHASE_STATUS_${_pv}=pending"
-    eval "PHASE_ATTEMPTS_${_pv}=0"
-    eval "PHASE_START_TIME_${_pv}=''"
-    eval "PHASE_END_TIME_${_pv}=''"
+    reset_phase_full "$_phase"
   done
 
   # Read existing progress if file exists
@@ -39,36 +34,35 @@ read_progress() {
     if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
       current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')
     elif [ -n "$current_phase" ]; then
-      local _cv
-      _cv=$(phase_to_var "$current_phase")
       case "$line" in
         "Status: "*)
+          local status_value
           status_value=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$status_value" = "in_progress" ] && status_value="pending"
-          status_value=$(printf '%s' "$status_value" | sed "s/'/'\\\\''/g")
-          eval "PHASE_STATUS_${_cv}='$status_value'"
+          phase_set STATUS "$current_phase" "$status_value"
           ;;
         "Started: "*)
+          local time_value
           time_value=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
-          time_value=$(printf '%s' "$time_value" | sed "s/'/'\\\\''/g")
-          eval "PHASE_START_TIME_${_cv}='$time_value'"
+          phase_set START_TIME "$current_phase" "$time_value"
           ;;
         "Completed: "*)
+          local time_value
           time_value=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
-          time_value=$(printf '%s' "$time_value" | sed "s/'/'\\\\''/g")
-          eval "PHASE_END_TIME_${_cv}='$time_value'"
+          phase_set END_TIME "$current_phase" "$time_value"
           ;;
         "Attempts: "*)
+          local attempts_value
           attempts_value=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
           printf '%s' "$attempts_value" | grep -qE '^[0-9]+$' || attempts_value=0
-          eval "PHASE_ATTEMPTS_${_cv}=$attempts_value"
+          phase_set ATTEMPTS "$current_phase" "$attempts_value"
           ;;
         "Attempt "[0-9]*)
+          local _anum _atime
           _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
-          _atime=$(printf '%s' "$_atime" | sed "s/'/'\\\\''/g")
-          eval "PHASE_ATTEMPT_TIME_${_cv}_${_anum}='$_atime'"
+          phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
           ;;
       esac
     fi
@@ -113,10 +107,8 @@ generate_status_summary() {
   local failed=0
 
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
     local status
-    status=$(eval "echo \"\$PHASE_STATUS_${_pv}\"")
+    status=$(get_phase_status "$_phase")
     case "$status" in
       completed)   completed=$((completed + 1)) ;;
       in_progress) in_progress=$((in_progress + 1)) ;;
@@ -135,12 +127,10 @@ generate_status_summary() {
 # Generate phase details section
 generate_phase_details() {
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
     local status
-    status=$(eval "echo \"\$PHASE_STATUS_${_pv}\"")
+    status=$(get_phase_status "$_phase")
     local title
-    title=$(eval "echo \"\$PHASE_TITLE_${_pv}\"")
+    title=$(get_phase_title "$_phase")
     local icon="⏳"
 
     case "$status" in
@@ -154,26 +144,26 @@ generate_phase_details() {
     echo "Status: $status"
 
     local start_time
-    start_time=$(eval "echo \"\$PHASE_START_TIME_${_pv}\"")
+    start_time=$(get_phase_start_time "$_phase")
     if [ -n "$start_time" ]; then
       echo "Started: $start_time"
     fi
 
     local end_time
-    end_time=$(eval "echo \"\$PHASE_END_TIME_${_pv}\"")
+    end_time=$(get_phase_end_time "$_phase")
     if [ -n "$end_time" ] && { [ "$status" = "completed" ] || [ "$status" = "failed" ]; }; then
       echo "Completed: $end_time"
     fi
 
     local attempts
-    attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_pv}\"")
+    attempts=$(get_phase_attempts "$_phase")
     if [ "$attempts" -gt 0 ]; then
       echo "Attempts: $attempts"
       if [ "$attempts" -gt 1 ]; then
         local _i=1
         while [ "$_i" -le "$attempts" ]; do
           local _at
-          _at=$(eval "echo \"\${PHASE_ATTEMPT_TIME_${_pv}_${_i}:-}\"")
+          _at=$(get_phase_attempt_time "$_phase" "$_i")
           [ -n "$_at" ] && echo "Attempt $_i Started: $_at"
           _i=$((_i + 1))
         done
@@ -181,14 +171,12 @@ generate_phase_details() {
     fi
 
     local deps
-    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${_pv}\"")
+    deps=$(get_phase_dependencies "$_phase")
     if [ -n "$deps" ]; then
       printf 'Depends on:'
       for dep in $deps; do
-        local dep_var
-        dep_var=$(phase_to_var "$dep")
         local dep_status
-        dep_status=$(eval "echo \"\$PHASE_STATUS_${dep_var}\"")
+        dep_status=$(get_phase_status "$dep")
         local dep_icon="⏳"
         case "$dep_status" in
           completed) dep_icon="✅" ;;
@@ -221,59 +209,51 @@ read_old_phase_list() {
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
     if echo "$line" | grep -qE '^###[[:space:]]+[^[:space:]]+[[:space:]]+Phase[[:space:]]+[0-9]+(\.[0-9]+)?:'; then
       current_phase=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*\([0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}\):.*/\1/p')
-      local _ov
-      _ov=$(phase_to_var "$current_phase")
-      local title safe_title
+      local title
       title=$(echo "$line" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p')
-      safe_title=$(echo "$title" | sed "s/'/'\\''/g")
-      eval "_OLD_PHASE_TITLE_${_ov}='${safe_title}'"
-      eval "_OLD_PHASE_STATUS_${_ov}=pending"
-      eval "_OLD_PHASE_ATTEMPTS_${_ov}=0"
-      eval "_OLD_PHASE_START_TIME_${_ov}=''"
-      eval "_OLD_PHASE_END_TIME_${_ov}=''"
-      eval "_OLD_PHASE_DEPS_${_ov}=''"
+      old_phase_set TITLE "$current_phase" "$title"
+      old_phase_set STATUS "$current_phase" "pending"
+      old_phase_set ATTEMPTS "$current_phase" "0"
+      old_phase_set START_TIME "$current_phase" ""
+      old_phase_set END_TIME "$current_phase" ""
+      old_phase_set DEPS "$current_phase" ""
       _OLD_PHASE_COUNT=$((_OLD_PHASE_COUNT + 1))
       _OLD_PHASE_NUMBERS="${_OLD_PHASE_NUMBERS:+$_OLD_PHASE_NUMBERS }$current_phase"
     elif [ -n "$current_phase" ]; then
-      local _ov2
-      _ov2=$(phase_to_var "$current_phase")
       case "$line" in
         "Status: "*)
           local sv
           sv=$(echo "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$sv" = "in_progress" ] && sv="pending"
-          sv=$(printf '%s' "$sv" | sed "s/'/'\\\\''/g")
-          eval "_OLD_PHASE_STATUS_${_ov2}='${sv}'"
+          old_phase_set STATUS "$current_phase" "$sv"
           ;;
         "Started: "*)
           local tv
           tv=$(echo "$line" | sed 's/^Started:[[:space:]]*//')
-          tv=$(printf '%s' "$tv" | sed "s/'/'\\\\''/g")
-          eval "_OLD_PHASE_START_TIME_${_ov2}='${tv}'"
+          old_phase_set START_TIME "$current_phase" "$tv"
           ;;
         "Completed: "*)
           local tv
           tv=$(echo "$line" | sed 's/^Completed:[[:space:]]*//')
-          tv=$(printf '%s' "$tv" | sed "s/'/'\\\\''/g")
-          eval "_OLD_PHASE_END_TIME_${_ov2}='${tv}'"
+          old_phase_set END_TIME "$current_phase" "$tv"
           ;;
         "Attempts: "*)
           local av
           av=$(echo "$line" | sed 's/^Attempts:[[:space:]]*//')
           printf '%s' "$av" | grep -qE '^[0-9]+$' || av=0
-          eval "_OLD_PHASE_ATTEMPTS_${_ov2}=${av}"
+          old_phase_set ATTEMPTS "$current_phase" "$av"
           ;;
         "Attempt "[0-9]*)
+          local _anum _atime
           _anum=$(echo "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(echo "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
-          _atime=$(printf '%s' "$_atime" | sed "s/'/'\\\\''/g")
-          eval "_OLD_PHASE_ATTEMPT_TIME_${_ov2}_${_anum}='$_atime'"
+          old_phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
           ;;
         "Depends on:"*)
           local dv
           dv=$(echo "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
-          eval "_OLD_PHASE_DEPS_${_ov2}='${dv}'"
+          old_phase_set DEPS "$current_phase" "$dv"
           ;;
       esac
     fi
@@ -301,18 +281,14 @@ detect_plan_changes() {
 
   # For each new phase, find matching old phase by title
   for new_i in $PHASE_NUMBERS; do
-    local new_iv
-    new_iv=$(phase_to_var "$new_i")
     local new_title
-    new_title=$(eval "echo \"\$PHASE_TITLE_${new_iv}\"")
+    new_title=$(get_phase_title "$new_i")
 
     # Linear scan through old phases to find title match (first unmatched match wins)
     local matched_old_num=""
     for old_j in $_OLD_PHASE_NUMBERS; do
-      local old_jv
-      old_jv=$(phase_to_var "$old_j")
       local old_title
-      old_title=$(eval "echo \"\$_OLD_PHASE_TITLE_${old_jv}\"")
+      old_title=$(old_phase_get TITLE "$old_j")
       if [ "$old_title" = "$new_title" ]; then
         if ! echo " $matched_old_phases " | grep -qF " $old_j "; then
           matched_old_num="$old_j"
@@ -325,36 +301,27 @@ detect_plan_changes() {
       # Phase added — explicitly reset to defaults (init_progress may have loaded stale
       # status from PROGRESS.md by phase number before detect_plan_changes ran)
       had_changes=true
-      eval "PHASE_STATUS_${new_iv}=pending"
-      eval "PHASE_ATTEMPTS_${new_iv}=0"
-      eval "PHASE_START_TIME_${new_iv}=''"
-      eval "PHASE_END_TIME_${new_iv}=''"
+      reset_phase_full "$new_i"
       printf '[%s] Plan change: Phase added — "%s" (new Phase %s)\n' "$(date '+%H:%M:%S')" "$new_title" "$new_i"
     else
       matched_old_phases="$matched_old_phases $matched_old_num"
-      local old_mnv
-      old_mnv=$(phase_to_var "$matched_old_num")
       local old_status old_attempts old_start old_end
-      old_status=$(eval "echo \"\$_OLD_PHASE_STATUS_${old_mnv}\"")
-      old_attempts=$(eval "echo \"\$_OLD_PHASE_ATTEMPTS_${old_mnv}\"")
-      old_start=$(eval "echo \"\$_OLD_PHASE_START_TIME_${old_mnv}\"")
-      old_end=$(eval "echo \"\$_OLD_PHASE_END_TIME_${old_mnv}\"")
+      old_status=$(old_phase_get STATUS "$matched_old_num")
+      old_attempts=$(old_phase_get ATTEMPTS "$matched_old_num")
+      old_start=$(old_phase_get START_TIME "$matched_old_num")
+      old_end=$(old_phase_get END_TIME "$matched_old_num")
 
-      old_status=$(printf '%s' "$old_status" | sed "s/'/'\\\\''/g")
       printf '%s' "$old_attempts" | grep -qE '^[0-9]+$' || old_attempts=0
-      old_start=$(printf '%s' "$old_start" | sed "s/'/'\\\\''/g")
-      old_end=$(printf '%s' "$old_end" | sed "s/'/'\\\\''/g")
-      eval "PHASE_STATUS_${new_iv}='${old_status}'"
-      eval "PHASE_ATTEMPTS_${new_iv}=${old_attempts}"
-      eval "PHASE_START_TIME_${new_iv}='${old_start}'"
-      eval "PHASE_END_TIME_${new_iv}='${old_end}'"
+      phase_set STATUS "$new_i" "$old_status"
+      phase_set ATTEMPTS "$new_i" "$old_attempts"
+      phase_set START_TIME "$new_i" "$old_start"
+      phase_set END_TIME "$new_i" "$old_end"
 
       local _ti=1
       while [ "$_ti" -le "$old_attempts" ]; do
         local _old_at
-        _old_at=$(eval "echo \"\${_OLD_PHASE_ATTEMPT_TIME_${old_mnv}_${_ti}:-}\"")
-        _old_at=$(printf '%s' "$_old_at" | sed "s/'/'\\\\''/g")
-        eval "PHASE_ATTEMPT_TIME_${new_iv}_${_ti}='${_old_at}'"
+        _old_at=$(old_phase_get ATTEMPT_TIME "$matched_old_num" "$_ti")
+        phase_set ATTEMPT_TIME "$new_i" "$_old_at" "$_ti"
         _ti=$((_ti + 1))
       done
 
@@ -367,22 +334,18 @@ detect_plan_changes() {
 
       # Check dependency changes — compare by title to avoid false positives from renumbering
       local old_dep_nums new_dep_nums
-      old_dep_nums=$(eval "echo \"\$_OLD_PHASE_DEPS_${old_mnv}\"")
-      new_dep_nums=$(eval "echo \"\$PHASE_DEPENDENCIES_${new_iv}\"")
+      old_dep_nums=$(old_phase_get DEPS "$matched_old_num")
+      new_dep_nums=$(get_phase_dependencies "$new_i")
 
       # Translate dep numbers to newline-separated title lists for sorting
       local old_dep_titles="" new_dep_titles="" old_dt new_dt
       for dep_num in $old_dep_nums; do
-        local dep_ov
-        dep_ov=$(phase_to_var "$dep_num")
-        old_dt=$(eval "echo \"\$_OLD_PHASE_TITLE_${dep_ov}\"")
+        old_dt=$(old_phase_get TITLE "$dep_num")
         [ -n "$old_dt" ] && old_dep_titles="${old_dep_titles}${old_dt}
 "
       done
       for dep_num in $new_dep_nums; do
-        local dep_nv
-        dep_nv=$(phase_to_var "$dep_num")
-        new_dt=$(eval "echo \"\$PHASE_TITLE_${dep_nv}\"")
+        new_dt=$(get_phase_title "$dep_num")
         [ -n "$new_dt" ] && new_dep_titles="${new_dep_titles}${new_dt}
 "
       done
@@ -405,12 +368,10 @@ detect_plan_changes() {
   # Check for removed phases (old phases not matched to any new phase)
   for old_k in $_OLD_PHASE_NUMBERS; do
     if ! echo " $matched_old_phases " | grep -qF " $old_k "; then
-      local old_kv
-      old_kv=$(phase_to_var "$old_k")
       local removed_title removed_status
-      removed_title=$(eval "echo \"\$_OLD_PHASE_TITLE_${old_kv}\"")
+      removed_title=$(old_phase_get TITLE "$old_k")
       if [ -n "$removed_title" ]; then
-        removed_status=$(eval "echo \"\$_OLD_PHASE_STATUS_${old_kv}\"")
+        removed_status=$(old_phase_get STATUS "$old_k")
         had_changes=true
         printf '[%s] Plan change: Phase removed — "%s" (was Phase %s, status: %s)\n' \
           "$(date '+%H:%M:%S')" "$removed_title" "$old_k" "$removed_status"
@@ -427,10 +388,8 @@ detect_plan_changes() {
     local removed_count=0
     for old_k in $_OLD_PHASE_NUMBERS; do
       if ! echo " $matched_old_phases " | grep -qF " $old_k "; then
-        local _rkv
-        _rkv=$(phase_to_var "$old_k")
         local _rtitle
-        _rtitle=$(eval "echo \"\$_OLD_PHASE_TITLE_${_rkv}\"")
+        _rtitle=$(old_phase_get TITLE "$old_k")
         [ -n "$_rtitle" ] && removed_count=$((removed_count + 1))
       fi
     done
@@ -589,18 +548,11 @@ recover_progress_from_logs() {
 
   # Initialize all phases to defaults
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
-    eval "PHASE_STATUS_${_pv}=pending"
-    eval "PHASE_ATTEMPTS_${_pv}=0"
-    eval "PHASE_START_TIME_${_pv}=''"
-    eval "PHASE_END_TIME_${_pv}=''"
+    reset_phase_full "$_phase"
   done
 
   # Process each phase
   for _phase in $PHASE_NUMBERS; do
-    local _pv
-    _pv=$(phase_to_var "$_phase")
     local log_file="$logs_dir/phase-${_phase}.log"
 
     if [ ! -f "$log_file" ]; then
@@ -614,14 +566,14 @@ recover_progress_from_logs() {
       [ -f "$_af" ] && attempt_count=$((attempt_count + 1))
     done
     attempt_count=$((attempt_count + 1))
-    eval "PHASE_ATTEMPTS_${_pv}=$attempt_count"
+    phase_set ATTEMPTS "$_phase" "$attempt_count"
 
     # Extract start time from EXECUTION START line
     local start_time
     start_time=$(sed -n 's/^=== EXECUTION START .* time=\([^ ]*\) ===$/\1/p' "$log_file" | tail -1)
     if [ -n "$start_time" ]; then
       start_time=$(printf '%s' "$start_time" | sed 's/T/ /')
-      eval "PHASE_START_TIME_${_pv}='$start_time'"
+      phase_set START_TIME "$_phase" "$start_time"
     fi
 
     # Check for EXECUTION END
@@ -638,7 +590,7 @@ recover_progress_from_logs() {
     end_time=$(printf '%s' "$end_line" | sed -n 's/.* time=\([^ ]*\) ===$/\1/p')
     if [ -n "$end_time" ]; then
       end_time=$(printf '%s' "$end_time" | sed 's/T/ /')
-      eval "PHASE_END_TIME_${_pv}='$end_time'"
+      phase_set END_TIME "$_phase" "$end_time"
     fi
 
     # Determine status
@@ -654,15 +606,15 @@ recover_progress_from_logs() {
       local verify_log="$logs_dir/phase-${_phase}.verify.log"
       if [ -f "$verify_log" ]; then
         if grep -q 'VERIFICATION_PASSED' "$verify_log"; then
-          eval "PHASE_STATUS_${_pv}=completed"
+          phase_set STATUS "$_phase" "completed"
         else
-          eval "PHASE_STATUS_${_pv}=failed"
+          phase_set STATUS "$_phase" "failed"
         fi
       else
-        eval "PHASE_STATUS_${_pv}=completed"
+        phase_set STATUS "$_phase" "completed"
       fi
     else
-      eval "PHASE_STATUS_${_pv}=failed"
+      phase_set STATUS "$_phase" "failed"
     fi
   done
 
@@ -701,26 +653,23 @@ recover_progress_from_logs() {
 update_phase_status() {
   local phase_num="$1"
   local new_status="$2"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
 
-  new_status=$(printf '%s' "$new_status" | sed "s/'/'\\\\''/g")
-  eval "PHASE_STATUS_${phase_var}='$new_status'"
+  phase_set STATUS "$phase_num" "$new_status"
 
   case "$new_status" in
     in_progress)
       local _now
       _now=$(date '+%Y-%m-%d %H:%M:%S')
-      eval "PHASE_START_TIME_${phase_var}='${_now}'"
-      eval "PHASE_END_TIME_${phase_var}=''"
+      phase_set START_TIME "$phase_num" "$_now"
+      phase_set END_TIME "$phase_num" ""
       local attempts
-      attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${phase_var}\"")
-      eval "PHASE_ATTEMPTS_${phase_var}=$((attempts + 1))"
+      attempts=$(get_phase_attempts "$phase_num")
+      phase_set ATTEMPTS "$phase_num" "$((attempts + 1))"
       local _new_attempt=$((attempts + 1))
-      eval "PHASE_ATTEMPT_TIME_${phase_var}_${_new_attempt}='${_now}'"
+      phase_set ATTEMPT_TIME "$phase_num" "$_now" "$_new_attempt"
       ;;
     completed|failed)
-      eval "PHASE_END_TIME_${phase_var}='$(date '+%Y-%m-%d %H:%M:%S')'"
+      phase_set END_TIME "$phase_num" "$(date '+%Y-%m-%d %H:%M:%S')"
       ;;
   esac
 }

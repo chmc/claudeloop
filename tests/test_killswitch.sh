@@ -27,6 +27,7 @@ teardown() {
 
 @test "killswitch: handle_interrupt function saves state" {
   source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
   source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
 
@@ -79,6 +80,7 @@ EOF
 
 @test "killswitch: progress reading restores phase status" {
   source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
 
   # Parse plan

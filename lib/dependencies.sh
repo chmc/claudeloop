@@ -9,10 +9,8 @@
 # Returns: 0 if runnable, 1 if not
 is_phase_runnable() {
   local phase_num="$1"
-  local phase_var
-  phase_var=$(phase_to_var "$phase_num")
   local status
-  status=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
+  status=$(get_phase_status "$phase_num")
 
   # Phase must be pending or failed (not completed or in_progress)
   if [ "$status" != "pending" ] && [ "$status" != "failed" ]; then
@@ -21,12 +19,10 @@ is_phase_runnable() {
 
   # Check all dependencies are completed
   local deps
-  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${phase_var}\"")
+  deps=$(get_phase_dependencies "$phase_num")
   for dep in $deps; do
-    local dep_var
-    dep_var=$(phase_to_var "$dep")
     local dep_status
-    dep_status=$(eval "echo \"\$PHASE_STATUS_${dep_var}\"")
+    dep_status=$(get_phase_status "$dep")
     if [ "$dep_status" != "completed" ]; then
       return 1
     fi
@@ -88,7 +84,7 @@ _dfs_cycle_check() {
   # Check all dependencies
   local deps
   local _cycle_found=false
-  deps=$(eval "echo \"\$PHASE_DEPENDENCIES_$(phase_to_var "$phase")\"")
+  deps=$(get_phase_dependencies "$phase")
   for dep in $deps; do
     if ! _dfs_cycle_check "$dep"; then
       _cycle_found=true
@@ -119,10 +115,8 @@ get_blocked_phases() {
   local blocked=""
 
   for phase in $PHASE_NUMBERS; do
-    local phase_var
-    phase_var=$(phase_to_var "$phase")
     local deps
-    deps=$(eval "echo \"\$PHASE_DEPENDENCIES_${phase_var}\"")
+    deps=$(get_phase_dependencies "$phase")
     case " $deps " in
       *" $blocker_phase "*)
         blocked="$blocked $phase"

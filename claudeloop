@@ -26,6 +26,7 @@ _CL_VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
+. "$SCRIPT_DIR/lib/phase_state.sh"
 . "$SCRIPT_DIR/lib/dependencies.sh"
 . "$SCRIPT_DIR/lib/progress.sh"
 . "$SCRIPT_DIR/lib/retry.sh"
@@ -401,7 +402,7 @@ load_state() {
 
     print_warning "Found interrupted session"
     if [ -n "$_phase" ]; then
-      _title=$(eval "echo \"\$PHASE_TITLE_$(phase_to_var "$_phase")\"")
+      _title=$(get_phase_title "$_phase")
       printf '  Phase %s: %s\n' "$_phase" "$_title"
     fi
     if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
@@ -485,20 +486,11 @@ handle_interrupt() {
 
   # Mark current phase as pending if it was in progress
   if [ -n "$CURRENT_PHASE" ]; then
-    local _cpv
-    _cpv=$(phase_to_var "$CURRENT_PHASE")
     local _status
-    _status=$(eval "echo \"\$PHASE_STATUS_${_cpv}\"")
+    _status=$(get_phase_status "$CURRENT_PHASE")
     if [ "$_status" = "in_progress" ]; then
       print_warning "Marking Phase $CURRENT_PHASE as pending for retry"
-      eval "PHASE_STATUS_${_cpv}=pending"
-      # Don't count this as an attempt since it was interrupted
-      local _attempts
-      _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_cpv}\"")
-      if [ "$_attempts" -gt 0 ]; then
-        eval "PHASE_ATTEMPTS_${_cpv}=$((_attempts - 1))"
-        eval "PHASE_ATTEMPT_TIME_${_cpv}_${_attempts}=''"
-      fi
+      reset_phase_for_retry "$CURRENT_PHASE"
     fi
   fi
 
@@ -859,12 +851,10 @@ _add_platform_gitignore() {
 # Execute a single phase
 execute_phase() {
   local phase_num="$1"
-  local _epv
-  _epv=$(phase_to_var "$phase_num")
   local title
-  title=$(eval "echo \"\$PHASE_TITLE_${_epv}\"")
+  title=$(get_phase_title "$phase_num")
   local description
-  description=$(eval "echo \"\$PHASE_DESCRIPTION_${_epv}\"")
+  description=$(get_phase_description "$phase_num")
   local log_file=".claudeloop/logs/phase-$phase_num.log"
   local raw_log=".claudeloop/logs/phase-$phase_num.raw.json"
   local start_ts duration
@@ -882,7 +872,7 @@ execute_phase() {
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
   local attempt
-  attempt=$(eval "echo \"\$PHASE_ATTEMPTS_${_epv}\"")
+  attempt=$(get_phase_attempts "$phase_num")
   start_ts=$(date '+%s')
 
   print_phase_exec_header "$phase_num"
@@ -938,7 +928,7 @@ Implement the above phase completely. Make sure to:
   # Archive previous attempt log and inject strategy-aware failure context on retry
   if [ "$attempt" -gt 1 ]; then
     local _fail_reason _strategy _prev_verify_log _retry_ctx
-    _fail_reason=$(eval "echo \"\$PHASE_FAIL_REASON_${_epv}\"")
+    _fail_reason=$(get_phase_fail_reason "$phase_num")
     _strategy=$(retry_strategy "$attempt" "$MAX_RETRIES")
 
     # Archive previous attempt log
@@ -1106,7 +1096,7 @@ ${_retry_ctx}"
 
   # Empty log means Claude produced no output — always a failure
   if is_empty_log "$log_file"; then
-    eval "PHASE_FAIL_REASON_${_epv}='empty_log'"
+    phase_set FAIL_REASON "$phase_num" "empty_log"
     print_error "Phase $phase_num: Claude produced no output (empty log)."
     update_phase_status "$phase_num" "failed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1127,7 +1117,7 @@ ${_retry_ctx}"
 
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$raw_log"; then
-      eval "PHASE_FAIL_REASON_${_epv}='no_write_actions'"
+      phase_set FAIL_REASON "$phase_num" "no_write_actions"
       log_verbose "execute_phase: phase $phase_num exited 0 but no write actions in raw log"
       print_warning "Phase $phase_num: Claude exited successfully but made no changes — treating as failed"
       update_phase_status "$phase_num" "failed"
@@ -1142,7 +1132,7 @@ ${_retry_ctx}"
     _vmode=$(verify_mode "$attempt" "$MAX_RETRIES")
     if [ "$_vmode" = "full" ]; then
       if ! verify_phase "$phase_num" "$log_file"; then
-        eval "PHASE_FAIL_REASON_${_epv}='verification_failed'"
+        phase_set FAIL_REASON "$phase_num" "verification_failed"
         print_error "Phase $phase_num: verification failed"
         update_phase_status "$phase_num" "failed"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1166,7 +1156,7 @@ ${_retry_ctx}"
       _vmode2=$(verify_mode "$attempt" "$MAX_RETRIES")
       if [ "$_vmode2" = "full" ]; then
         if ! verify_phase "$phase_num" "$log_file"; then
-          eval "PHASE_FAIL_REASON_${_epv}='verification_failed'"
+          phase_set FAIL_REASON "$phase_num" "verification_failed"
           print_error "Phase $phase_num: verification failed"
           update_phase_status "$phase_num" "failed"
           write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -1182,7 +1172,7 @@ ${_retry_ctx}"
       CURRENT_PHASE=""
       return 0
     fi
-    eval "PHASE_FAIL_REASON_${_epv}='no_session'"
+    phase_set FAIL_REASON "$phase_num" "no_session"
     log_verbose "execute_phase: phase $phase_num failed"
     print_error "Phase $phase_num failed"
     update_phase_status "$phase_num" "failed"
@@ -1213,7 +1203,7 @@ main_loop() {
 
       for _ml_phase in $PHASE_NUMBERS; do
         local _status
-        _status=$(eval "echo \"\$PHASE_STATUS_$(phase_to_var "$_ml_phase")\"")
+        _status=$(get_phase_status "$_ml_phase")
         if [ "$_status" = "pending" ]; then
           has_pending=true
         fi
@@ -1245,19 +1235,10 @@ main_loop() {
     else
       local _log_file
       _log_file=".claudeloop/logs/phase-${next_phase}.log"
-      local _npv
-      _npv=$(phase_to_var "$next_phase")
       if is_quota_error "$_log_file"; then
         # Quota error: restore attempt counter (same pattern as handle_interrupt)
-        local _cur_attempts
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        if [ "$_cur_attempts" -gt 0 ]; then
-          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
-        fi
+        reset_phase_for_retry "$next_phase"
         log_verbose "main_loop: quota error on phase $next_phase, attempts restored"
-        # Reset to pending so find_next_phase picks it up after the wait
-        eval "PHASE_STATUS_${_npv}=pending"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         print_quota_wait "$next_phase" "$QUOTA_RETRY_INTERVAL"
         sleep "$QUOTA_RETRY_INTERVAL"
@@ -1271,12 +1252,7 @@ main_loop() {
           printf 'Press Enter to retry phase %s once the issue is resolved, or Ctrl+C to abort: ' "$next_phase"
           read -r _dummy 2>/dev/null || return 1
         fi
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        if [ "$_cur_attempts" -gt 0 ]; then
-          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
-        fi
-        eval "PHASE_STATUS_${_npv}=pending"
+        reset_phase_for_retry "$next_phase"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
       fi
@@ -1289,19 +1265,14 @@ main_loop() {
           printf 'Press Enter to retry phase %s, or Ctrl+C to abort: ' "$next_phase"
           read -r _dummy 2>/dev/null || return 1
         fi
-        _cur_attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
-        if [ "$_cur_attempts" -gt 0 ]; then
-          eval "PHASE_ATTEMPTS_${_npv}=$((_cur_attempts - 1))"
-          eval "PHASE_ATTEMPT_TIME_${_npv}_${_cur_attempts}=''"
-        fi
-        eval "PHASE_STATUS_${_npv}=pending"
+        reset_phase_for_retry "$next_phase"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
       fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
         local _attempts
-        _attempts=$(eval "echo \"\$PHASE_ATTEMPTS_${_npv}\"")
+        _attempts=$(get_phase_attempts "$next_phase")
         local delay
         delay=$(calculate_backoff "$_attempts")
         log_verbose "main_loop: scheduling retry of phase $next_phase in ${delay}s (attempt $_attempts)"
@@ -1582,18 +1553,14 @@ main() {
     fi
     for _p in $PHASE_NUMBERS; do
       phase_less_than "$_p" "$START_PHASE" || break
-      eval "PHASE_STATUS_$(phase_to_var "$_p")='completed'"
+      phase_set STATUS "$_p" "completed"
     done
     # Reset START_PHASE and all subsequent phases to pending
     _past_start=false
     for _p in $PHASE_NUMBERS; do
       if [ "$_p" = "$START_PHASE" ]; then _past_start=true; fi
       if [ "$_past_start" = true ]; then
-        _pv=$(phase_to_var "$_p")
-        eval "PHASE_STATUS_${_pv}='pending'"
-        eval "PHASE_ATTEMPTS_${_pv}=0"
-        eval "PHASE_START_TIME_${_pv}=''"
-        eval "PHASE_END_TIME_${_pv}=''"
+        reset_phase_full "$_p"
       fi
     done
     # Persist immediately so Ctrl+C before first phase doesn't lose the reset
@@ -1605,8 +1572,7 @@ main() {
 
   # Apply --mark-complete N: override status of a specific phase to completed
   if [ -n "$MARK_COMPLETE_PHASE" ]; then
-    _mc_var=$(phase_to_var "$MARK_COMPLETE_PHASE")
-    _mc_title=$(eval "echo \"\${PHASE_TITLE_${_mc_var}:-}\"")
+    _mc_title=$(get_phase_title "$MARK_COMPLETE_PHASE")
     if [ -z "$_mc_title" ]; then
       print_error "Phase $MARK_COMPLETE_PHASE not found in plan"
       exit 1

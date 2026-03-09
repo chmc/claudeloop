@@ -11,6 +11,7 @@ setup() {
   export SIMPLE_MODE=false
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/stream_processor.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ai_parser.sh"
 
@@ -586,6 +587,7 @@ MOCK
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "e\nn\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
@@ -946,6 +948,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
@@ -991,6 +994,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
@@ -1051,6 +1055,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
@@ -1098,6 +1103,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
@@ -1143,6 +1149,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
@@ -1732,6 +1739,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "y\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
@@ -1752,6 +1760,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "n\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
@@ -1786,6 +1795,7 @@ MOCK
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "e\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
@@ -1837,6 +1847,7 @@ EOF
     sh -c '
       . "'"$script_dir"'/lib/ui.sh"
       . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "y\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
