@@ -162,6 +162,7 @@ printf 'Detected bump: %s  (%s → %s)\n' "${bump:-none}" "$current" "$next"
 
 tmp=$(mktemp)
 sed "s|^VERSION=.*|VERSION=\"${next}\"|" ./claudeloop > "$tmp" && mv "$tmp" ./claudeloop
+chmod +x ./claudeloop
 
 # ── commit and tag ────────────────────────────────────────────────────────────
 
