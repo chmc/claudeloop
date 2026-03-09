@@ -749,7 +749,7 @@ validate_environment() {
 handle_orphan_recovery() {
   [ "${_ORPHAN_RECOVERY_ACTION:-}" = "recover" ] || return 0
 
-  printf '[%s] Switching plan to .claudeloop/ai-parsed-plan.md\n' "$(date '+%H:%M:%S')"
+  log_ts "Switching plan to .claudeloop/ai-parsed-plan.md"
   PLAN_FILE=".claudeloop/ai-parsed-plan.md"
   parse_plan "$PLAN_FILE"
   printf '[%s] Re-parsed: %s phases\n' "$(date '+%H:%M:%S')" "$PHASE_COUNT"
@@ -772,7 +772,7 @@ handle_orphan_recovery() {
     update_conf_key ".claudeloop/.claudeloop.conf" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
     update_conf_key ".claudeloop/.claudeloop.conf" VERIFY_PHASES "$VERIFY_PHASES"
   else
-    printf '[%s] Non-interactive: review .claudeloop/.claudeloop.conf to verify settings\n' "$(date '+%H:%M:%S')"
+    log_ts "Non-interactive: review .claudeloop/.claudeloop.conf to verify settings"
   fi
 
   _PLAN_HAD_CHANGES=""
@@ -945,8 +945,7 @@ run_claude_pipeline() {
   if [ "$VERBOSE_MODE" = "true" ]; then
     _claude_debug_flag="--debug-file .claudeloop/logs/phase-$_rcp_phase.claude.debug"
   fi
-  printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')"
-  [ -n "${LIVE_LOG:-}" ] && printf '[%s] Executing Claude CLI...\n' "$(date '+%H:%M:%S')" >> "$LIVE_LOG" || true
+  log_ts "Executing Claude CLI..."
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 

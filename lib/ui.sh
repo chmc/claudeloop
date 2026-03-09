@@ -24,6 +24,20 @@ log_live() {
   fi
 }
 
+# Print a timestamped message to stdout and live log
+# Args: $1 - message
+log_ts() {
+  printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$1"
+  log_live "$1"
+}
+
+# Print a timestamped message to stderr and live log
+# Args: $1 - message
+log_ts_err() {
+  printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$1" >&2
+  log_live "$1"
+}
+
 # Print startup logo (space ghost)
 print_logo() {
   [ "$SIMPLE_MODE" = "true" ] && return 0

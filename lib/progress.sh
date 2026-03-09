@@ -415,17 +415,17 @@ detect_plan_changes() {
           read -r _ans
           case "$_ans" in
             [yY]*) ;;
-            *) printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"; return 1 ;;
+            *) log_ts "Aborted."; return 1 ;;
           esac
         else
-          printf '[%s] Non-interactive mode — aborting to prevent data loss.\n' "$(date '+%H:%M:%S')"
+          log_ts "Non-interactive mode — aborting to prevent data loss."
           return 1
         fi
       fi
     fi
 
     echo ""
-    printf '[%s] Plan has changed since last run. Progress reconciled by title matching.\n' "$(date '+%H:%M:%S')"
+    log_ts "Plan has changed since last run. Progress reconciled by title matching."
   fi
 
   return 0
@@ -506,12 +506,12 @@ detect_orphan_logs() {
           return 0
           ;;
         [cC]*)
-          printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
+          log_ts "Continuing with current progress."
           _ORPHAN_RECOVERY_ACTION=continue
           return 0
           ;;
         *)
-          printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
+          log_ts "Aborted."
           return 1
           ;;
       esac
@@ -520,18 +520,18 @@ detect_orphan_logs() {
       read -r _ans
       case "$_ans" in
         [cC]*)
-          printf '[%s] Continuing with current progress.\n' "$(date '+%H:%M:%S')"
+          log_ts "Continuing with current progress."
           _ORPHAN_RECOVERY_ACTION=continue
           return 0
           ;;
         *)
-          printf '[%s] Aborted.\n' "$(date '+%H:%M:%S')"
+          log_ts "Aborted."
           return 1
           ;;
       esac
     fi
   else
-    printf '[%s] Non-interactive mode — continuing (use --reset to start fresh).\n' "$(date '+%H:%M:%S')"
+    log_ts "Non-interactive mode — continuing (use --reset to start fresh)."
     _ORPHAN_RECOVERY_ACTION=continue
     return 0
   fi
