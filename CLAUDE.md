@@ -136,3 +136,7 @@ Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-cor
 When modifying existing behavior, update affected tests before changing implementation code.
 
 When found failing suites that are pre-existing, mandatory rule to fix them.
+
+### Completion gate (mandatory)
+
+After all implementation and tests pass, run `/verify` before reporting the task as done. The verify skill selects appropriate checks (smoke, stub, GUI) based on which files changed. Skip only for documentation-only or test-only changes with no implementation modifications.
