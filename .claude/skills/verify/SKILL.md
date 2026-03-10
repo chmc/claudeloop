@@ -66,6 +66,16 @@ Key principles:
 - Every row specifies both what to run AND what to look for
 - No "sufficient" exit ramps — every path ends with observation
 
+### Mandatory GUI rule
+
+GUI screenshot verification is **required** when any of these files are changed or moved (including pure refactors, code moves, source order changes):
+- `lib/execution.sh` (`run_claude_pipeline`, `execute_phase`)
+- `lib/stream_processor.sh` (`process_stream_json`, `inject_heartbeats`)
+- `lib/ui.sh` (display functions)
+- `lib/verify.sh` (`verify_phase` — runs its own pipeline)
+
+Reason: Bash tool cannot render TTY output (spinners, cursor movement, ANSI, sticky panels).
+
 ### fake_claude scenario reference
 
 Map verification goals to `tests/fake_claude` scenarios and env vars:
