@@ -4,7 +4,7 @@
 # Handles retry attempts and fixed-delay retries
 
 # Configuration
-MAX_RETRIES="${MAX_RETRIES:-10}"
+MAX_RETRIES="${MAX_RETRIES:-15}"
 BASE_DELAY="${BASE_DELAY:-3}"
 QUOTA_RETRY_INTERVAL="${QUOTA_RETRY_INTERVAL:-900}"
 

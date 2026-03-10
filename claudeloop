@@ -62,10 +62,10 @@ MONITOR_MODE=false
 MAX_PHASE_TIME=0             # kill claude after N seconds per phase (0=disabled, default)
 IDLE_TIMEOUT=600             # exit stream processor after N seconds of no activity (0=disabled)
 VERIFY_TIMEOUT=300           # kill verify_phase after N seconds (default 300)
-AI_PARSE=false
+AI_PARSE=true
 GRANULARITY="tasks"
-VERIFY_PHASES=false
-REFACTOR_PHASES=false
+VERIFY_PHASES=true
+REFACTOR_PHASES=true
 _REFACTORING_PHASE=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
@@ -798,7 +798,8 @@ init_live_log() {
 # Sets: PLAN_FILE, _parse_msg
 run_ai_parsing() {
   _parse_msg="Parsing plan file"
-  if [ "$AI_PARSE" = "true" ]; then
+  # In dry-run, only AI-parse if explicitly requested via --ai-parse CLI flag
+  if [ "$AI_PARSE" = "true" ] && { ! $DRY_RUN || [ -n "$_CLI_AI_PARSE" ]; }; then
     local ai_plan=".claudeloop/ai-parsed-plan.md"
     if [ -f "$ai_plan" ] && [ -f "$PROGRESS_FILE" ] && [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
       print_warning "AI-parsed plan already exists. Re-parsing will invalidate progress."

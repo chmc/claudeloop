@@ -66,6 +66,9 @@ PLAN
   mkdir -p "$TEST_DIR/.claudeloop"
   cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
 CONF
 
   git -C "$TEST_DIR" add PLAN.md
@@ -153,10 +156,10 @@ _call_count() {
 # =============================================================================
 # Item 0: MAX_RETRIES default is 10
 # =============================================================================
-@test "default MAX_RETRIES is 10" {
+@test "default MAX_RETRIES is 15" {
   # Source retry.sh in a clean env (no MAX_RETRIES set) and verify the default
   result=$(unset MAX_RETRIES; sh -c ". '$CLAUDELOOP_DIR/lib/parser.sh'; . '$CLAUDELOOP_DIR/lib/phase_state.sh'; . '$CLAUDELOOP_DIR/lib/retry.sh'; printf '%s' \"\$MAX_RETRIES\"")
-  [ "$result" = "10" ]
+  [ "$result" = "15" ]
 }
 
 # =============================================================================

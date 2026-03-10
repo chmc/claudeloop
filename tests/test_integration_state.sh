@@ -27,6 +27,7 @@ silent_calls_file="${dir}/claude_silent_calls"
 if grep -qx "\$count" "\$silent_calls_file" 2>/dev/null; then
   exit "\$exit_code"
 fi
+printf 'PASS\n## Phase 1: Setup\nInitialize the project\n\n## Phase 2: Build\nBuild the project\n'
 printf 'stub output for call %s\n' "\$count"
 printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 custom_outputs_file="${dir}/claude_custom_outputs"
@@ -66,6 +67,9 @@ PLAN
   mkdir -p "$TEST_DIR/.claudeloop"
   cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
 CONF
 
   git -C "$TEST_DIR" add PLAN.md

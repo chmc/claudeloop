@@ -66,6 +66,9 @@ PLAN
   mkdir -p "$TEST_DIR/.claudeloop"
   cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
 BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
 CONF
 
   git -C "$TEST_DIR" add PLAN.md
