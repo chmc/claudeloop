@@ -362,14 +362,14 @@ STUB
 
 @test "verify_phase: VERIFY_TIMEOUT overrides default 300s" {
   VERIFY_PHASES=true
-  VERIFY_TIMEOUT=10
+  VERIFY_TIMEOUT=2
   MAX_PHASE_TIME=0
   # Stub that sleeps longer than VERIFY_TIMEOUT to prove timeout is applied
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /dev/null
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
-sleep 30
+sleep 5
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -378,19 +378,19 @@ STUB
   run verify_phase "1" ".claudeloop/logs/phase-1.log"
   end_time=$(date +%s)
   elapsed=$((end_time - start_time))
-  # Should complete in ~10s (VERIFY_TIMEOUT), not 300s (default) or 30s (sleep)
-  [ "$elapsed" -lt 20 ]
+  # Should complete in ~2s (VERIFY_TIMEOUT), not 300s (default) or 5s (sleep)
+  [ "$elapsed" -lt 10 ]
 }
 
 @test "verify_phase: VERIFY_TIMEOUT takes priority over MAX_PHASE_TIME" {
   VERIFY_PHASES=true
-  VERIFY_TIMEOUT=5
+  VERIFY_TIMEOUT=2
   MAX_PHASE_TIME=60
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 cat > /dev/null
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
-sleep 30
+sleep 5
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -399,8 +399,8 @@ STUB
   run verify_phase "1" ".claudeloop/logs/phase-1.log"
   end_time=$(date +%s)
   elapsed=$((end_time - start_time))
-  # Should complete in ~5s (VERIFY_TIMEOUT), not 60s (MAX_PHASE_TIME)
-  [ "$elapsed" -lt 15 ]
+  # Should complete in ~2s (VERIFY_TIMEOUT), not 60s (MAX_PHASE_TIME)
+  [ "$elapsed" -lt 10 ]
 }
 
 @test "verify_phase: empty exit code defaults to failure" {

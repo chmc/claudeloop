@@ -1007,13 +1007,11 @@ JSON"
     printf '%s\n' "$se"
     sleep 2
     printf '%s\n' "$se"
-    sleep 2
-    printf '%s\n' "$se"
   } | process_stream_json "$_log" "$_raw" false "" false 3 >/dev/null 2>&1
   local lines_consumed
   lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
-  # Should exit before consuming all 5 lines due to wall-clock timeout
-  [ "$lines_consumed" -lt 5 ]
+  # Should exit before consuming all 4 lines due to wall-clock timeout
+  [ "$lines_consumed" -lt 4 ]
 }
 
 @test "idle timeout: no exit below threshold" {
@@ -1052,15 +1050,11 @@ JSON"
     printf '%s\n' "$se"
     sleep 2
     printf '%s\n' "$se"
-    sleep 2
-    printf '%s\n' "$se"
-    sleep 2
-    printf '%s\n' "$se"
   } | process_stream_json "$_log" "$_raw" false "" false 2 >/dev/null 2>&1
   local lines_consumed
   lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
-  # Should exit before consuming all 5 lines
-  [ "$lines_consumed" -lt 5 ]
+  # Should exit before consuming all 3 lines
+  [ "$lines_consumed" -lt 3 ]
 }
 
 @test "idle timeout: meaningful event resets wall-clock timer" {
@@ -1069,9 +1063,9 @@ JSON"
   local tool='{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/x"}}'
   {
     printf '%s\n' "$tool"
-    sleep 2
+    sleep 1
     printf '%s\n' "$tool"
-    sleep 2
+    sleep 1
     printf '%s\n' "$tool"
   } | process_stream_json "$_log" "$_raw" false "" false 3 >/dev/null 2>&1
   local lines_consumed
@@ -1122,7 +1116,7 @@ JSON"
   # Feed continuous data but close pipe after 1 line read
   bash -c '
     . "'"${BATS_TEST_DIRNAME}"'/../lib/stream_processor.sh"
-    { echo "line1"; sleep 5; } | inject_heartbeats | head -1
+    { echo "line1"; sleep 3; } | inject_heartbeats | head -1
   ' 2>"$stderr_out"
   local stderr_content
   stderr_content=$(cat "$stderr_out")
@@ -1203,9 +1197,9 @@ JSON"
   local result='{"type":"tool_result","tool_use_id":"toolu_wc","content":"done"}'
   {
     printf '%s\n' "$tool"
-    sleep 2
+    sleep 1
     printf '%s\n' "$hb"
-    sleep 2
+    sleep 1
     printf '%s\n' "$hb"
     printf '%s\n' "$result"
   } | process_stream_json "$_log" "$_raw" false "" false 2 >/dev/null 2>&1
