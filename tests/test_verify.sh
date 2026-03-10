@@ -403,6 +403,53 @@ STUB
   [ "$elapsed" -lt 10 ]
 }
 
+# =============================================================================
+# check_verdict helper
+# =============================================================================
+
+@test "check_verdict: passes when VERIFICATION_PASSED + tool_use present" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf 'All checks passed.\nVERIFICATION_PASSED\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "0"
+  [ "$status" -eq 0 ]
+}
+
+@test "check_verdict: fails when VERIFICATION_FAILED present (even with PASSED)" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf 'VERIFICATION_PASSED\nVERIFICATION_FAILED tests broken\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "0"
+  [ "$status" -eq 1 ]
+}
+
+@test "check_verdict: fails when no tool calls (anti-skip)" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf 'I would run tests but skipping.\nVERIFICATION_PASSED\n' > "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "0"
+  [ "$status" -eq 1 ]
+}
+
+@test "check_verdict: fails when no verdict found" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf 'Tests passed but forgot to output verdict.\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "0"
+  [ "$status" -eq 1 ]
+}
+
+@test "check_verdict: fails when exit code is non-zero" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf 'VERIFICATION_PASSED\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "1"
+  [ "$status" -eq 1 ]
+}
+
+# =============================================================================
+# Original verify_phase tests (continued)
+# =============================================================================
+
 @test "verify_phase: empty exit code defaults to failure" {
   VERIFY_PHASES=true
   # Stub that creates a tool_use event and VERIFICATION_PASSED but writes empty exit file

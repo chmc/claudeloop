@@ -36,6 +36,7 @@ _CL_VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-}"
 . "$SCRIPT_DIR/lib/stream_processor.sh"
 . "$SCRIPT_DIR/lib/ai_parser.sh"
 . "$SCRIPT_DIR/lib/verify.sh"
+. "$SCRIPT_DIR/lib/refactor.sh"
 . "$SCRIPT_DIR/lib/execution.sh"
 
 # Default configuration
@@ -64,6 +65,8 @@ VERIFY_TIMEOUT=300           # kill verify_phase after N seconds (default 300)
 AI_PARSE=false
 GRANULARITY="tasks"
 VERIFY_PHASES=false
+REFACTOR_PHASES=false
+_PRE_REFACTOR_SHA=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
 
@@ -73,6 +76,7 @@ _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
 _CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT="" _CLI_VERIFY_TIMEOUT=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
 _CLI_VERIFY_PHASES=""
+_CLI_REFACTOR_PHASES=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
@@ -198,6 +202,13 @@ handle_interrupt() {
   print_warning "Saving state and shutting down gracefully..."
   log_verbose "handle_interrupt: CURRENT_PHASE=$CURRENT_PHASE"
 
+  # Rollback incomplete refactoring if interrupted mid-refactor
+  if [ -n "${_PRE_REFACTOR_SHA:-}" ]; then
+    print_warning "Rolling back incomplete refactoring..."
+    git reset --hard "$_PRE_REFACTOR_SHA" 2>/dev/null && git clean -fd 2>/dev/null || true
+    _PRE_REFACTOR_SHA=""
+  fi
+
   # Mark current phase as pending if it was in progress
   if [ -n "$CURRENT_PHASE" ]; then
     local _status
@@ -263,6 +274,8 @@ Options:
   --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
   --verify               Verify each phase with a fresh read-only Claude instance
                          (doubles API calls per phase)
+  --refactor             Auto-refactor code after each phase completion
+                         (up to 4 API calls per phase with --verify)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
@@ -385,6 +398,10 @@ parse_args() {
         VERIFY_PHASES=true; _CLI_VERIFY_PHASES=1
         shift
         ;;
+      --refactor)
+        REFACTOR_PHASES=true; _CLI_REFACTOR_PHASES=1
+        shift
+        ;;
       --recover-progress)
         RECOVER_PROGRESS=true
         shift
@@ -485,6 +502,7 @@ handle_orphan_recovery() {
     update_conf_key ".claudeloop/.claudeloop.conf" MAX_RETRIES "$MAX_RETRIES"
     update_conf_key ".claudeloop/.claudeloop.conf" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
     update_conf_key ".claudeloop/.claudeloop.conf" VERIFY_PHASES "$VERIFY_PHASES"
+    update_conf_key ".claudeloop/.claudeloop.conf" REFACTOR_PHASES "$REFACTOR_PHASES"
   else
     log_ts "Non-interactive: review .claudeloop/.claudeloop.conf to verify settings"
   fi

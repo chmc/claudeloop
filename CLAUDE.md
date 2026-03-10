@@ -63,6 +63,7 @@ PHASE_ATTEMPTS_N      PHASE_START_TIME_N     PHASE_END_TIME_N
 PHASE_COUNT           (total number of phases)
 PHASE_NUMBERS         (space-separated ordered list, e.g. "1 2 2.5 2.6 3")
 VERIFY_PHASES         (true|false, default false)
+REFACTOR_PHASES       (true|false, default false)
 LIVE_LOG              (path to .claudeloop/live.log; empty string during dry-run)
 ```
 
@@ -100,7 +101,8 @@ done
 | `lib/stream_processor.sh` | `process_stream_json` (AWK-based stream parser), `inject_heartbeats` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning`, `log_verbose` |
 | `lib/config.sh` | `load_config`, `write_config`, `update_conf_key`, `run_setup_wizard` |
-| `lib/verify.sh` | `verify_phase` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
+| `lib/verify.sh` | `verify_phase`, `check_verdict` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
+| `lib/refactor.sh` | `build_refactor_prompt`, `verify_refactor`, `refactor_phase`, `run_refactor_if_needed` — opt-in auto-refactoring with git rollback |
 | `lib/execution.sh` | `execute_phase`, `run_claude_pipeline`, `evaluate_phase_result`, `run_adaptive_verification` |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |
 
@@ -108,9 +110,9 @@ done
 
 ```
 main → parse_plan → init_progress → main_loop
-  find_next_phase → execute_phase → verify_phase → update_phase_status → write_progress
+  find_next_phase → execute_phase → verify_phase → refactor_phase → update_phase_status → write_progress
   on failure:  should_retry_phase → retry_strategy → calculate_backoff → sleep → retry (standard/stripped/targeted)
-  on Ctrl+C:   handle_interrupt → write_progress → save_state → exit 130
+  on Ctrl+C:   handle_interrupt → rollback refactor (if active) → write_progress → save_state → exit 130
   --monitor:   run_monitor → tail -f .claudeloop/live.log
 ```
 

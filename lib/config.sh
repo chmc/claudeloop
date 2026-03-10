@@ -34,6 +34,7 @@ load_config() {
       AI_PARSE)              AI_PARSE="$value" ;;
       GRANULARITY)           GRANULARITY="$value" ;;
       VERIFY_PHASES)         VERIFY_PHASES="$value" ;;
+      REFACTOR_PHASES)       REFACTOR_PHASES="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -79,6 +80,7 @@ write_config() {
       printf 'AI_PARSE=%s\n'          "$AI_PARSE"
       printf 'GRANULARITY=%s\n'       "$GRANULARITY"
       printf 'VERIFY_PHASES=%s\n'   "$VERIFY_PHASES"
+      printf 'REFACTOR_PHASES=%s\n' "$REFACTOR_PHASES"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -100,6 +102,7 @@ write_config() {
   [ -n "$_CLI_AI_PARSE" ]            && update_conf_key "$conf_file" AI_PARSE "$AI_PARSE"
   [ -n "$_CLI_GRANULARITY" ]         && update_conf_key "$conf_file" GRANULARITY "$GRANULARITY"
   [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"
+  [ -n "$_CLI_REFACTOR_PHASES" ]     && update_conf_key "$conf_file" REFACTOR_PHASES "$REFACTOR_PHASES"
   return 0
 }
 
@@ -238,6 +241,18 @@ run_setup_wizard() {
     esac
   fi
 
+  # REFACTOR_PHASES
+  if [ -n "$_CLI_REFACTOR_PHASES" ]; then
+    printf 'Auto-refactor: using --refactor\n'
+  else
+    printf 'Auto-refactor after each phase? (y/n) [y]: '
+    read -r response || return 0
+    case "$response" in
+      [Nn]|[Nn][Oo]) REFACTOR_PHASES=false ;;
+      *) REFACTOR_PHASES=true ;;
+    esac
+  fi
+
   printf '\n'
 }
 
@@ -281,6 +296,18 @@ run_config_wizard() {
     case "$response" in
       [Yy]|[Yy][Ee][Ss]) VERIFY_PHASES=true ;;
       [Nn]|[Nn][Oo]) VERIFY_PHASES=false ;;
+    esac
+  fi
+
+  # REFACTOR_PHASES
+  if [ -n "$_CLI_REFACTOR_PHASES" ]; then
+    printf 'Auto-refactor: using --refactor\n'
+  else
+    printf 'Auto-refactor after each phase? (y/n) [%s]: ' "$(bool_yn "$REFACTOR_PHASES")"
+    read -r response || return 0
+    case "$response" in
+      [Yy]|[Yy][Ee][Ss]) REFACTOR_PHASES=true ;;
+      [Nn]|[Nn][Oo]) REFACTOR_PHASES=false ;;
     esac
   fi
 
