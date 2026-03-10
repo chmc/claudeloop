@@ -140,35 +140,44 @@ Do NOT skip this. Do NOT just end silently.
   fi
   case "$verify_exit" in ''|*[!0-9]*) verify_exit=1 ;; esac
 
+  check_verdict "$verify_log" "$phase_num" "Verification" "$verify_exit"
+}
+
+# check_verdict(log_file, phase_num, context_label, exit_code)
+# Reusable verdict checker for verification and refactor-verification.
+# Returns 0 (pass) or 1 (fail).
+check_verdict() {
+  local _cv_log="$1" _cv_phase="$2" _cv_label="$3" _cv_exit="$4"
+
   # Exit code check FIRST
-  if [ "$verify_exit" -ne 0 ]; then
-    printf '[%s] Verification failed (exit code %s)\n' "$(date '+%H:%M:%S')" "$verify_exit" >&2
-    log_live "Verification failed for phase $phase_num (exit code $verify_exit)"
+  if [ "$_cv_exit" -ne 0 ]; then
+    printf '[%s] %s failed (exit code %s)\n' "$(date '+%H:%M:%S')" "$_cv_label" "$_cv_exit" >&2
+    log_live "$_cv_label failed for phase $_cv_phase (exit code $_cv_exit)"
     return 1
   fi
 
   # Verdict check 1: VERIFICATION_FAILED takes priority (even if PASSED also appears)
-  if grep -q 'VERIFICATION_FAILED' "$verify_log" 2>/dev/null; then
-    printf '[%s] Verification failed: verifier reported VERIFICATION_FAILED\n' "$(date '+%H:%M:%S')" >&2
-    log_live "Verification failed for phase $phase_num: VERIFICATION_FAILED"
+  if grep -q 'VERIFICATION_FAILED' "$_cv_log" 2>/dev/null; then
+    printf '[%s] %s failed: verifier reported VERIFICATION_FAILED\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
+    log_live "$_cv_label failed for phase $_cv_phase: VERIFICATION_FAILED"
     return 1
   fi
 
   # Verdict check 2: tool calls were actually made (JSON-aware anti-skip)
-  if ! grep -q '"type":"tool_use"' "$verify_log" 2>/dev/null; then
-    printf '[%s] Verification failed: no tool calls detected (verifier may have skipped checks)\n' "$(date '+%H:%M:%S')" >&2
-    log_live "Verification failed for phase $phase_num: no tool calls detected"
+  if ! grep -q '"type":"tool_use"' "$_cv_log" 2>/dev/null; then
+    printf '[%s] %s failed: no tool calls detected (verifier may have skipped checks)\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
+    log_live "$_cv_label failed for phase $_cv_phase: no tool calls detected"
     return 1
   fi
 
   # Verdict check 3: explicit VERIFICATION_PASSED verdict required
-  if ! grep -q 'VERIFICATION_PASSED' "$verify_log" 2>/dev/null; then
-    printf '[%s] Verification failed: no VERIFICATION_PASSED verdict found\n' "$(date '+%H:%M:%S')" >&2
-    log_live "Verification failed for phase $phase_num: no VERIFICATION_PASSED verdict"
+  if ! grep -q 'VERIFICATION_PASSED' "$_cv_log" 2>/dev/null; then
+    printf '[%s] %s failed: no VERIFICATION_PASSED verdict found\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
+    log_live "$_cv_label failed for phase $_cv_phase: no VERIFICATION_PASSED verdict"
     return 1
   fi
 
-  printf '[%s] Verification passed for phase %s\n' "$(date '+%H:%M:%S')" "$phase_num" >&2
-  log_live "Verification passed for phase $phase_num"
+  printf '[%s] %s passed for phase %s\n' "$(date '+%H:%M:%S')" "$_cv_label" "$_cv_phase" >&2
+  log_live "$_cv_label passed for phase $_cv_phase"
   return 0
 }

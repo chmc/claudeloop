@@ -80,6 +80,7 @@ See `examples/PLAN.md.example` for a complete example.
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
 --verify             Verify each phase with a fresh read-only Claude instance using verdict-based checking (VERIFICATION_PASSED/FAILED keywords, doubles API calls)
+--refactor           Auto-refactor code after each phase (structural improvements, with verification and git rollback on failure)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
 --simple             Plain output (no colors)
@@ -116,6 +117,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `AI_PARSE` | `--ai-parse` | `false` |
 | `GRANULARITY` | `--granularity` | `tasks` |
 | `VERIFY_PHASES` | `--verify` | `false` |
+| `REFACTOR_PHASES` | `--refactor` | `false` |
 
 Example `.claudeloop/.claudeloop.conf`:
 
@@ -190,9 +192,10 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 2. Find the next runnable phase (dependencies met, not yet completed)
 3. Spawn a fresh `claude` CLI instance with the phase description
 4. Optionally verify with a fresh read-only Claude instance (`--verify`)
-5. Save result to `PROGRESS.md`
-6. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
-6. Repeat until all phases complete
+5. Optionally auto-refactor code structure (`--refactor`) with verification and git rollback on failure
+6. Save result to `PROGRESS.md`
+7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
+8. Repeat until all phases complete
 
 Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
 

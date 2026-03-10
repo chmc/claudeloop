@@ -32,3 +32,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0024](0024-retry-strategy-rotation.md) | Retry strategy rotation for model-agnostic resilience | 2026-03-09 | Accepted |
 | [0025](0025-fixed-retry-delay.md) | Fixed retry delay replacing exponential backoff | 2026-03-09 | Accepted |
 | [0026](0026-phase-state-abstraction.md) | Phase state abstraction layer | 2026-03-09 | Accepted |
+| [0027](0027-automatic-refactoring.md) | Automatic refactoring after phase completion | 2026-03-10 | Accepted |
