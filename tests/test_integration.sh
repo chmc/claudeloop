@@ -1174,7 +1174,7 @@ EOF
     SKIP_PERMISSIONS='' STREAM_TRUNCATE_LEN='' HOOKS_ENABLED='' MAX_PHASE_TIME=''
     IDLE_TIMEOUT='' GRANULARITY='' VERIFY_PHASES=''
     . '$_parser'
-    eval \"\$(sed -n '/^load_config()/,/^}/p' '$CLAUDELOOP')\"
+    . '${BATS_TEST_DIRNAME}/../lib/config.sh'
     load_config
     printf '%s' \"\$AI_PARSE\"
   "
@@ -1187,7 +1187,7 @@ EOF
 # =============================================================================
 
 @test "integration: update_conf_key ensures trailing newline after sed update" {
-  eval "$(sed -n '/^update_conf_key()/,/^}/p' "$CLAUDELOOP")"
+  . "${BATS_TEST_DIRNAME}/../lib/config.sh"
   printf 'KEY1=old\nKEY2=val2' > "$TEST_DIR/test.conf"
   update_conf_key "$TEST_DIR/test.conf" KEY1 new
   # File must end with newline

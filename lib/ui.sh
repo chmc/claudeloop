@@ -191,3 +191,8 @@ print_quota_wait() {
   printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
   log_live "  Press Ctrl+C to stop and save state."
 }
+
+# Print a message only when VERBOSE_MODE is true
+log_verbose() {
+  [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
+}

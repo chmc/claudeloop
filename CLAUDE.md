@@ -98,8 +98,10 @@ done
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
 | `lib/retry.sh` | `calculate_backoff`, `should_retry_phase`, `has_write_actions`, `retry_strategy`, `verify_mode`, `extract_error_context`, `extract_verify_error`, `build_retry_context` |
 | `lib/stream_processor.sh` | `process_stream_json` (AWK-based stream parser), `inject_heartbeats` |
-| `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning` |
+| `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning`, `log_verbose` |
+| `lib/config.sh` | `load_config`, `write_config`, `update_conf_key`, `run_setup_wizard` |
 | `lib/verify.sh` | `verify_phase` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
+| `lib/execution.sh` | `execute_phase`, `run_claude_pipeline`, `evaluate_phase_result`, `run_adaptive_verification` |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |
 
 ### Execution flow
