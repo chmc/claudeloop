@@ -108,3 +108,14 @@ old_phase_set() {
     eval "_OLD_PHASE_${_field}_${_pv}='${_escaped}'"
   fi
 }
+
+# auto_commit_changes(phase_num, label)
+# Commits any uncommitted changes with a descriptive message.
+# Non-fatal: logs warning on failure, always returns 0.
+auto_commit_changes() {
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    if ! git add -A || ! git commit -q -m "Phase $1: $2"; then
+      print_warning "Phase $1: auto-commit failed ($2)"
+    fi
+  fi
+}

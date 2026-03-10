@@ -91,14 +91,7 @@ refactor_phase() {
 
   _REFACTORING_PHASE="$_rp_phase"
 
-  # Check for uncommitted changes before refactoring
-  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-    print_warning "Phase $_rp_phase: uncommitted changes detected, skipping refactoring"
-    phase_set REFACTOR_STATUS "$_rp_phase" "completed"
-    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-    _REFACTORING_PHASE=""
-    return 0
-  fi
+  auto_commit_changes "$_rp_phase" "auto-commit before refactoring"
 
   _pre_sha=$(git rev-parse HEAD)
   _max_attempts=3
@@ -145,6 +138,9 @@ $_err_ctx
       git reset --hard "$_pre_sha" 2>/dev/null && git clean -fd 2>/dev/null || true
       continue
     fi
+
+    # Auto-commit any uncommitted refactoring changes
+    auto_commit_changes "$_rp_phase" "auto-commit after refactoring"
 
     # Check if SHA changed — if not, nothing was refactored
     local _post_sha

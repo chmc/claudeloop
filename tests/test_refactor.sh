@@ -306,17 +306,30 @@ STUB
 # Dirty worktree check
 # =============================================================================
 
-@test "refactor_phase: skips when uncommitted changes detected" {
+@test "refactor_phase: auto-commits uncommitted changes before refactoring" {
   REFACTOR_PHASES=true
 
   # Create uncommitted changes
   echo "dirty" >> file.txt
 
-  refactor_phase "1" > "$TEST_DIR/refactor_out.txt" 2>&1
-  # Should print warning about uncommitted changes
-  grep -qi "uncommitted" "$TEST_DIR/refactor_out.txt"
-  # Should mark as completed (not pending, to prevent infinite retry)
-  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: first call = refactor (no-op), second call = verify
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Auto-commit should have committed the dirty changes
+  git log --oneline | grep -q "auto-commit before refactoring"
+  # Refactoring should have run (not skipped)
+  [ -f ".claudeloop/logs/phase-1.refactor.log" ]
 }
 
 # =============================================================================
@@ -487,5 +500,67 @@ STUB
 
   resume_pending_refactors
   # Should have marked completed (skipped due to invalid SHA)
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+# =============================================================================
+# auto_commit_changes
+# =============================================================================
+
+@test "auto_commit_changes: commits dirty worktree" {
+  echo "new stuff" >> file.txt
+
+  auto_commit_changes "1" "test label"
+
+  # Commit message should contain our label
+  git log --oneline -1 | grep -q "Phase 1: test label"
+  # Worktree should be clean
+  [ -z "$(git status --porcelain)" ]
+}
+
+@test "auto_commit_changes: no-op when worktree clean" {
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  auto_commit_changes "1" "test label"
+
+  # HEAD should not have changed
+  [ "$(git rev-parse HEAD)" = "$pre_sha" ]
+}
+
+@test "refactor_phase: auto-commits after refactoring when model leaves uncommitted changes" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: refactor call modifies files but does NOT commit; verify passes
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    # Refactor: modify file but do NOT commit
+    echo "refactored-uncommitted" >> "$TEST_DIR/file.txt"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    exit 0
+    ;;
+  2)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\\nVERIFICATION_PASSED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Auto-commit should have picked up the uncommitted refactoring changes
+  git log --oneline | grep -q "auto-commit after refactoring"
+  # SHA should have changed (refactoring detected, not treated as no-op)
   [ "$(get_phase_refactor_status 1)" = "completed" ]
 }

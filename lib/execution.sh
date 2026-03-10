@@ -262,6 +262,7 @@ evaluate_phase_result() {
     fi
     print_success "Phase $_epr_phase completed successfully"
     update_phase_status "$_epr_phase" "completed"
+    auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
     if [ "$REFACTOR_PHASES" = "true" ]; then
       phase_set REFACTOR_STATUS "$_epr_phase" "pending"
     fi
@@ -277,6 +278,7 @@ evaluate_phase_result() {
       fi
       print_warning "Phase $_epr_phase: Claude exited with code $_epr_exit but a successful session was detected — treating as completed."
       update_phase_status "$_epr_phase" "completed"
+      auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
       if [ "$REFACTOR_PHASES" = "true" ]; then
         phase_set REFACTOR_STATUS "$_epr_phase" "pending"
       fi
