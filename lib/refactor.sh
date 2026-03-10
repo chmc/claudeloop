@@ -72,7 +72,7 @@ You MUST actually execute commands. Do NOT skip testing.
   : > "$_vr_formatted"
   : > "$_vr_raw"
 
-  log_ts "Verifying refactoring for phase $_vr_phase..."
+  print_substep_header "🔍" "Verifying refactoring for phase $_vr_phase..."
 
   run_claude_pipeline "$_vr_prompt" "$_vr_phase" "$_vr_formatted" "$_vr_raw"
   local _vr_exit="$_LAST_CLAUDE_EXIT"
@@ -91,7 +91,7 @@ refactor_phase() {
   _PRE_REFACTOR_SHA="$_pre_sha"
   _max_attempts=3
 
-  log_ts "Starting auto-refactor for Phase $_rp_phase..."
+  print_substep_header "🔧" "Refactoring phase $_rp_phase..."
 
   _attempt=0
   while [ "$_attempt" -lt "$_max_attempts" ]; do

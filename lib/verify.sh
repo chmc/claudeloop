@@ -15,8 +15,7 @@ verify_phase() {
   title=$(get_phase_title "$phase_num")
   description=$(get_phase_description "$phase_num")
 
-  printf '[%s] Verifying phase %s...\n' "$(date '+%H:%M:%S')" "$phase_num" >&2
-  log_live "Verifying phase $phase_num..."
+  print_substep_header "🔍" "Verifying phase $phase_num..."
 
   # Extract tail of execution log for context
   local exec_tail=""
@@ -151,33 +150,28 @@ check_verdict() {
 
   # Exit code check FIRST
   if [ "$_cv_exit" -ne 0 ]; then
-    printf '[%s] %s failed (exit code %s)\n' "$(date '+%H:%M:%S')" "$_cv_label" "$_cv_exit" >&2
-    log_live "$_cv_label failed for phase $_cv_phase (exit code $_cv_exit)"
+    print_error "$_cv_label failed for phase $_cv_phase (exit code $_cv_exit)"
     return 1
   fi
 
   # Verdict check 1: VERIFICATION_FAILED takes priority (even if PASSED also appears)
   if grep -q 'VERIFICATION_FAILED' "$_cv_log" 2>/dev/null; then
-    printf '[%s] %s failed: verifier reported VERIFICATION_FAILED\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
-    log_live "$_cv_label failed for phase $_cv_phase: VERIFICATION_FAILED"
+    print_error "$_cv_label failed for phase $_cv_phase: VERIFICATION_FAILED"
     return 1
   fi
 
   # Verdict check 2: tool calls were actually made (JSON-aware anti-skip)
   if ! grep -q '"type":"tool_use"' "$_cv_log" 2>/dev/null; then
-    printf '[%s] %s failed: no tool calls detected (verifier may have skipped checks)\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
-    log_live "$_cv_label failed for phase $_cv_phase: no tool calls detected"
+    print_error "$_cv_label failed for phase $_cv_phase: no tool calls detected"
     return 1
   fi
 
   # Verdict check 3: explicit VERIFICATION_PASSED verdict required
   if ! grep -q 'VERIFICATION_PASSED' "$_cv_log" 2>/dev/null; then
-    printf '[%s] %s failed: no VERIFICATION_PASSED verdict found\n' "$(date '+%H:%M:%S')" "$_cv_label" >&2
-    log_live "$_cv_label failed for phase $_cv_phase: no VERIFICATION_PASSED verdict"
+    print_error "$_cv_label failed for phase $_cv_phase: no VERIFICATION_PASSED verdict"
     return 1
   fi
 
-  printf '[%s] %s passed for phase %s\n' "$(date '+%H:%M:%S')" "$_cv_label" "$_cv_phase" >&2
-  log_live "$_cv_label passed for phase $_cv_phase"
+  print_success "$_cv_label passed for phase $_cv_phase"
   return 0
 }

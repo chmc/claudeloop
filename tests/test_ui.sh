@@ -232,6 +232,45 @@ setup() {
 
 # --- log_live() ---
 
+# --- print_substep_header() ---
+
+@test "print_substep_header: outputs separator and message" {
+  SIMPLE_MODE="false"
+  run print_substep_header "🔍" "Verifying phase 1..."
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"┄┄┄┄"* ]]
+  [[ "$output" == *"🔍"* ]]
+  [[ "$output" == *"Verifying phase 1..."* ]]
+}
+
+@test "print_substep_header: includes timestamp" {
+  SIMPLE_MODE="false"
+  run print_substep_header "🔍" "Verifying phase 1..."
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ \[[0-9]{2}:[0-9]{2}:[0-9]{2}\] ]]
+}
+
+@test "print_substep_header: falls back to log_ts in SIMPLE_MODE" {
+  SIMPLE_MODE="true"
+  run print_substep_header "🔍" "Verifying phase 1..."
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"┄┄┄┄"* ]]
+  [[ "$output" == *"Verifying phase 1..."* ]]
+}
+
+@test "print_substep_header: writes to LIVE_LOG" {
+  SIMPLE_MODE="false"
+  local tmplog
+  tmplog=$(mktemp)
+  LIVE_LOG="$tmplog"
+  print_substep_header "🔍" "Verifying phase 1..."
+  [[ "$(cat "$tmplog")" == *"┄┄┄┄"* ]]
+  [[ "$(cat "$tmplog")" == *"Verifying phase 1..."* ]]
+  rm -f "$tmplog"
+}
+
+# --- log_live() ---
+
 @test "log_live writes timestamped entry to LIVE_LOG" {
   local tmplog
   tmplog=$(mktemp)

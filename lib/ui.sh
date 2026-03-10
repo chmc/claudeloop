@@ -38,6 +38,21 @@ log_ts_err() {
   log_live "$1"
 }
 
+# Print a sub-step header (verification, refactoring, etc.)
+# Args: $1 - icon, $2 - message
+print_substep_header() {
+  if [ "$SIMPLE_MODE" = "true" ]; then
+    log_ts "$2"
+    return
+  fi
+  local timestamp
+  timestamp=$(date "+%H:%M:%S")
+  echo "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"
+  printf '%b\n' "${COLOR_BLUE}[$timestamp] $1 $2${COLOR_RESET}"
+  log_live "┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄"
+  log_live "$1 $2"
+}
+
 # Print startup logo (space ghost)
 print_logo() {
   [ "$SIMPLE_MODE" = "true" ] && return 0
