@@ -86,6 +86,23 @@ has_write_actions() {
   ' "$raw_log"
 }
 
+# Check if the most recent execution block contains tool call patterns
+# trapped inside thinking content (model formatting bug where tool calls
+# are emitted as XML inside thinking instead of proper tool_use blocks).
+# Matches assembled assistant messages only (not partial deltas).
+# Args: $1 - path to raw JSON log file (.raw.json)
+# Returns: 0 if trapped tool calls found, 1 otherwise
+has_trapped_tool_calls() {
+  local raw_log="$1"
+  [ -f "$raw_log" ] || return 1
+  awk '
+    /^=== EXECUTION START /{found=0; next}
+    /"type":"thinking","thinking":/ && /function=/ {found=1}
+    /"type":"thinking","thinking":/ && /<tool_call>/ {found=1}
+    END{exit (found ? 0 : 1)}
+  ' "$raw_log"
+}
+
 # Map failure reason code to a human-readable hint for the retry prompt
 # Args: $1 - failure reason code
 # Returns: hint string (stdout), empty for unknown/empty codes
@@ -93,6 +110,8 @@ fail_reason_hint() {
   case "$1" in
     no_write_actions)
       echo "You MUST use Edit or Write tools to modify files. Start by reading the most relevant file, then edit it." ;;
+    trapped_tool_calls)
+      echo "Your tool calls were trapped inside thinking blocks and never executed. Emit tool calls as top-level actions, not inside thinking." ;;
     empty_log)
       echo "You must actively use tools. Start with Read, then Edit." ;;
     no_session)

@@ -411,6 +411,49 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 1 ]
 }
 
+# --- has_trapped_tool_calls() ---
+
+@test "has_trapped_tool_calls: returns 0 when thinking has XML function call" {
+  printf '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"<tool_call>\\n<function=Read>\\n<parameter=file_path>/tmp/x</parameter>\\n</function>\\n</tool_call>"}]}}\n' > "$_log"
+  run has_trapped_tool_calls "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_trapped_tool_calls: returns 1 when no tool patterns in thinking" {
+  printf '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Let me analyze the code"}]}}\n' > "$_log"
+  run has_trapped_tool_calls "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_trapped_tool_calls: returns 1 when log file missing" {
+  run has_trapped_tool_calls "/nonexistent/file"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_trapped_tool_calls: ignores delta events (only matches assembled)" {
+  printf '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"<function"}}}\n' > "$_log"
+  run has_trapped_tool_calls "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_trapped_tool_calls: returns 1 when raw log is empty" {
+  printf '' > "$_log"
+  run has_trapped_tool_calls "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_trapped_tool_calls: returns 0 with function= but no tool_call wrapper" {
+  printf '{"type":"message","message":{"content":[{"type":"thinking","thinking":"I will call <function=Edit>"}]}}\n' > "$_log"
+  run has_trapped_tool_calls "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "fail_reason_hint: trapped_tool_calls returns hint about thinking blocks" {
+  run fail_reason_hint "trapped_tool_calls"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "thinking"
+}
+
 # --- retry_strategy() ---
 
 @test "retry_strategy: MAX_RETRIES=15, attempts 1-5 return standard" {

@@ -241,9 +241,15 @@ evaluate_phase_result() {
 
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$_epr_raw"; then
-      phase_set FAIL_REASON "$_epr_phase" "no_write_actions"
-      log_verbose "execute_phase: phase $_epr_phase exited 0 but no write actions in raw log"
-      print_warning "Phase $_epr_phase: Claude exited successfully but made no changes — treating as failed"
+      if has_trapped_tool_calls "$_epr_raw"; then
+        phase_set FAIL_REASON "$_epr_phase" "trapped_tool_calls"
+        log_verbose "execute_phase: phase $_epr_phase has tool calls trapped in thinking blocks"
+        print_warning "Phase $_epr_phase: Tool calls trapped in thinking blocks — treating as failed"
+      else
+        phase_set FAIL_REASON "$_epr_phase" "no_write_actions"
+        log_verbose "execute_phase: phase $_epr_phase exited 0 but no write actions in raw log"
+        print_warning "Phase $_epr_phase: Claude exited successfully but made no changes — treating as failed"
+      fi
       update_phase_status "$_epr_phase" "failed"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
