@@ -47,6 +47,8 @@ get_phase_start_time()   { phase_get START_TIME "$1"; }
 get_phase_end_time()     { phase_get END_TIME "$1"; }
 get_phase_fail_reason()  { phase_get FAIL_REASON "$1"; }
 get_phase_attempt_time() { phase_get ATTEMPT_TIME "$1" "$2"; }
+get_phase_refactor_status() { phase_get REFACTOR_STATUS "$1"; }
+get_phase_refactor_sha()    { phase_get REFACTOR_SHA "$1"; }
 
 # Reset phase for retry: decrement attempts, clear last attempt time, set pending.
 # Does NOT call write_progress — callers control timing.
@@ -72,6 +74,8 @@ reset_phase_full() {
   phase_set START_TIME "$_phase_num" ""
   phase_set END_TIME "$_phase_num" ""
   phase_set FAIL_REASON "$_phase_num" ""
+  phase_set REFACTOR_STATUS "$_phase_num" ""
+  phase_set REFACTOR_SHA "$_phase_num" ""
 }
 
 # --- _OLD_PHASE_* namespace (for plan-change detection) ---

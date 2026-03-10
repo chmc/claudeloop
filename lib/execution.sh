@@ -260,11 +260,14 @@ evaluate_phase_result() {
     if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
       return 1
     fi
-    run_refactor_if_needed "$_epr_phase"
     print_success "Phase $_epr_phase completed successfully"
     update_phase_status "$_epr_phase" "completed"
+    if [ "$REFACTOR_PHASES" = "true" ]; then
+      phase_set REFACTOR_STATUS "$_epr_phase" "pending"
+    fi
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
+    run_refactor_if_needed "$_epr_phase"
     return 0
   else
     if has_successful_session "$_epr_log"; then
@@ -272,11 +275,14 @@ evaluate_phase_result() {
       if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
         return 1
       fi
-      run_refactor_if_needed "$_epr_phase"
       print_warning "Phase $_epr_phase: Claude exited with code $_epr_exit but a successful session was detected — treating as completed."
       update_phase_status "$_epr_phase" "completed"
+      if [ "$REFACTOR_PHASES" = "true" ]; then
+        phase_set REFACTOR_STATUS "$_epr_phase" "pending"
+      fi
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
+      run_refactor_if_needed "$_epr_phase"
       return 0
     fi
     phase_set FAIL_REASON "$_epr_phase" "no_session"

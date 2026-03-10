@@ -2,6 +2,7 @@
 
 # Auto-Refactoring Library
 # Runs a Claude instance to refactor code after each phase, with verification and rollback.
+# Refactor state is persisted to PROGRESS.md and can resume on restart.
 
 # build_refactor_prompt(phase_num)
 # Builds the refactoring prompt including phase context and git diff stats.
@@ -82,14 +83,30 @@ You MUST actually execute commands. Do NOT skip testing.
 
 # refactor_phase(phase_num)
 # Main refactoring entry point with up to 3 attempts and git rollback.
+# Persists state to PROGRESS.md for resume on restart.
 # Always returns 0 — refactoring failure is non-fatal.
 refactor_phase() {
   local _rp_phase="$1"
   local _pre_sha _attempt _max_attempts
 
+  _REFACTORING_PHASE="$_rp_phase"
+
+  # Check for uncommitted changes before refactoring
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    print_warning "Phase $_rp_phase: uncommitted changes detected, skipping refactoring"
+    phase_set REFACTOR_STATUS "$_rp_phase" "completed"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    _REFACTORING_PHASE=""
+    return 0
+  fi
+
   _pre_sha=$(git rev-parse HEAD)
-  _PRE_REFACTOR_SHA="$_pre_sha"
   _max_attempts=3
+
+  # Persist in_progress state + SHA before running
+  phase_set REFACTOR_STATUS "$_rp_phase" "in_progress"
+  phase_set REFACTOR_SHA "$_rp_phase" "$_pre_sha"
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
   print_substep_header "🔧" "Refactoring phase $_rp_phase..."
 
@@ -134,14 +151,20 @@ $_err_ctx
     _post_sha=$(git rev-parse HEAD)
     if [ "$_post_sha" = "$_pre_sha" ]; then
       log_ts "Nothing to refactor for phase $_rp_phase"
-      _PRE_REFACTOR_SHA=""
+      phase_set REFACTOR_STATUS "$_rp_phase" "completed"
+      phase_set REFACTOR_SHA "$_rp_phase" ""
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      _REFACTORING_PHASE=""
       return 0
     fi
 
     # Verify refactoring
     if verify_refactor "$_rp_phase"; then
       print_success "Phase $_rp_phase refactored successfully"
-      _PRE_REFACTOR_SHA=""
+      phase_set REFACTOR_STATUS "$_rp_phase" "completed"
+      phase_set REFACTOR_SHA "$_rp_phase" ""
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      _REFACTORING_PHASE=""
       return 0
     fi
 
@@ -150,10 +173,13 @@ $_err_ctx
     git reset --hard "$_pre_sha" 2>/dev/null && git clean -fd 2>/dev/null || true
   done
 
-  # All attempts exhausted
+  # All attempts exhausted — mark completed to prevent retry
   print_warning "Refactoring failed after $_max_attempts attempts, continuing without"
   git reset --hard "$_pre_sha" 2>/dev/null && git clean -fd 2>/dev/null || true
-  _PRE_REFACTOR_SHA=""
+  phase_set REFACTOR_STATUS "$_rp_phase" "completed"
+  phase_set REFACTOR_SHA "$_rp_phase" ""
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  _REFACTORING_PHASE=""
   return 0
 }
 
@@ -162,4 +188,40 @@ $_err_ctx
 run_refactor_if_needed() {
   [ "$REFACTOR_PHASES" = "true" ] || return 0
   refactor_phase "$1"
+}
+
+# resume_pending_refactors()
+# Called on startup to resume any interrupted or pending refactors from a previous run.
+# Gates on REFACTOR_PHASES=true — stale state is harmless without the flag.
+resume_pending_refactors() {
+  [ "$REFACTOR_PHASES" = "true" ] || return 0
+
+  for phase_num in $PHASE_NUMBERS; do
+    local refactor_status
+    refactor_status=$(get_phase_refactor_status "$phase_num")
+    case "$refactor_status" in
+      in_progress)
+        print_warning "Resuming interrupted refactoring for Phase $phase_num..."
+        local pre_sha
+        pre_sha=$(get_phase_refactor_sha "$phase_num")
+        if [ -n "$pre_sha" ]; then
+          # Validate SHA still exists (could be gc'd)
+          if git cat-file -t "$pre_sha" >/dev/null 2>&1; then
+            print_warning "Rolling back to pre-refactor state ($pre_sha)..."
+            git reset --hard "$pre_sha" 2>/dev/null && git clean -fd 2>/dev/null || true
+          else
+            print_warning "Pre-refactor SHA $pre_sha no longer exists, skipping refactor for Phase $phase_num"
+            phase_set REFACTOR_STATUS "$phase_num" "completed"
+            write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+            continue
+          fi
+        fi
+        refactor_phase "$phase_num"
+        ;;
+      pending)
+        print_warning "Completing pending refactoring for Phase $phase_num..."
+        refactor_phase "$phase_num"
+        ;;
+    esac
+  done
 }

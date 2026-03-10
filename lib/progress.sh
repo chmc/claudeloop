@@ -64,6 +64,16 @@ read_progress() {
           _atime=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
           phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
           ;;
+        "Refactor: "*)
+          local rv
+          rv=$(printf '%s\n' "$line" | sed 's/^Refactor:[[:space:]]*//')
+          phase_set REFACTOR_STATUS "$current_phase" "$rv"
+          ;;
+        "Refactor SHA: "*)
+          local sv
+          sv=$(printf '%s\n' "$line" | sed 's/^Refactor SHA:[[:space:]]*//')
+          phase_set REFACTOR_SHA "$current_phase" "$sv"
+          ;;
       esac
     fi
   done < "$progress_file"
@@ -170,6 +180,17 @@ generate_phase_details() {
       fi
     fi
 
+    local refactor_status
+    refactor_status=$(get_phase_refactor_status "$_phase")
+    if [ -n "$refactor_status" ]; then
+      echo "Refactor: $refactor_status"
+      if [ "$refactor_status" = "in_progress" ]; then
+        local refactor_sha
+        refactor_sha=$(get_phase_refactor_sha "$_phase")
+        [ -n "$refactor_sha" ] && echo "Refactor SHA: $refactor_sha"
+      fi
+    fi
+
     local deps
     deps=$(get_phase_dependencies "$_phase")
     if [ -n "$deps" ]; then
@@ -217,6 +238,8 @@ read_old_phase_list() {
       old_phase_set START_TIME "$current_phase" ""
       old_phase_set END_TIME "$current_phase" ""
       old_phase_set DEPS "$current_phase" ""
+      old_phase_set REFACTOR_STATUS "$current_phase" ""
+      old_phase_set REFACTOR_SHA "$current_phase" ""
       _OLD_PHASE_COUNT=$((_OLD_PHASE_COUNT + 1))
       _OLD_PHASE_NUMBERS="${_OLD_PHASE_NUMBERS:+$_OLD_PHASE_NUMBERS }$current_phase"
     elif [ -n "$current_phase" ]; then
@@ -254,6 +277,16 @@ read_old_phase_list() {
           local dv
           dv=$(printf '%s\n' "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
           old_phase_set DEPS "$current_phase" "$dv"
+          ;;
+        "Refactor: "*)
+          local rv
+          rv=$(printf '%s\n' "$line" | sed 's/^Refactor:[[:space:]]*//')
+          old_phase_set REFACTOR_STATUS "$current_phase" "$rv"
+          ;;
+        "Refactor SHA: "*)
+          local sv
+          sv=$(printf '%s\n' "$line" | sed 's/^Refactor SHA:[[:space:]]*//')
+          old_phase_set REFACTOR_SHA "$current_phase" "$sv"
           ;;
       esac
     fi
@@ -324,6 +357,12 @@ detect_plan_changes() {
         phase_set ATTEMPT_TIME "$new_i" "$_old_at" "$_ti"
         _ti=$((_ti + 1))
       done
+
+      local old_refactor_status old_refactor_sha
+      old_refactor_status=$(old_phase_get REFACTOR_STATUS "$matched_old_num")
+      old_refactor_sha=$(old_phase_get REFACTOR_SHA "$matched_old_num")
+      phase_set REFACTOR_STATUS "$new_i" "$old_refactor_status"
+      phase_set REFACTOR_SHA "$new_i" "$old_refactor_sha"
 
       # Report renumbering (string comparison to support decimal numbers)
       if [ "$matched_old_num" != "$new_i" ]; then

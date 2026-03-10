@@ -17,6 +17,7 @@ setup() {
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
   . "$CLAUDELOOP_DIR/lib/execution.sh"
+  . "$CLAUDELOOP_DIR/lib/progress.sh"
   . "$CLAUDELOOP_DIR/lib/refactor.sh"
 
   # Set up minimal phase data
@@ -40,9 +41,11 @@ setup() {
   IDLE_TIMEOUT=0
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
-  _PRE_REFACTOR_SHA=""
+  _REFACTORING_PHASE=""
   MAX_RETRIES=10
   BASE_DELAY=3
+  PROGRESS_FILE="$TEST_DIR/.claudeloop/PROGRESS.md"
+  PLAN_FILE="$TEST_DIR/PLAN.md"
 
   # Set up git repo
   cd "$TEST_DIR"
@@ -54,9 +57,10 @@ setup() {
   git commit -q -m "initial"
 
   mkdir -p ".claudeloop/logs"
+  printf '# Plan\n## Phase 1: Build feature\nImplement the new feature module\n' > "$PLAN_FILE"
 
   # Protect test artifacts from git clean -fd (used in refactor rollback)
-  printf 'bin/\ncall_count\n' >> .gitignore
+  printf 'bin/\ncall_count\n.claudeloop/\nPLAN.md\n' >> .gitignore
   git add .gitignore
   git commit -q -m "add gitignore"
 
@@ -197,8 +201,7 @@ esac
 STUB
   chmod +x "$TEST_DIR/bin/claude"
 
-  run refactor_phase "1"
-  [ "$status" -eq 0 ]
+  refactor_phase "1"
 
   # HEAD should have moved forward (refactor commit kept)
   local post_sha
@@ -297,4 +300,192 @@ STUB
   # Run claudeloop with --refactor --dry-run and capture config output
   run "$CLAUDELOOP_DIR/claudeloop" --plan "$TEST_DIR/PLAN.md" --refactor --dry-run 2>&1
   [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# Dirty worktree check
+# =============================================================================
+
+@test "refactor_phase: skips when uncommitted changes detected" {
+  REFACTOR_PHASES=true
+
+  # Create uncommitted changes
+  echo "dirty" >> file.txt
+
+  refactor_phase "1" > "$TEST_DIR/refactor_out.txt" 2>&1
+  # Should print warning about uncommitted changes
+  grep -qi "uncommitted" "$TEST_DIR/refactor_out.txt"
+  # Should mark as completed (not pending, to prevent infinite retry)
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+# =============================================================================
+# _REFACTORING_PHASE tracking
+# =============================================================================
+
+@test "refactor_phase: clears _REFACTORING_PHASE on all exit paths" {
+  REFACTOR_PHASES=true
+  _REFACTORING_PHASE="stale"
+
+  # Stub that exits 0 but makes no commits (nothing to refactor)
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+  [ "$_REFACTORING_PHASE" = "" ]
+}
+
+# =============================================================================
+# Refactor state persistence
+# =============================================================================
+
+@test "refactor_phase: persists in_progress state with SHA before running" {
+  REFACTOR_PHASES=true
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  # Stub that makes a commit but fails verification
+  echo "0" > "$TEST_DIR/call_count"
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$((n % 2)) in
+  1)
+    echo "refactored-\$n" >> "$TEST_DIR/file.txt"
+    git -C "$TEST_DIR" add file.txt
+    git -C "$TEST_DIR" commit -q -m "refactor: attempt \$n"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    exit 0
+    ;;
+  0)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Tests broken.\\nVERIFICATION_FAILED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+  # After exhausting retries, REFACTOR_STATUS should be completed
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  # SHA should be cleared on completion
+  [ "$(get_phase_refactor_sha 1)" = "" ]
+}
+
+@test "refactor_phase: marks completed on success" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    echo "refactored" >> "$TEST_DIR/file.txt"
+    git -C "$TEST_DIR" add file.txt
+    git -C "$TEST_DIR" commit -q -m "refactor: restructure"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    exit 0
+    ;;
+  2)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\\nVERIFICATION_PASSED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  [ "$(get_phase_refactor_sha 1)" = "" ]
+}
+
+# =============================================================================
+# resume_pending_refactors
+# =============================================================================
+
+@test "resume_pending_refactors: no-op when REFACTOR_PHASES=false" {
+  REFACTOR_PHASES=false
+  phase_set REFACTOR_STATUS "1" "pending"
+  resume_pending_refactors
+  # Should not have run (refactor still pending)
+  [ "$(get_phase_refactor_status 1)" = "pending" ]
+}
+
+@test "resume_pending_refactors: runs pending refactors" {
+  REFACTOR_PHASES=true
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "pending"
+
+  # Stub that exits 0, makes no commits (nothing to refactor)
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  resume_pending_refactors
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+@test "resume_pending_refactors: rolls back in_progress with valid SHA" {
+  REFACTOR_PHASES=true
+
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  # Make a "refactor" commit to simulate interrupted refactor
+  echo "refactored" >> file.txt
+  git add file.txt
+  git commit -q -m "refactor: interrupted"
+
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress"
+  phase_set REFACTOR_SHA "1" "$pre_sha"
+
+  # Stub that exits 0, makes no commits
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  resume_pending_refactors
+  # Should have rolled back to pre_sha
+  local current_sha
+  current_sha=$(git rev-parse HEAD)
+  [ "$current_sha" = "$pre_sha" ]
+}
+
+@test "resume_pending_refactors: skips when SHA no longer exists" {
+  REFACTOR_PHASES=true
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress"
+  phase_set REFACTOR_SHA "1" "0000000000000000000000000000000000000000"
+
+  resume_pending_refactors
+  # Should have marked completed (skipped due to invalid SHA)
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
 }

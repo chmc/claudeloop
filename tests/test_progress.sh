@@ -1386,3 +1386,137 @@ setup_orphan() {
   [ "$_OLD_PHASE_STATUS_2" = "failed" ]
   [ "$_OLD_PHASE_ATTEMPTS_2" = "5" ]
 }
+
+# =============================================================================
+# Refactor state persistence in PROGRESS.md
+# =============================================================================
+
+@test "generate_phase_details: writes Refactor line for non-empty REFACTOR_STATUS" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "pending"
+  local output
+  output=$(generate_phase_details)
+  echo "$output" | grep -q "Refactor: pending"
+}
+
+@test "generate_phase_details: writes Refactor SHA for in_progress refactor" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress"
+  phase_set REFACTOR_SHA "1" "abc123def"
+  local output
+  output=$(generate_phase_details)
+  echo "$output" | grep -q "Refactor: in_progress"
+  echo "$output" | grep -q "Refactor SHA: abc123def"
+}
+
+@test "generate_phase_details: no Refactor line when REFACTOR_STATUS is empty" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" ""
+  local output
+  output=$(generate_phase_details)
+  ! echo "$output" | grep -q "Refactor:"
+}
+
+@test "read_progress: restores REFACTOR_STATUS and REFACTOR_SHA" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Refactor: in_progress
+Refactor SHA: deadbeef123
+
+### ⏳ Phase 2: Phase Two
+Status: pending
+
+### ⏳ Phase 3: Phase Three
+Status: pending
+EOF
+  init_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "deadbeef123" ]
+  [ "$(phase_get REFACTOR_STATUS 2)" = "" ]
+}
+
+@test "read_progress: does NOT normalize REFACTOR_STATUS in_progress to pending" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Refactor: in_progress
+Refactor SHA: abc123
+EOF
+  init_progress "$TEST_DIR/PROGRESS.md"
+  # Unlike STATUS which normalizes in_progress→pending, REFACTOR_STATUS must NOT
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress" ]
+}
+
+@test "write_progress + read_progress: round-trip refactor state" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress"
+  phase_set REFACTOR_SHA "1" "sha256abc"
+  phase_set STATUS "2" "completed"
+  phase_set REFACTOR_STATUS "2" "completed"
+  write_progress "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  # Reset and re-read
+  phase_set REFACTOR_STATUS "1" ""
+  phase_set REFACTOR_SHA "1" ""
+  phase_set REFACTOR_STATUS "2" ""
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "sha256abc" ]
+  [ "$(phase_get REFACTOR_STATUS 2)" = "completed" ]
+}
+
+@test "read_old_phase_list: parses Refactor and Refactor SHA" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Refactor: pending
+
+### ✅ Phase 2: Phase Two
+Status: completed
+Refactor: in_progress
+Refactor SHA: deadbeef
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$(old_phase_get REFACTOR_STATUS 1)" = "pending" ]
+  [ "$(old_phase_get REFACTOR_SHA 1)" = "" ]
+  [ "$(old_phase_get REFACTOR_STATUS 2)" = "in_progress" ]
+  [ "$(old_phase_get REFACTOR_SHA 2)" = "deadbeef" ]
+}
+
+@test "detect_plan_changes: carries over REFACTOR_STATUS and REFACTOR_SHA" {
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+Refactor: pending
+
+### ✅ Phase 2: Phase Two
+Status: completed
+Attempts: 1
+Refactor: in_progress
+Refactor SHA: abc123
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ "$(phase_get REFACTOR_STATUS 1)" = "pending" ]
+  [ "$(phase_get REFACTOR_STATUS 2)" = "in_progress" ]
+  [ "$(phase_get REFACTOR_SHA 2)" = "abc123" ]
+}
+
+@test "reset_phase_full: clears REFACTOR_STATUS and REFACTOR_SHA" {
+  phase_set REFACTOR_STATUS "1" "pending"
+  phase_set REFACTOR_SHA "1" "abc123"
+  reset_phase_full "1"
+  [ "$(phase_get REFACTOR_STATUS 1)" = "" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "" ]
+}

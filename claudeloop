@@ -66,7 +66,7 @@ AI_PARSE=false
 GRANULARITY="tasks"
 VERIFY_PHASES=false
 REFACTOR_PHASES=false
-_PRE_REFACTOR_SHA=""
+_REFACTORING_PHASE=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
 
@@ -202,11 +202,10 @@ handle_interrupt() {
   print_warning "Saving state and shutting down gracefully..."
   log_verbose "handle_interrupt: CURRENT_PHASE=$CURRENT_PHASE"
 
-  # Rollback incomplete refactoring if interrupted mid-refactor
-  if [ -n "${_PRE_REFACTOR_SHA:-}" ]; then
-    print_warning "Rolling back incomplete refactoring..."
-    git reset --hard "$_PRE_REFACTOR_SHA" 2>/dev/null && git clean -fd 2>/dev/null || true
-    _PRE_REFACTOR_SHA=""
+  # Note: refactor state is persisted in PROGRESS.md — resume_pending_refactors handles recovery
+  if [ -n "${_REFACTORING_PHASE:-}" ]; then
+    print_warning "Refactoring of Phase $_REFACTORING_PHASE interrupted (will resume on restart)"
+    _REFACTORING_PHASE=""
   fi
 
   # Mark current phase as pending if it was in progress
@@ -999,6 +998,9 @@ main() {
 
   print_warning "Press Ctrl+C at any time to stop (state will be saved)"
   echo ""
+
+  # Resume any interrupted/pending refactors from previous run
+  resume_pending_refactors
 
   # Execute phases
   local exit_code=0
