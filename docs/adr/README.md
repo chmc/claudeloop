@@ -34,3 +34,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0026](0026-phase-state-abstraction.md) | Phase state abstraction layer | 2026-03-09 | Accepted |
 | [0027](0027-automatic-refactoring.md) | Automatic refactoring after phase completion | 2026-03-10 | Accepted |
 | [0028](0028-decoupled-refactor-lifecycle.md) | Decoupled refactor lifecycle with persistent state | 2026-03-10 | Accepted |
+| [0029](0029-refactor-retry-improvements.md) | Refactor retry improvements | 2026-03-11 | Accepted |

@@ -1513,10 +1513,104 @@ EOF
   [ "$(phase_get REFACTOR_SHA 2)" = "abc123" ]
 }
 
-@test "reset_phase_full: clears REFACTOR_STATUS and REFACTOR_SHA" {
+@test "reset_phase_full: clears REFACTOR_STATUS, REFACTOR_SHA, and REFACTOR_ATTEMPTS" {
   phase_set REFACTOR_STATUS "1" "pending"
   phase_set REFACTOR_SHA "1" "abc123"
+  phase_set REFACTOR_ATTEMPTS "1" "3"
   reset_phase_full "1"
   [ "$(phase_get REFACTOR_STATUS 1)" = "" ]
   [ "$(phase_get REFACTOR_SHA 1)" = "" ]
+  [ "$(phase_get REFACTOR_ATTEMPTS 1)" = "" ]
+}
+
+# =============================================================================
+# Refactor retry state persistence
+# =============================================================================
+
+@test "write_progress + read_progress: round-trip in_progress 3/5 refactor status" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress 3/5"
+  phase_set REFACTOR_SHA "1" "sha256abc"
+  phase_set REFACTOR_ATTEMPTS "1" "3"
+  write_progress "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  # Reset and re-read
+  phase_set REFACTOR_STATUS "1" ""
+  phase_set REFACTOR_SHA "1" ""
+  phase_set REFACTOR_ATTEMPTS "1" ""
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "sha256abc" ]
+  [ "$(phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
+}
+
+@test "write_progress + read_progress: round-trip discarded refactor status" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "discarded"
+  write_progress "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  # Reset and re-read
+  phase_set REFACTOR_STATUS "1" ""
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(phase_get REFACTOR_STATUS 1)" = "discarded" ]
+}
+
+@test "write_progress + read_progress: round-trip Refactor Attempts field" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress 2/5"
+  phase_set REFACTOR_SHA "1" "deadbeef"
+  phase_set REFACTOR_ATTEMPTS "1" "2"
+  write_progress "$TEST_DIR/PROGRESS.md" "test-plan.md"
+  phase_set REFACTOR_ATTEMPTS "1" ""
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(phase_get REFACTOR_ATTEMPTS 1)" = "2" ]
+}
+
+@test "generate_phase_details: writes Refactor SHA and Attempts for in_progress N/5" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress 3/5"
+  phase_set REFACTOR_SHA "1" "abc123def"
+  phase_set REFACTOR_ATTEMPTS "1" "3"
+  local output
+  output=$(generate_phase_details)
+  echo "$output" | grep -q "Refactor: in_progress 3/5"
+  echo "$output" | grep -q "Refactor SHA: abc123def"
+  echo "$output" | grep -q "Refactor Attempts: 3"
+}
+
+@test "detect_plan_changes: carries over REFACTOR_ATTEMPTS" {
+  PHASE_COUNT=1
+  PHASE_NUMBERS="1"
+  PHASE_TITLE_1="Phase One"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_STATUS_1="pending"
+  PHASE_ATTEMPTS_1=0
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Attempts: 1
+Refactor: in_progress 3/5
+Refactor SHA: abc123
+Refactor Attempts: 3
+EOF
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "abc123" ]
+  [ "$(phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
+}
+
+@test "read_old_phase_list: parses Refactor Attempts" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ✅ Phase 1: Phase One
+Status: completed
+Refactor: in_progress 3/5
+Refactor SHA: deadbeef
+Refactor Attempts: 3
+EOF
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$(old_phase_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  [ "$(old_phase_get REFACTOR_SHA 1)" = "deadbeef" ]
+  [ "$(old_phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
 }

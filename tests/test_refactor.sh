@@ -100,30 +100,34 @@ teardown() {
 # refactor_phase retries
 # =============================================================================
 
-@test "refactor_phase: retries up to 3 times before giving up" {
+@test "refactor_phase: retries up to 5 times before giving up" {
   REFACTOR_PHASES=true
-  # Stub that always fails (non-zero exit)
-  cat > "$TEST_DIR/bin/claude" << 'STUB'
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that always fails (non-zero exit), counts calls
+  cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
 cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
 exit 1
 STUB
   chmod +x "$TEST_DIR/bin/claude"
 
-  # Track attempts via a counter file
-  : > "$TEST_DIR/attempt_count"
-  _original_run_claude_pipeline=$(type run_claude_pipeline 2>/dev/null || true)
-
   run refactor_phase "1"
   [ "$status" -eq 0 ]  # non-fatal: always returns 0
+  # Should have made exactly 5 attempts
+  [ "$(cat "$TEST_DIR/call_count")" = "5" ]
 }
 
 # =============================================================================
 # Rollback between attempts
 # =============================================================================
 
-@test "refactor_phase: rolls back cleanly between attempts" {
+@test "refactor_phase: preserves changes between retry attempts and rolls back on final failure" {
   REFACTOR_PHASES=true
   local pre_sha
   pre_sha=$(git rev-parse HEAD)
@@ -147,7 +151,8 @@ case \$((n % 2)) in
     exit 0
     ;;
   0)
-    # Even call = verify: fail
+    # Even call = verify: fail — record HEAD to prove no rollback between attempts
+    git -C "$TEST_DIR" rev-parse HEAD >> "$TEST_DIR/heads_during_verify"
     printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
     printf '{"type":"content_block_start","content_block":{"type":"text","text":"Tests broken.\\nVERIFICATION_FAILED\\n"}}\n'
     exit 0
@@ -156,13 +161,24 @@ esac
 STUB
   chmod +x "$TEST_DIR/bin/claude"
 
-  run refactor_phase "1"
-  [ "$status" -eq 0 ]
+  refactor_phase "1"
 
-  # After failed refactoring + rollback, HEAD should be back to pre_sha
+  # HEAD advances between attempts (no rollback between retries)
+  # With 5 max attempts, we get 5 refactor + 5 verify = 10 calls
+  # Each verify records HEAD; successive HEADs should differ (no reset)
+  if [ -f "$TEST_DIR/heads_during_verify" ]; then
+    local unique_heads
+    unique_heads=$(sort -u "$TEST_DIR/heads_during_verify" | wc -l | tr -d ' ')
+    [ "$unique_heads" -gt 1 ]
+  fi
+
+  # After ALL attempts exhausted, final rollback to pre_sha
   local post_sha
   post_sha=$(git rev-parse HEAD)
   [ "$post_sha" = "$pre_sha" ]
+
+  # Status should be "discarded" (not "completed")
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
 }
 
 # =============================================================================
@@ -213,7 +229,7 @@ STUB
 # Non-fatal after 3 failures
 # =============================================================================
 
-@test "refactor_phase: gives up after 3 failures and returns 0" {
+@test "refactor_phase: gives up after 5 failures with discarded status" {
   REFACTOR_PHASES=true
 
   # Stub that always exits non-zero
@@ -225,8 +241,9 @@ exit 1
 STUB
   chmod +x "$TEST_DIR/bin/claude"
 
-  run refactor_phase "1"
-  [ "$status" -eq 0 ]  # non-fatal
+  refactor_phase "1"
+  # Status should be "discarded" not "completed"
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
 }
 
 # =============================================================================
@@ -390,9 +407,9 @@ STUB
   chmod +x "$TEST_DIR/bin/claude"
 
   refactor_phase "1"
-  # After exhausting retries, REFACTOR_STATUS should be completed
-  [ "$(get_phase_refactor_status 1)" = "completed" ]
-  # SHA should be cleared on completion
+  # After exhausting retries, REFACTOR_STATUS should be discarded
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
+  # SHA should be cleared on discard
   [ "$(get_phase_refactor_sha 1)" = "" ]
 }
 
@@ -499,8 +516,8 @@ STUB
   phase_set REFACTOR_SHA "1" "0000000000000000000000000000000000000000"
 
   resume_pending_refactors
-  # Should have marked completed (skipped due to invalid SHA)
-  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  # Should have marked discarded (skipped due to invalid SHA)
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
 }
 
 # =============================================================================
@@ -563,4 +580,293 @@ STUB
   git log --oneline | grep -q "auto-commit after refactoring"
   # SHA should have changed (refactoring detected, not treated as no-op)
   [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+# =============================================================================
+# Auto-commit on crash before retry
+# =============================================================================
+
+@test "refactor_phase: auto-commits on crash before retry" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: first call crashes with uncommitted changes, second call succeeds with verify
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    # Crash with uncommitted changes
+    echo "partial-work" >> "$TEST_DIR/file.txt"
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Crash"}}\n'
+    exit 1
+    ;;
+  2)
+    # Second attempt: make a commit
+    echo "refactored" >> "$TEST_DIR/file.txt"
+    git -C "$TEST_DIR" add file.txt
+    git -C "$TEST_DIR" commit -q -m "refactor: restructure"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    exit 0
+    ;;
+  3)
+    # Verify: pass
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\\nVERIFICATION_PASSED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # The partial work from the crash should have been auto-committed
+  git log --oneline | grep -q "auto-commit after crash"
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+# =============================================================================
+# Status shows attempt progress
+# =============================================================================
+
+@test "refactor_phase: status shows attempt progress" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  local progress_dir="$TEST_DIR/captured_progress"
+  mkdir -p "$progress_dir"
+  # Protect from git clean -fd during final rollback
+  echo "captured_progress/" >> .gitignore
+  git add .gitignore && git commit -q -m "temp: add captured_progress to gitignore"
+
+  # Stub that always fails — copies PROGRESS.md at each attempt to capture status
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+cp "$TEST_DIR/.claudeloop/PROGRESS.md" "$progress_dir/progress_at_\$n" 2>/dev/null || true
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
+exit 1
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Check that progress files captured at each attempt show in_progress N/5
+  grep -q "in_progress 1/5" "$progress_dir/progress_at_1"
+  grep -q "in_progress 2/5" "$progress_dir/progress_at_2"
+}
+
+# =============================================================================
+# Resume from persisted attempt count
+# =============================================================================
+
+@test "refactor_phase: resume continues from persisted attempt count" {
+  REFACTOR_PHASES=true
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  # Simulate resume: persisted attempt count = 3, SHA set
+  phase_set REFACTOR_ATTEMPTS "1" "3"
+  phase_set REFACTOR_SHA "1" "$pre_sha"
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that always fails
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
+exit 1
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+  # Should have made only 2 more attempts (4 and 5), not 5 fresh ones
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
+}
+
+# =============================================================================
+# Retry prompt includes error context from previous attempt
+# =============================================================================
+
+@test "refactor_phase: retry prompt includes error context from previous attempt" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: first call fails with error output, second call captures prompt
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+# Save the prompt from stdin
+cat > "$TEST_DIR/prompt_\$(cat "$TEST_DIR/call_count")"
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    # First attempt: produce error output in the log, then fail
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"TypeError: cannot read property foo\\n"}}\n'
+    exit 1
+    ;;
+  2)
+    # Second attempt: succeed with no changes (nothing to refactor)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  run refactor_phase "1"
+  [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# build_refactor_prompt with pre_sha
+# =============================================================================
+
+@test "build_refactor_prompt: uses pre_sha for accumulated diff scope" {
+  # Make two commits so we can test accumulated diff
+  echo "first change" >> file.txt
+  git add file.txt
+  git commit -q -m "change 1"
+  local sha_before
+  sha_before=$(git rev-parse HEAD~1)
+
+  echo "second change" >> file.txt
+  git add file.txt
+  git commit -q -m "change 2"
+
+  # With pre_sha, should use $pre_sha..HEAD range
+  local prompt
+  prompt=$(build_refactor_prompt "1" "$sha_before")
+  # Should show accumulated changes from sha_before, not just HEAD~1
+  echo "$prompt" | grep -q "file.txt"
+}
+
+# =============================================================================
+# verify_refactor with pre_sha
+# =============================================================================
+
+@test "verify_refactor: uses full diff from pre_sha on retries" {
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that captures the prompt and passes
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt"
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  # Make a commit so there's something to verify
+  echo "refactored" >> file.txt
+  git add file.txt
+  git commit -q -m "refactor"
+
+  run verify_refactor "1" "$pre_sha"
+  [ "$status" -eq 0 ]
+
+  # The prompt sent to verify should reference the pre_sha for diff
+  grep -q "$pre_sha" "$TEST_DIR/verify_prompt"
+}
+
+# =============================================================================
+# resume_pending_refactors with in_progress N/5 status
+# =============================================================================
+
+@test "resume_pending_refactors: handles in_progress N/5 status" {
+  REFACTOR_PHASES=true
+
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress 3/5"
+  phase_set REFACTOR_SHA "1" "$pre_sha"
+  phase_set REFACTOR_ATTEMPTS "1" "3"
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that exits 0, makes no commits (nothing to refactor)
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  resume_pending_refactors
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+@test "resume_pending_refactors: marks discarded when SHA gc'd" {
+  REFACTOR_PHASES=true
+  phase_set STATUS "1" "completed"
+  phase_set REFACTOR_STATUS "1" "in_progress 2/5"
+  phase_set REFACTOR_SHA "1" "0000000000000000000000000000000000000000"
+
+  resume_pending_refactors
+  # Should be "discarded" not "completed" when SHA is gc'd
+  [ "$(get_phase_refactor_status 1)" = "discarded" ]
+}
+
+# =============================================================================
+# REFACTOR_ATTEMPTS cleared on success
+# =============================================================================
+
+@test "refactor_phase: clears REFACTOR_ATTEMPTS on success" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    echo "refactored" >> "$TEST_DIR/file.txt"
+    git -C "$TEST_DIR" add file.txt
+    git -C "$TEST_DIR" commit -q -m "refactor: restructure"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    exit 0
+    ;;
+  2)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\\nVERIFICATION_PASSED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  [ "$(get_phase_refactor_attempts 1)" = "" ]
 }

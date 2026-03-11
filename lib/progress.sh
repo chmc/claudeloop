@@ -74,6 +74,11 @@ read_progress() {
           sv=$(printf '%s\n' "$line" | sed 's/^Refactor SHA:[[:space:]]*//')
           phase_set REFACTOR_SHA "$current_phase" "$sv"
           ;;
+        "Refactor Attempts: "*)
+          local ra
+          ra=$(printf '%s\n' "$line" | sed 's/^Refactor Attempts:[[:space:]]*//')
+          phase_set REFACTOR_ATTEMPTS "$current_phase" "$ra"
+          ;;
       esac
     fi
   done < "$progress_file"
@@ -184,11 +189,16 @@ generate_phase_details() {
     refactor_status=$(get_phase_refactor_status "$_phase")
     if [ -n "$refactor_status" ]; then
       echo "Refactor: $refactor_status"
-      if [ "$refactor_status" = "in_progress" ]; then
-        local refactor_sha
-        refactor_sha=$(get_phase_refactor_sha "$_phase")
-        [ -n "$refactor_sha" ] && echo "Refactor SHA: $refactor_sha"
-      fi
+      case "$refactor_status" in
+        "in_progress"*)
+          local refactor_sha
+          refactor_sha=$(get_phase_refactor_sha "$_phase")
+          [ -n "$refactor_sha" ] && echo "Refactor SHA: $refactor_sha"
+          local refactor_attempts
+          refactor_attempts=$(get_phase_refactor_attempts "$_phase")
+          [ -n "$refactor_attempts" ] && echo "Refactor Attempts: $refactor_attempts"
+          ;;
+      esac
     fi
 
     local deps
@@ -240,6 +250,7 @@ read_old_phase_list() {
       old_phase_set DEPS "$current_phase" ""
       old_phase_set REFACTOR_STATUS "$current_phase" ""
       old_phase_set REFACTOR_SHA "$current_phase" ""
+      old_phase_set REFACTOR_ATTEMPTS "$current_phase" ""
       _OLD_PHASE_COUNT=$((_OLD_PHASE_COUNT + 1))
       _OLD_PHASE_NUMBERS="${_OLD_PHASE_NUMBERS:+$_OLD_PHASE_NUMBERS }$current_phase"
     elif [ -n "$current_phase" ]; then
@@ -287,6 +298,11 @@ read_old_phase_list() {
           local sv
           sv=$(printf '%s\n' "$line" | sed 's/^Refactor SHA:[[:space:]]*//')
           old_phase_set REFACTOR_SHA "$current_phase" "$sv"
+          ;;
+        "Refactor Attempts: "*)
+          local ra
+          ra=$(printf '%s\n' "$line" | sed 's/^Refactor Attempts:[[:space:]]*//')
+          old_phase_set REFACTOR_ATTEMPTS "$current_phase" "$ra"
           ;;
       esac
     fi
@@ -358,11 +374,13 @@ detect_plan_changes() {
         _ti=$((_ti + 1))
       done
 
-      local old_refactor_status old_refactor_sha
+      local old_refactor_status old_refactor_sha old_refactor_attempts
       old_refactor_status=$(old_phase_get REFACTOR_STATUS "$matched_old_num")
       old_refactor_sha=$(old_phase_get REFACTOR_SHA "$matched_old_num")
+      old_refactor_attempts=$(old_phase_get REFACTOR_ATTEMPTS "$matched_old_num")
       phase_set REFACTOR_STATUS "$new_i" "$old_refactor_status"
       phase_set REFACTOR_SHA "$new_i" "$old_refactor_sha"
+      phase_set REFACTOR_ATTEMPTS "$new_i" "$old_refactor_attempts"
 
       # Report renumbering (string comparison to support decimal numbers)
       if [ "$matched_old_num" != "$new_i" ]; then
