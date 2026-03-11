@@ -19,6 +19,14 @@ build_refactor_prompt() {
     _brp_diff_stat=$(git diff --stat HEAD~1 2>/dev/null || echo "(no diff available)")
   fi
 
+  local _brp_file_sizes
+  _brp_file_sizes=$(git ls-files -- ':!.claudeloop/' ':!*.lock' ':!package-lock.json' \
+    ':!*.min.js' ':!*.min.css' ':!*.map' ':!*.png' ':!*.jpg' ':!*.jpeg' ':!*.gif' \
+    ':!*.ico' ':!*.svg' ':!*.woff*' ':!*.ttf' ':!*.eot' ':!*.pdf' ':!*.wasm' \
+    ':!*.zip' ':!*.tar*' ':!*.gz' 2>/dev/null | while read -r _f; do
+      [ -f "$_f" ] && printf '%s %s\n' "$(wc -l < "$_f" | tr -d ' ')" "$_f"
+    done | sort -rn | head -10)
+
   printf '%s' "You are a refactoring agent. Your ONLY job is to improve code structure.
 You MUST NOT add features, change behavior, or fix bugs.
 
@@ -29,6 +37,9 @@ $_brp_desc
 ## Changes from this phase
 $_brp_diff_stat
 
+## Source files by size (largest first)
+$_brp_file_sizes
+
 ## Rules
 1. ONLY structural changes: extract functions, split files, improve organization
 2. NO behavioral changes — all existing tests must continue to pass
@@ -36,12 +47,15 @@ $_brp_diff_stat
 4. Run the test suite before and after your changes
 5. Commit with message: \"refactor: restructure phase $_brp_phase output\"
 
-## Strategy
-- Large files: split into logical modules
-- Long functions: extract helper functions
-- Repeated patterns: extract into shared utilities
-- Keep public API/exports identical
-- If the code is already well-structured, do nothing and exit"
+## Steps
+1. Read the largest file listed above
+2. Any source file over 200 lines MUST be split into focused modules
+3. Extract related functions into their own files (e.g., utils, handlers, types)
+4. Update imports — keep the same public API from the original file
+5. Run the test suite to verify nothing broke
+6. Commit with message: \"refactor: restructure phase $_brp_phase output\"
+
+If ALL files are under 200 lines and well-organized, do nothing."
 }
 
 # verify_refactor(phase_num [pre_sha])
@@ -176,10 +190,10 @@ $_err_ctx
     # Auto-commit any uncommitted refactoring changes
     auto_commit_changes "$_rp_phase" "auto-commit after refactoring"
 
-    # Check if SHA changed — if not, nothing was refactored
-    local _post_sha
-    _post_sha=$(git rev-parse HEAD)
-    if [ "$_post_sha" = "$_pre_sha" ]; then
+    # Check if any non-metadata files changed — if not, nothing was refactored
+    local _code_changes
+    _code_changes=$(git diff --name-only "$_pre_sha"..HEAD -- ':!.claudeloop/' 2>/dev/null)
+    if [ -z "$_code_changes" ]; then
       log_ts "Nothing to refactor for phase $_rp_phase"
       phase_set REFACTOR_STATUS "$_rp_phase" "completed"
       phase_set REFACTOR_SHA "$_rp_phase" ""

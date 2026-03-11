@@ -837,6 +837,98 @@ STUB
 # REFACTOR_ATTEMPTS cleared on success
 # =============================================================================
 
+# =============================================================================
+# False success when only PROGRESS.md changed (SHA comparison bug)
+# =============================================================================
+
+@test "refactor_phase: detects no-op when only PROGRESS.md changed" {
+  REFACTOR_PHASES=true
+
+  # Track .claudeloop/ in git (reproduces real-world behavior where PROGRESS.md is committed)
+  # Remove .claudeloop/ from .gitignore so it gets tracked
+  sed -i '' 's|\.claudeloop/||' .gitignore
+  git add .gitignore .claudeloop/
+  git commit -q -m "track .claudeloop"
+
+  # Write initial progress so it's tracked
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  git add .claudeloop/
+  git commit -q -m "initial progress"
+
+  # Stub that exits 0 but makes no code changes (only reads files)
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+cat > /dev/null
+printf '{"type":"tool_use","name":"Read","input":{"file_path":"file.txt"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Code looks good, nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Should detect nothing to refactor (not falsely report success)
+  # Verify log should not exist (verification was skipped)
+  [ ! -f ".claudeloop/logs/phase-1.refactor-verify.log" ] || [ ! -s ".claudeloop/logs/phase-1.refactor-verify.log" ]
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+}
+
+@test "refactor_phase: verifies accumulated changes from crashed attempt" {
+  REFACTOR_PHASES=true
+
+  # Track .claudeloop/ in git
+  sed -i '' 's|\.claudeloop/||' .gitignore
+  git add .gitignore .claudeloop/
+  git commit -q -m "track .claudeloop"
+
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  git add .claudeloop/
+  git commit -q -m "initial progress"
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: attempt 1 crashes after writing a source file, attempt 2 exits 0 with no writes
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    # Crash after writing a source file
+    echo "new feature code" > "$TEST_DIR/feature.ts"
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"feature.ts","content":"new feature code"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Crash"}}\n'
+    exit 1
+    ;;
+  2)
+    # Second attempt: no code changes, just reads
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"file.txt"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Already refactored.\n"}}\n'
+    exit 0
+    ;;
+  3)
+    # Verify: pass
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\nVERIFICATION_PASSED\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # verify_refactor SHOULD have been called because attempt 1 left non-.claudeloop code changes
+  [ -f ".claudeloop/logs/phase-1.refactor-verify.log" ]
+  [ "$(cat "$TEST_DIR/call_count")" = "3" ]
+}
+
+# =============================================================================
+# REFACTOR_ATTEMPTS cleared on success
+# =============================================================================
+
 @test "refactor_phase: clears REFACTOR_ATTEMPTS on success" {
   REFACTOR_PHASES=true
 

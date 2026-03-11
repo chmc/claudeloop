@@ -234,12 +234,8 @@ PROGRESS
 # =============================================================================
 @test "integration: stale lock file is cleaned up and run succeeds" {
   mkdir -p "$TEST_DIR/.claudeloop"
-  # Create a background process and kill it to get a dead PID
-  sh -c 'sleep 100' &
-  dead_pid=$!
-  kill "$dead_pid" 2>/dev/null || true
-  wait "$dead_pid" 2>/dev/null || true
-  echo "$dead_pid" > "$TEST_DIR/.claudeloop/lock"
+  # Use a PID that is guaranteed to not be running (max PID + 1 range)
+  echo "4194304" > "$TEST_DIR/.claudeloop/lock"
 
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
@@ -329,11 +325,8 @@ PROGRESS
 
 @test "create_lock: stale PID lock is removed and execution succeeds" {
   mkdir -p "$TEST_DIR/.claudeloop"
-  sh -c 'sleep 100' &
-  dead_pid=$!
-  kill "$dead_pid" 2>/dev/null || true
-  wait "$dead_pid" 2>/dev/null || true
-  echo "$dead_pid" > "$TEST_DIR/.claudeloop/lock"
+  # Use a PID that is guaranteed to not be running (max PID + 1 range)
+  echo "4194304" > "$TEST_DIR/.claudeloop/lock"
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
 }
