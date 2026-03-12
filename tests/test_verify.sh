@@ -8,6 +8,8 @@ CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 setup() {
   TEST_DIR=$(mktemp -d)
   export TEST_DIR
+  export _SENTINEL_POLL=0.1
+  export _SKIP_HEARTBEATS=1
 
   # Source libraries in the right order (verify.sh depends on ui.sh, stream_processor.sh)
   . "$CLAUDELOOP_DIR/lib/parser.sh"

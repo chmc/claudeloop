@@ -110,7 +110,7 @@ Do NOT skip this. Do NOT just end silently.
 
   # Wait for stream processor to finish (sentinel-based, same as execute_phase)
   while [ ! -f "$_sentinel" ]; do
-    sleep 1
+    sleep "${_SENTINEL_POLL:-1}"
   done
 
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)

@@ -158,7 +158,7 @@ run_claude_pipeline() {
   # Note: bash 3.2's `wait PID` with set -m blocks for the entire pipeline job,
   # not just the specified process. The sentinel avoids this deadlock.
   while [ ! -f "$_sentinel" ]; do
-    sleep 1
+    sleep "${_SENTINEL_POLL:-1}"
   done
 
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)

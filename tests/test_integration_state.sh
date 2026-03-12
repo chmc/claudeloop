@@ -44,6 +44,8 @@ setup() {
   TEST_DIR=$(mktemp -d)
   export TEST_DIR
   export CLAUDELOOP="${CLAUDELOOP_DIR}/claudeloop"
+  export _SENTINEL_POLL=0.1
+  export _SKIP_HEARTBEATS=1
 
   # Initialize git repo
   git -C "$TEST_DIR" init -q
@@ -153,7 +155,7 @@ EOF
 
 @test "write_config: saves CLI-provided settings to new conf" {
   rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
-  _cl --plan PLAN.md --max-retries 5
+  run sh -c "cd '$TEST_DIR' && VERIFY_PHASES=false REFACTOR_PHASES=false '$CLAUDELOOP' --plan PLAN.md --max-retries 5"
   [ "$status" -eq 0 ]
   grep -q "^MAX_RETRIES=5$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
@@ -176,7 +178,7 @@ EOF
 
 @test "write_config: does not persist one-time flags like --reset or --phase" {
   rm -f "$TEST_DIR/.claudeloop/.claudeloop.conf"
-  _cl --plan PLAN.md --reset
+  run sh -c "cd '$TEST_DIR' && VERIFY_PHASES=false REFACTOR_PHASES=false '$CLAUDELOOP' --plan PLAN.md --reset"
   [ "$status" -eq 0 ]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
   ! grep -q "RESET" "$TEST_DIR/.claudeloop/.claudeloop.conf"

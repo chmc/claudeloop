@@ -23,6 +23,8 @@ _CL_STREAM_TRUNCATE_LEN="${STREAM_TRUNCATE_LEN:-}"
 _CL_MAX_PHASE_TIME="${MAX_PHASE_TIME:-}"
 _CL_IDLE_TIMEOUT="${IDLE_TIMEOUT:-}"
 _CL_VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-}"
+_CL_VERIFY_PHASES="${VERIFY_PHASES:-}"
+_CL_REFACTOR_PHASES="${REFACTOR_PHASES:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -767,6 +769,8 @@ apply_config_precedence() {
   [ -n "$_CL_MAX_PHASE_TIME" ]         && MAX_PHASE_TIME="$_CL_MAX_PHASE_TIME"
   [ -n "$_CL_IDLE_TIMEOUT" ]           && IDLE_TIMEOUT="$_CL_IDLE_TIMEOUT"
   [ -n "$_CL_VERIFY_TIMEOUT" ]         && VERIFY_TIMEOUT="$_CL_VERIFY_TIMEOUT"
+  [ -n "$_CL_VERIFY_PHASES" ]          && VERIFY_PHASES="$_CL_VERIFY_PHASES"
+  [ -n "$_CL_REFACTOR_PHASES" ]        && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
@@ -943,6 +947,8 @@ main() {
   fi
 
   run_setup_wizard
+  [ -n "$_CL_VERIFY_PHASES" ]   && VERIFY_PHASES="$_CL_VERIFY_PHASES"
+  [ -n "$_CL_REFACTOR_PHASES" ] && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
   write_config
   init_live_log
 

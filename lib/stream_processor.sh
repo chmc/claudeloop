@@ -11,10 +11,17 @@
 # timeout and EOF. We use epoch seconds to distinguish: EOF returns instantly,
 # timeout takes ~2s. read -t is non-POSIX but supported by bash and most sh.
 inject_heartbeats() {
+  if [ "${_SKIP_HEARTBEATS:-}" = "1" ]; then
+    cat
+    # Flush synthetic heartbeats so stream processor can detect post-result exit
+    printf '{"type":"heartbeat"}\n{"type":"heartbeat"}\n{"type":"heartbeat"}\n' 2>/dev/null
+    return
+  fi
+  _hb_timeout="${_HEARTBEAT_INTERVAL:-2}"
   while true; do
     _hb_line=""
     _hb_before=$(date +%s)
-    if IFS= read -t 2 -r _hb_line; then
+    if IFS= read -t "$_hb_timeout" -r _hb_line; then
       printf '%s\n' "$_hb_line" 2>/dev/null || break
     elif [ -n "$_hb_line" ]; then
       # Partial line (data without trailing newline)
