@@ -22,17 +22,17 @@ The auto-refactoring system (`--refactor`) had several issues with its retry beh
 - **Crash (non-zero exit)**: May leave uncommitted partial work. `auto_commit_changes` preserves it before the next attempt.
 - **Final exhaustion only**: `git reset --hard` to the original pre-refactor SHA happens only after all attempts are exhausted ("discard" point).
 
-### Increase max attempts to 5
+### Configurable max attempts (default: 20)
 
-Complex refactoring often needs iterative refinement. 5 attempts provides enough room for the model to converge.
+Complex refactoring often needs iterative refinement. The default of 20 attempts provides enough room for models to converge, and can be overridden via `--refactor-max-retries` or `REFACTOR_MAX_RETRIES`.
 
 ### New status values
 
 | Value | Meaning |
 |-------|---------|
-| `in_progress N/5` | Attempt N of 5 running |
+| `in_progress N/M` | Attempt N of M running (M = REFACTOR_MAX_RETRIES) |
 | `completed` | Refactoring succeeded and committed |
-| `discarded` | Failed after 5 attempts, changes rolled back |
+| `discarded` | Failed after M attempts, changes rolled back |
 
 ### Persist attempt count for resume
 
@@ -60,6 +60,6 @@ Pass `pre_sha` to both `build_refactor_prompt` and `verify_refactor`. Use `git d
 - Verify checks the full scope of changes
 
 **Negative:**
-- More API calls possible per phase (up to 10: 5 × refactor + verify)
+- More API calls possible per phase (up to 2×REFACTOR_MAX_RETRIES: refactor + verify each)
 - Accumulated commits between retries may create a messier git history before final discard
-- The `in_progress N/5` status format is slightly more complex to parse
+- The `in_progress N/M` status format is slightly more complex to parse

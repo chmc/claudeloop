@@ -80,7 +80,8 @@ See `examples/PLAN.md.example` for a complete example.
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
 --verify             Verify each phase with a fresh read-only Claude instance using verdict-based checking (VERIFICATION_PASSED/FAILED keywords, doubles API calls)
---refactor           Auto-refactor code after each phase (up to 5 attempts, preserves work between retries, discards on final failure)
+--refactor           Auto-refactor code after each phase (default 20 attempts, configurable)
+--refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
 --simple             Plain output (no colors)
@@ -192,7 +193,7 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 2. Find the next runnable phase (dependencies met, not yet completed)
 3. Spawn a fresh `claude` CLI instance with the phase description
 4. Optionally verify with a fresh read-only Claude instance (`--verify`)
-5. Optionally auto-refactor code structure (`--refactor`) with up to 5 attempts, preserving work between retries and discarding on final failure
+5. Optionally auto-refactor code structure (`--refactor`) with up to 20 attempts (configurable via `--refactor-max-retries`), preserving work between retries and discarding on final failure
 6. Save result to `PROGRESS.md`
 7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
 8. Repeat until all phases complete

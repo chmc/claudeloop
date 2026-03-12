@@ -25,6 +25,7 @@ _CL_IDLE_TIMEOUT="${IDLE_TIMEOUT:-}"
 _CL_VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-}"
 _CL_VERIFY_PHASES="${VERIFY_PHASES:-}"
 _CL_REFACTOR_PHASES="${REFACTOR_PHASES:-}"
+_CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -68,6 +69,7 @@ AI_PARSE=true
 GRANULARITY="tasks"
 VERIFY_PHASES=true
 REFACTOR_PHASES=true
+REFACTOR_MAX_RETRIES=20
 _REFACTORING_PHASE=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
@@ -79,6 +81,7 @@ _CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT="" _CLI_VERIFY_TIMEOUT=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
 _CLI_VERIFY_PHASES=""
 _CLI_REFACTOR_PHASES=""
+_CLI_REFACTOR_MAX_RETRIES=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
@@ -277,6 +280,7 @@ Options:
                          (doubles API calls per phase)
   --refactor             Auto-refactor code after each phase completion
                          (up to 4 API calls per phase with --verify)
+  --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
@@ -402,6 +406,12 @@ parse_args() {
       --refactor)
         REFACTOR_PHASES=true; _CLI_REFACTOR_PHASES=1
         shift
+        ;;
+      --refactor-max-retries)
+        if [ $# -lt 2 ]; then echo "Error: --refactor-max-retries requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --refactor-max-retries requires a number" >&2; exit 1 ;; esac
+        REFACTOR_MAX_RETRIES="$2"; _CLI_REFACTOR_MAX_RETRIES=1
+        shift 2
         ;;
       --recover-progress)
         RECOVER_PROGRESS=true
@@ -790,6 +800,7 @@ apply_config_precedence() {
   [ -n "$_CL_VERIFY_TIMEOUT" ]         && VERIFY_TIMEOUT="$_CL_VERIFY_TIMEOUT"
   [ -n "$_CL_VERIFY_PHASES" ]          && VERIFY_PHASES="$_CL_VERIFY_PHASES"
   [ -n "$_CL_REFACTOR_PHASES" ]        && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
+  [ -n "$_CL_REFACTOR_MAX_RETRIES" ]   && REFACTOR_MAX_RETRIES="$_CL_REFACTOR_MAX_RETRIES"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

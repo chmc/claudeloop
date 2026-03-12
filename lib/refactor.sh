@@ -116,7 +116,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without outpu
 }
 
 # refactor_phase(phase_num)
-# Main refactoring entry point with up to 5 attempts and git rollback.
+# Main refactoring entry point with up to REFACTOR_MAX_RETRIES attempts (default 20) and git rollback.
 # Persists state to PROGRESS.md for resume on restart.
 # Between retries, work is preserved (no rollback). Only on final exhaustion
 # are changes rolled back to pre-refactor state.
@@ -134,7 +134,7 @@ refactor_phase() {
   if [ -z "$_pre_sha" ]; then
     _pre_sha=$(git rev-parse HEAD)
   fi
-  _max_attempts=5
+  _max_attempts=${REFACTOR_MAX_RETRIES:-20}
 
   # Resume from persisted attempt count
   _attempt=$(get_phase_refactor_attempts "$_rp_phase")

@@ -45,6 +45,7 @@ setup() {
   CURRENT_PIPELINE_PGID=""
   _REFACTORING_PHASE=""
   MAX_RETRIES=10
+  REFACTOR_MAX_RETRIES=5
   BASE_DELAY=3
   PROGRESS_FILE="$TEST_DIR/.claudeloop/PROGRESS.md"
   PLAN_FILE="$TEST_DIR/PLAN.md"
@@ -1025,4 +1026,92 @@ STUB
   refactor_phase "1"
   [ "$(get_phase_refactor_status 1)" = "completed" ]
   [ "$(get_phase_refactor_attempts 1)" = "" ]
+}
+
+# =============================================================================
+# REFACTOR_MAX_RETRIES configurability
+# =============================================================================
+
+@test "refactor_phase: uses REFACTOR_MAX_RETRIES when set" {
+  REFACTOR_PHASES=true
+  REFACTOR_MAX_RETRIES=2
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that always fails (non-zero exit), counts calls
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
+exit 1
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  run refactor_phase "1"
+  [ "$status" -eq 0 ]
+  # Should have made exactly 2 attempts (not 5 or 20)
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
+}
+
+@test "refactor_phase: defaults to 20 when REFACTOR_MAX_RETRIES unset" {
+  REFACTOR_PHASES=true
+  unset REFACTOR_MAX_RETRIES
+
+  local progress_dir="$TEST_DIR/captured_progress"
+  mkdir -p "$progress_dir"
+  echo "captured_progress/" >> .gitignore
+  git add .gitignore && git commit -q -m "temp: add captured_progress to gitignore"
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that captures progress at attempt 1 then fails
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+cp "$TEST_DIR/.claudeloop/PROGRESS.md" "$progress_dir/progress_at_\$n" 2>/dev/null || true
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
+exit 1
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  run refactor_phase "1"
+  [ "$status" -eq 0 ]
+  # Progress at attempt 1 should show denominator of 20
+  grep -q "in_progress 1/20" "$progress_dir/progress_at_1"
+}
+
+@test "refactor_phase: status denominator matches REFACTOR_MAX_RETRIES" {
+  REFACTOR_PHASES=true
+  REFACTOR_MAX_RETRIES=3
+
+  local progress_dir="$TEST_DIR/captured_progress"
+  mkdir -p "$progress_dir"
+  echo "captured_progress/" >> .gitignore
+  git add .gitignore && git commit -q -m "temp: add captured_progress to gitignore"
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub that captures progress at each attempt then fails
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+cp "$TEST_DIR/.claudeloop/PROGRESS.md" "$progress_dir/progress_at_\$n" 2>/dev/null || true
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Error"}}\n'
+exit 1
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  run refactor_phase "1"
+  [ "$status" -eq 0 ]
+  grep -q "in_progress 1/3" "$progress_dir/progress_at_1"
+  grep -q "in_progress 2/3" "$progress_dir/progress_at_2"
 }
