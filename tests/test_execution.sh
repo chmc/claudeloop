@@ -121,6 +121,22 @@ teardown() { rm -rf "$_tmpdir"; }
   [[ "$output" == *"Uncommitted changes"* ]]
 }
 
+# --- raw log reset in execute_phase ---
+
+@test "execute_phase: raw log is truncated before run_claude_pipeline" {
+  # Verify that the code truncates raw_log before running the pipeline.
+  # We check this by inspecting the source within execute_phase function.
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # Find line numbers within execute_phase (after line 324 where function starts)
+  local truncate_line pipeline_line
+  truncate_line=$(grep -n ': > "$raw_log"' "$src" | tail -1 | cut -d: -f1)
+  pipeline_line=$(grep -n 'run_claude_pipeline "$prompt"' "$src" | head -1 | cut -d: -f1)
+  [ -n "$truncate_line" ]
+  [ -n "$pipeline_line" ]
+  # Truncation must come before the pipeline call
+  [ "$truncate_line" -lt "$pipeline_line" ]
+}
+
 @test "capture_git_context: returns empty when in dir with no git repo" {
   cd "$_tmpdir"
   run capture_git_context

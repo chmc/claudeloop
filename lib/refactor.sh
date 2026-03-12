@@ -46,6 +46,7 @@ $_brp_file_sizes
 3. NO new features or bug fixes
 4. Run the test suite before and after your changes
 5. Commit with message: \"refactor: restructure phase $_brp_phase output\"
+6. MOVE code into new files — do NOT create copies. Delete the original after extracting.
 
 ## Steps
 1. Read the largest file listed above
@@ -68,33 +69,37 @@ verify_refactor() {
   local _vr_title
   _vr_title=$(get_phase_title "$_vr_phase")
 
-  local _vr_diff_cmd
+  local _vr_pre_sha_display
   if [ -n "$_vr_pre_sha" ]; then
-    _vr_diff_cmd="git diff ${_vr_pre_sha}..HEAD"
+    _vr_pre_sha_display="$_vr_pre_sha"
   else
-    _vr_diff_cmd="git diff HEAD~1"
+    _vr_pre_sha_display="HEAD~1"
   fi
 
   local _vr_prompt
-  _vr_prompt="You are a verification agent. Your job is to verify that a code refactoring did not break anything.
-The refactoring was purely structural — files were split, functions extracted, code reorganized.
-No features were added or removed.
+  _vr_prompt="You are a verification agent checking that a code refactoring did not introduce regressions.
+The refactoring was purely structural — files split, functions extracted, code reorganized.
 
 ## What was refactored
-Phase $_vr_phase: $_vr_title — structural improvements to code from this phase.
+Phase $_vr_phase: $_vr_title — structural improvements. Pre-refactor commit: $_vr_pre_sha_display
 
-## Mandatory Verification Steps
+## Mandatory Steps
+1. Run \`git diff --name-only $_vr_pre_sha_display..HEAD\` to see which files were changed
+2. Run the test suite / build command (e.g. \`npm test\`, \`pytest\`, \`go test\`, \`bats\`, etc.)
+3. If failures exist, determine whether they are pre-existing or new regressions
 
-You MUST actually execute commands. Do NOT skip testing.
-
-1. Run \`$_vr_diff_cmd\` to review what the refactoring changed
-2. Run the test suite (e.g. \`npm test\`, \`pytest\`, \`go test\`, \`bats\`, etc.)
-3. Run linters if configured
-4. Verify the refactoring was purely structural (no behavioral changes)
+## Regression Rule (CRITICAL)
+You are checking for REGRESSIONS, not absolute correctness.
+- If errors are in code that was NOT changed by the refactoring → pre-existing → acceptable
+- If errors moved between files during refactoring (e.g., from original to extracted module) → same error, acceptable
+- Only fail if the refactoring INTRODUCED genuinely new errors
+- When in doubt, pass — refactoring should not be blocked by pre-existing issues
 
 ## Verdict (MANDATORY)
-- If ALL checks pass: output exactly VERIFICATION_PASSED
-- If ANY check fails: output exactly VERIFICATION_FAILED followed by what failed"
+Your FINAL line of output MUST be exactly one of:
+  VERIFICATION_PASSED
+  VERIFICATION_FAILED
+WARNING: Omitting the verdict causes automatic failure. Do not end without outputting one."
 
   local _vr_formatted=".claudeloop/logs/phase-$_vr_phase.refactor-verify.log"
   local _vr_raw=".claudeloop/logs/phase-$_vr_phase.refactor-verify.raw.json"

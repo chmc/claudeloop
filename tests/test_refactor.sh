@@ -931,6 +931,68 @@ STUB
 # REFACTOR_ATTEMPTS cleared on success
 # =============================================================================
 
+# =============================================================================
+# verify_refactor prompt content
+# =============================================================================
+
+@test "verify_refactor: prompt includes pre_sha for regression checking" {
+  # Stub that captures the prompt
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt_captured"
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  echo "refactored" >> file.txt
+  git add file.txt
+  git commit -q -m "refactor"
+
+  verify_refactor "1" "$pre_sha"
+
+  # Prompt should mention the pre_sha for git diff --name-only
+  grep -q "git diff --name-only.*$pre_sha" "$TEST_DIR/verify_prompt_captured"
+}
+
+@test "verify_refactor: prompt mentions regression-based verification" {
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > "$TEST_DIR/verify_prompt_captured"
+printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  echo "refactored" >> file.txt
+  git add file.txt
+  git commit -q -m "refactor"
+
+  verify_refactor "1"
+
+  # Prompt should mention regression-based checking
+  grep -qi "regression" "$TEST_DIR/verify_prompt_captured"
+}
+
+# =============================================================================
+# build_refactor_prompt anti-duplication
+# =============================================================================
+
+@test "build_refactor_prompt: includes anti-duplication rule" {
+  local prompt
+  prompt=$(build_refactor_prompt "1")
+  echo "$prompt" | grep -qi "move.*code.*new files.*do not.*create copies\|move code.*not.*copies\|MOVE code.*NOT create copies"
+}
+
+# =============================================================================
+# REFACTOR_ATTEMPTS cleared on success
+# =============================================================================
+
 @test "refactor_phase: clears REFACTOR_ATTEMPTS on success" {
   REFACTOR_PHASES=true
 

@@ -52,13 +52,12 @@ You MUST actually execute commands. Do NOT skip testing. Do NOT assume. Run them
 
 If no test suite exists, focus on reviewing the git diff for correctness and obvious errors.
 
-## Verdict (MANDATORY)
+## Verdict (MANDATORY — you MUST output one)
 
-After completing ALL verification steps above, you MUST output your verdict as the LAST thing you write.
-Do NOT skip this. Do NOT just end silently.
-
-- If ALL checks pass: output exactly the word VERIFICATION_PASSED on its own line
-- If ANY check fails: output exactly the word VERIFICATION_FAILED on its own line, followed by a brief summary of what failed"
+After completing ALL steps, your FINAL line of output MUST be exactly one of:
+  VERIFICATION_PASSED
+  VERIFICATION_FAILED
+WARNING: Omitting the verdict causes automatic failure. Do not end without it."
 
   # Prepare verify log files
   local verify_log=".claudeloop/logs/phase-$phase_num.verify.log"

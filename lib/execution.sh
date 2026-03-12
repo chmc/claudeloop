@@ -371,6 +371,9 @@ ${_git_context}"
     printf '=== RESPONSE ===\n'
   } > "$log_file"
 
+  # Reset raw log so has_write_actions() only sees events from this attempt
+  : > "$raw_log"
+
   # Run Claude pipeline
   run_claude_pipeline "$prompt" "$phase_num" "$log_file" "$raw_log"
   local claude_exit="$_LAST_CLAUDE_EXIT"
