@@ -61,6 +61,15 @@ write_config() {
   # Never write config during dry-run
   $DRY_RUN && return 0
 
+  # Ensure .claudeloop/ is gitignored before creating the directory
+  if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
+    if [ -f ".gitignore" ]; then
+      printf '\n.claudeloop/\n' >> .gitignore
+    else
+      printf '.claudeloop/\n' > .gitignore
+    fi
+  fi
+
   mkdir -p ".claudeloop"
 
   if [ ! -f "$conf_file" ]; then

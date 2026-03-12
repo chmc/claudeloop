@@ -12,6 +12,9 @@ setup() {
   _CLI_MAX_RETRIES=""
   _CLI_SKIP_PERMISSIONS=""
   _CLI_VERIFY_PHASES=""
+  # Stub UI functions not available in test context
+  print_success() { :; }
+  export -f print_success
 }
 
 teardown() { rm -rf "$_tmpdir"; }
@@ -40,6 +43,46 @@ teardown() { rm -rf "$_tmpdir"; }
   run bool_yn "anything_else"
   [ "$status" -eq 0 ]
   [ "$output" = "n" ]
+}
+
+# --- write_config() gitignore guard ---
+
+@test "write_config creates .gitignore with .claudeloop/ when none exists" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_PHASES=false REFACTOR_PHASES=false
+  rm -f .gitignore
+  write_config
+  grep -qF '.claudeloop/' .gitignore
+}
+
+@test "write_config appends .claudeloop/ to existing .gitignore" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_PHASES=false REFACTOR_PHASES=false
+  printf 'node_modules/\n' > .gitignore
+  write_config
+  grep -qF '.claudeloop/' .gitignore
+  grep -qF 'node_modules/' .gitignore
+}
+
+@test "write_config preserves .gitignore when .claudeloop/ already present" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_PHASES=false REFACTOR_PHASES=false
+  printf '.claudeloop/\n' > .gitignore
+  write_config
+  count=$(grep -cF '.claudeloop/' .gitignore)
+  [ "$count" -eq 1 ]
 }
 
 # --- load_config() edge cases ---
