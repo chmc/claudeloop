@@ -50,6 +50,11 @@ get_phase_attempt_time() { phase_get ATTEMPT_TIME "$1" "$2"; }
 get_phase_refactor_status() { phase_get REFACTOR_STATUS "$1"; }
 get_phase_refactor_sha()    { phase_get REFACTOR_SHA "$1"; }
 get_phase_refactor_attempts() { phase_get REFACTOR_ATTEMPTS "$1"; }
+get_phase_consec_fail() {
+  local _val
+  _val=$(phase_get CONSEC_FAIL "$1")
+  printf '%s' "${_val:-0}"
+}
 
 # Reset phase for retry: decrement attempts, clear last attempt time, set pending.
 # Does NOT call write_progress — callers control timing.
@@ -64,6 +69,7 @@ reset_phase_for_retry() {
     phase_set ATTEMPT_TIME "$_phase_num" "" "$_attempts"
     phase_set ATTEMPTS "$_phase_num" "$((_attempts - 1))"
   fi
+  phase_set CONSEC_FAIL "$_phase_num" "0"
 }
 
 # Full reset to defaults (for --phase, --reset, plan-change additions)
@@ -78,6 +84,7 @@ reset_phase_full() {
   phase_set REFACTOR_STATUS "$_phase_num" ""
   phase_set REFACTOR_SHA "$_phase_num" ""
   phase_set REFACTOR_ATTEMPTS "$_phase_num" ""
+  phase_set CONSEC_FAIL "$_phase_num" "0"
 }
 
 # --- _OLD_PHASE_* namespace (for plan-change detection) ---

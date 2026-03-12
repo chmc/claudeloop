@@ -675,3 +675,116 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 0 ]
   echo "$output" | grep -qi "tool\|Read\|Edit"
 }
+
+# --- fail_reason_hint() escalation with consecutive count ---
+
+@test "fail_reason_hint: backward compat — no 2nd arg returns same as consec=1" {
+  run fail_reason_hint "trapped_tool_calls"
+  local no_arg="$output"
+  run fail_reason_hint "trapped_tool_calls" 1
+  [ "$output" = "$no_arg" ]
+}
+
+@test "fail_reason_hint: trapped_tool_calls consec=1 returns level-1 hint" {
+  run fail_reason_hint "trapped_tool_calls" 1
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "thinking"
+  ! echo "$output" | grep -q "CRITICAL"
+}
+
+@test "fail_reason_hint: trapped_tool_calls consec=3 includes CRITICAL" {
+  run fail_reason_hint "trapped_tool_calls" 3
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "CRITICAL"
+}
+
+@test "fail_reason_hint: no_write_actions consec=3 escalates" {
+  run fail_reason_hint "no_write_actions" 3
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "CRITICAL"
+}
+
+@test "fail_reason_hint: verification_failed ignores consecutive count" {
+  run fail_reason_hint "verification_failed" 5
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "CRITICAL"
+  echo "$output" | grep -qi "verification"
+}
+
+# --- escalate_strategy() ---
+
+@test "escalate_strategy: returns base unchanged for consec < 3" {
+  run escalate_strategy "standard" "trapped_tool_calls" 2
+  [ "$output" = "standard" ]
+}
+
+@test "escalate_strategy: returns stripped for trapped_tool_calls consec=3" {
+  run escalate_strategy "standard" "trapped_tool_calls" 3
+  [ "$output" = "stripped" ]
+}
+
+@test "escalate_strategy: returns stripped for no_write_actions consec=3" {
+  run escalate_strategy "standard" "no_write_actions" 3
+  [ "$output" = "stripped" ]
+}
+
+@test "escalate_strategy: returns targeted for consec=5" {
+  run escalate_strategy "standard" "trapped_tool_calls" 5
+  [ "$output" = "targeted" ]
+}
+
+@test "escalate_strategy: never downgrades — base=targeted consec=3 stays targeted" {
+  run escalate_strategy "targeted" "trapped_tool_calls" 3
+  [ "$output" = "targeted" ]
+}
+
+@test "escalate_strategy: ignores non-model-behavior reasons at high consec" {
+  run escalate_strategy "standard" "verification_failed" 5
+  [ "$output" = "standard" ]
+}
+
+@test "escalate_strategy: ignores non-model-behavior reasons (no_session)" {
+  run escalate_strategy "standard" "no_session" 5
+  [ "$output" = "standard" ]
+}
+
+# --- build_retry_context: skip error context for model-behavior failures ---
+
+@test "build_retry_context: skips error context for trapped_tool_calls (only hint)" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'error: something broke\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 ===\n' >> "$_log"
+  run build_retry_context "standard" 2 10 "trapped_tool_calls" "$_log" ""
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "thinking"
+  # Should NOT contain the error context from the log
+  ! echo "$output" | grep -q "something broke"
+}
+
+@test "build_retry_context: skips error context for no_write_actions" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'error: something broke\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 ===\n' >> "$_log"
+  run build_retry_context "standard" 2 10 "no_write_actions" "$_log" ""
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "Edit"
+  ! echo "$output" | grep -q "something broke"
+}
+
+@test "build_retry_context: skips error context for empty_log" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'error: something broke\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 ===\n' >> "$_log"
+  run build_retry_context "standard" 2 10 "empty_log" "$_log" ""
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -q "something broke"
+}
+
+@test "build_retry_context: includes error context for verification_failed" {
+  printf '=== RESPONSE ===\n' > "$_log"
+  printf 'error: test assertion failed\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 ===\n' >> "$_log"
+  run build_retry_context "standard" 2 10 "verification_failed" "$_log" ""
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "test assertion failed"
+}

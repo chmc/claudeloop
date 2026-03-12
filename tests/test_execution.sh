@@ -143,3 +143,33 @@ teardown() { rm -rf "$_tmpdir"; }
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# --- update_fail_reason() ---
+
+@test "update_fail_reason: same reason increments consec" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  phase_set FAIL_REASON 1 "trapped_tool_calls"
+  phase_set CONSEC_FAIL 1 "2"
+  update_fail_reason 1 "trapped_tool_calls"
+  [ "$(get_phase_fail_reason 1)" = "trapped_tool_calls" ]
+  [ "$(get_phase_consec_fail 1)" = "3" ]
+}
+
+@test "update_fail_reason: different reason resets consec to 1" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  phase_set FAIL_REASON 1 "trapped_tool_calls"
+  phase_set CONSEC_FAIL 1 "3"
+  update_fail_reason 1 "no_write_actions"
+  [ "$(get_phase_fail_reason 1)" = "no_write_actions" ]
+  [ "$(get_phase_consec_fail 1)" = "1" ]
+}
+
+@test "update_fail_reason: first failure sets consec to 1" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  update_fail_reason 1 "empty_log"
+  [ "$(get_phase_fail_reason 1)" = "empty_log" ]
+  [ "$(get_phase_consec_fail 1)" = "1" ]
+}

@@ -3,6 +3,21 @@
 # Phase Execution Pipeline Library
 # Handles phase execution, Claude CLI pipeline, retry strategies, and result evaluation
 
+# Update fail reason and track consecutive same-reason failures
+# Args: $1 - phase number, $2 - new fail reason
+update_fail_reason() {
+  local _ufr_phase="$1" _ufr_reason="$2"
+  local _prev_reason _prev_consec
+  _prev_reason=$(get_phase_fail_reason "$_ufr_phase")
+  _prev_consec=$(get_phase_consec_fail "$_ufr_phase")
+  phase_set FAIL_REASON "$_ufr_phase" "$_ufr_reason"
+  if [ "$_ufr_reason" = "$_prev_reason" ]; then
+    phase_set CONSEC_FAIL "$_ufr_phase" "$((_prev_consec + 1))"
+  else
+    phase_set CONSEC_FAIL "$_ufr_phase" "1"
+  fi
+}
+
 # Capture current git state for prompt context injection
 # Returns: git context string on stdout (empty if no git info)
 capture_git_context() {
@@ -52,8 +67,11 @@ apply_retry_strategy() {
   local _ars_git="$5" _ars_log="$6" _ars_prompt="$7"
   local _fail_reason _strategy _prev_verify_log _retry_ctx
 
+  local _consec
   _fail_reason=$(get_phase_fail_reason "$_ars_phase")
+  _consec=$(get_phase_consec_fail "$_ars_phase")
   _strategy=$(retry_strategy "$_ars_attempt" "$MAX_RETRIES")
+  _strategy=$(escalate_strategy "$_strategy" "$_fail_reason" "$_consec")
 
   # Archive previous attempt log
   if [ -f "$_ars_log" ]; then
@@ -77,7 +95,7 @@ ${_ars_git}"
   fi
 
   # Build and inject retry context
-  _retry_ctx=$(build_retry_context "$_strategy" "$_ars_attempt" "$MAX_RETRIES" "$_fail_reason" "$_ars_log" "$_prev_verify_log")
+  _retry_ctx=$(build_retry_context "$_strategy" "$_ars_attempt" "$MAX_RETRIES" "$_fail_reason" "$_ars_log" "$_prev_verify_log" "$_consec")
   if [ -n "$_retry_ctx" ]; then
     _ars_prompt="${_ars_prompt}
 
@@ -220,7 +238,7 @@ evaluate_phase_result() {
 
   # Empty log means Claude produced no output — always a failure
   if is_empty_log "$_epr_log"; then
-    phase_set FAIL_REASON "$_epr_phase" "empty_log"
+    update_fail_reason "$_epr_phase" "empty_log"
     print_error "Phase $_epr_phase: Claude produced no output (empty log)."
     update_phase_status "$_epr_phase" "failed"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
@@ -242,11 +260,11 @@ evaluate_phase_result() {
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$_epr_raw"; then
       if has_trapped_tool_calls "$_epr_raw"; then
-        phase_set FAIL_REASON "$_epr_phase" "trapped_tool_calls"
+        update_fail_reason "$_epr_phase" "trapped_tool_calls"
         log_verbose "execute_phase: phase $_epr_phase has tool calls trapped in thinking blocks"
         print_warning "Phase $_epr_phase: Tool calls trapped in thinking blocks — treating as failed"
       else
-        phase_set FAIL_REASON "$_epr_phase" "no_write_actions"
+        update_fail_reason "$_epr_phase" "no_write_actions"
         log_verbose "execute_phase: phase $_epr_phase exited 0 but no write actions in raw log"
         print_warning "Phase $_epr_phase: Claude exited successfully but made no changes — treating as failed"
       fi
@@ -287,7 +305,7 @@ evaluate_phase_result() {
       run_refactor_if_needed "$_epr_phase"
       return 0
     fi
-    phase_set FAIL_REASON "$_epr_phase" "no_session"
+    update_fail_reason "$_epr_phase" "no_session"
     log_verbose "execute_phase: phase $_epr_phase failed"
     print_error "Phase $_epr_phase failed"
     update_phase_status "$_epr_phase" "failed"
@@ -306,7 +324,7 @@ run_adaptive_verification() {
   _vmode=$(verify_mode "$_rav_attempt" "$MAX_RETRIES")
   if [ "$_vmode" = "full" ]; then
     if ! verify_phase "$_rav_phase" "$_rav_log"; then
-      phase_set FAIL_REASON "$_rav_phase" "verification_failed"
+      update_fail_reason "$_rav_phase" "verification_failed"
       print_error "Phase $_rav_phase: verification failed"
       update_phase_status "$_rav_phase" "failed"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"

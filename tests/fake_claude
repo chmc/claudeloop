@@ -210,6 +210,18 @@ scenario_success_verbose() {
   printf '{"type":"result","total_cost_usd":0.08,"duration_ms":25000,"num_turns":9,"usage":{"input_tokens":6500,"output_tokens":2800,"cache_read_input_tokens":3200,"cache_creation_input_tokens":800},"modelUsage":{"fake-claude-v1":{"input_tokens":6500,"output_tokens":2800}}}\n'
 }
 
+scenario_read_only() {
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me read the relevant files.\\n"}]}}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.sh"},"id":"toolu_fake_030"}\n'
+  printf '{"type":"tool_result","content":"#!/bin/sh\\necho hello","id":"toolu_fake_030"}\n'
+  printf '{"type":"tool_use","name":"Grep","input":{"pattern":"hello","path":"/tmp"},"id":"toolu_fake_031"}\n'
+  printf '{"type":"tool_result","content":"/tmp/test.sh:echo hello","id":"toolu_fake_031"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The code looks correct.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.02,"duration_ms":5000,"num_turns":3,"usage":{"input_tokens":800,"output_tokens":300},"modelUsage":{"fake-claude-v1":{"input_tokens":800,"output_tokens":300}}}\n'
+}
+
 scenario_custom() {
   default_exit=0
   if [ -f "$FAKE_CLAUDE_DIR/custom_output_$count" ]; then

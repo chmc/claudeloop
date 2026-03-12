@@ -104,14 +104,28 @@ has_trapped_tool_calls() {
 }
 
 # Map failure reason code to a human-readable hint for the retry prompt
-# Args: $1 - failure reason code
+# Args: $1 - failure reason code, $2 - consecutive count (optional, default 1)
 # Returns: hint string (stdout), empty for unknown/empty codes
 fail_reason_hint() {
-  case "$1" in
+  local _reason="$1"
+  local _consec="${2:-1}"
+  case "$_consec" in ''|*[!0-9]*) _consec=1 ;; esac
+
+  case "$_reason" in
     no_write_actions)
-      echo "You MUST use Edit or Write tools to modify files. Start by reading the most relevant file, then edit it." ;;
+      if [ "$_consec" -ge 3 ]; then
+        echo "CRITICAL: You have failed to make any file changes $_consec consecutive times. You MUST use Edit or Write tools to modify files. Start with a single Read, then immediately Edit."
+      else
+        echo "You MUST use Edit or Write tools to modify files. Start by reading the most relevant file, then edit it."
+      fi
+      ;;
     trapped_tool_calls)
-      echo "Your tool calls were trapped inside thinking blocks and never executed. Emit tool calls as top-level actions, not inside thinking." ;;
+      if [ "$_consec" -ge 3 ]; then
+        echo "CRITICAL: Your tool calls have been trapped in thinking blocks $_consec consecutive times. You MUST emit tool_use content blocks, not XML inside thinking. Start with a single, simple tool call."
+      else
+        echo "Your tool calls were trapped inside thinking blocks and never executed. Emit tool calls as top-level actions, not inside thinking."
+      fi
+      ;;
     empty_log)
       echo "You must actively use tools. Start with Read, then Edit." ;;
     no_session)
@@ -146,6 +160,30 @@ retry_strategy() {
   else
     echo "targeted"
   fi
+}
+
+# Escalate retry strategy for persistent model-behavior failures
+# Never downgrades — if base strategy is already higher, keep it.
+# Args: $1 - base strategy, $2 - fail reason, $3 - consecutive count
+# Returns: escalated strategy (stdout)
+escalate_strategy() {
+  local _base="$1" _reason="$2" _consec="$3"
+  case "$_consec" in ''|*[!0-9]*) _consec=0 ;; esac
+
+  local _escalated="$_base"
+  case "$_reason" in
+    trapped_tool_calls|no_write_actions)
+      if [ "$_consec" -ge 5 ]; then
+        _escalated="targeted"
+      elif [ "$_consec" -ge 3 ]; then
+        # Only upgrade if base is lower
+        case "$_base" in
+          standard) _escalated="stripped" ;;
+        esac
+      fi
+      ;;
+  esac
+  echo "$_escalated"
 }
 
 # Determine verification mode based on attempt number
@@ -226,17 +264,25 @@ extract_verify_error() {
 # Args: $1 - strategy (standard|stripped|targeted)
 #        $2 - current attempt, $3 - max retries
 #        $4 - fail reason code, $5 - phase log path, $6 - verify log path
+#        $7 - consecutive fail count (optional, default 1)
 # Returns: formatted retry context section (stdout)
 build_retry_context() {
   local strategy="$1" attempt="$2" max="$3" reason="$4" log_file="$5" verify_log="$6"
+  local consec="${7:-1}"
   local prev_attempt=$((attempt - 1))
   local hint
-  hint=$(fail_reason_hint "$reason")
+  hint=$(fail_reason_hint "$reason" "$consec")
+
+  # Model-behavior failures have no useful error context — skip extraction
+  local _skip_ctx=false
+  case "$reason" in trapped_tool_calls|no_write_actions|empty_log) _skip_ctx=true ;; esac
 
   case "$strategy" in
     standard)
-      local error_ctx
-      error_ctx=$(extract_error_context "$log_file" 30)
+      local error_ctx=""
+      if [ "$_skip_ctx" = "false" ]; then
+        error_ctx=$(extract_error_context "$log_file" 30)
+      fi
       printf '## Previous Attempt Failed (attempt %s of %s)\n\n' "$prev_attempt" "$max"
       printf 'The previous attempt exited without completing the phase.\n'
       [ -n "$hint" ] && printf '%s\n' "$hint"
@@ -246,8 +292,10 @@ build_retry_context() {
       printf '\nAddress any errors shown before proceeding.\n'
       ;;
     stripped)
-      local error_ctx
-      error_ctx=$(extract_error_context "$log_file" 15)
+      local error_ctx=""
+      if [ "$_skip_ctx" = "false" ]; then
+        error_ctx=$(extract_error_context "$log_file" 15)
+      fi
       printf '## Previous Attempt Failed (attempt %s of %s)\n\n' "$prev_attempt" "$max"
       [ -n "$hint" ] && printf '%s\n' "$hint"
       if [ -n "$error_ctx" ]; then
@@ -256,11 +304,13 @@ build_retry_context() {
       ;;
     targeted)
       local ctx=""
-      if [ -n "$verify_log" ] && [ -f "$verify_log" ]; then
-        ctx=$(extract_verify_error "$verify_log" 10)
-      fi
-      if [ -z "$ctx" ]; then
-        ctx=$(extract_error_context "$log_file" 10)
+      if [ "$_skip_ctx" = "false" ]; then
+        if [ -n "$verify_log" ] && [ -f "$verify_log" ]; then
+          ctx=$(extract_verify_error "$verify_log" 10)
+        fi
+        if [ -z "$ctx" ]; then
+          ctx=$(extract_error_context "$log_file" 10)
+        fi
       fi
       printf '## Fix This Error (attempt %s of %s)\n\n' "$prev_attempt" "$max"
       if [ -n "$ctx" ]; then

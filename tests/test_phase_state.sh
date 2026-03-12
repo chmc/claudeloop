@@ -244,3 +244,38 @@ teardown() {
   result=$(get_phase_dependencies 1)
   [ -z "$result" ]
 }
+
+# --- CONSEC_FAIL tracking ---
+
+@test "get_phase_consec_fail: returns 0 for unset phase" {
+  result=$(get_phase_consec_fail 1)
+  [ "$result" = "0" ]
+}
+
+@test "get_phase_consec_fail: returns set value" {
+  phase_set CONSEC_FAIL 1 "3"
+  result=$(get_phase_consec_fail 1)
+  [ "$result" = "3" ]
+}
+
+@test "get_phase_consec_fail: works with decimal phase numbers" {
+  phase_set CONSEC_FAIL 2.5 "5"
+  result=$(get_phase_consec_fail 2.5)
+  [ "$result" = "5" ]
+}
+
+@test "reset_phase_full: resets CONSEC_FAIL to 0" {
+  phase_set CONSEC_FAIL 1 "4"
+  reset_phase_full 1
+  result=$(get_phase_consec_fail 1)
+  [ "$result" = "0" ]
+}
+
+@test "reset_phase_for_retry: resets CONSEC_FAIL to 0" {
+  phase_set STATUS 1 "failed"
+  phase_set ATTEMPTS 1 "3"
+  phase_set CONSEC_FAIL 1 "3"
+  reset_phase_for_retry 1
+  result=$(get_phase_consec_fail 1)
+  [ "$result" = "0" ]
+}

@@ -671,13 +671,32 @@ main_loop() {
       fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
-        local _attempts
+        local _attempts _fail_reason _consec
         _attempts=$(get_phase_attempts "$next_phase")
+        _fail_reason=$(get_phase_fail_reason "$next_phase")
+        _consec=$(get_phase_consec_fail "$next_phase")
+
+        # Diagnostic warning at exactly 5 consecutive model-behavior failures
+        case "$_fail_reason" in
+          trapped_tool_calls|no_write_actions|empty_log)
+            if [ "$_consec" -eq 5 ]; then
+              print_warning "Phase $next_phase: 5 consecutive model-behavior failures. The model may not support tool_use properly. Consider using --model to try a different model."
+            fi ;;
+        esac
+
+        # Zero backoff for model-behavior failures (waiting won't help)
         local delay
-        delay=$(calculate_backoff "$_attempts")
+        case "$_fail_reason" in
+          trapped_tool_calls|no_write_actions|empty_log) delay=0 ;;
+          *) delay=$(calculate_backoff "$_attempts") ;;
+        esac
         log_verbose "main_loop: scheduling retry of phase $next_phase in ${delay}s (attempt $_attempts)"
-        print_warning "Retrying phase $next_phase after $delay seconds..."
-        sleep "$delay"
+        if [ "$delay" -gt 0 ]; then
+          print_warning "Retrying phase $next_phase after $delay seconds..."
+          sleep "$delay"
+        else
+          print_warning "Retrying phase $next_phase immediately (model-behavior failure)..."
+        fi
         continue
       else
         print_error "Phase $next_phase failed after ${MAX_RETRIES} attempts"
