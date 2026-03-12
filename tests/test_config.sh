@@ -14,7 +14,9 @@ setup() {
   _CLI_VERIFY_PHASES=""
   # Stub UI functions not available in test context
   print_success() { :; }
+  print_warning() { :; }
   export -f print_success
+  export -f print_warning
 }
 
 teardown() { rm -rf "$_tmpdir"; }
@@ -141,4 +143,84 @@ teardown() { rm -rf "$_tmpdir"; }
   output=$(printf '\n\n' | run_config_wizard)
   [ "$MAX_RETRIES" = "20" ]
   [[ "$output" == *"using --max-retries"* ]]
+}
+
+# --- commit_gitignore() ---
+
+# Helper: create a git repo in $_tmpdir with an initial commit
+_init_git_repo() {
+  git -C "$_tmpdir" init -q
+  git -C "$_tmpdir" config user.email "test@test.com"
+  git -C "$_tmpdir" config user.name "Test"
+  printf 'init\n' > "$_tmpdir/README"
+  git -C "$_tmpdir" add README
+  git -C "$_tmpdir" commit -q -m "initial"
+}
+
+@test "commit_gitignore: commits when .gitignore is modified (tracked)" {
+  cd "$_tmpdir"
+  _init_git_repo
+  # Create and commit a .gitignore, then modify it
+  printf 'node_modules/\n' > .gitignore
+  git add .gitignore && git commit -q -m "add gitignore"
+  printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
+  # .gitignore should have uncommitted changes
+  [ -n "$(git status --porcelain .gitignore)" ]
+  commit_gitignore
+  # After commit, .gitignore should be clean
+  [ -z "$(git status --porcelain .gitignore)" ]
+  git log --oneline -1 | grep -qF "chore: add .claudeloop/ to .gitignore"
+}
+
+@test "commit_gitignore: commits when .gitignore is new (untracked)" {
+  cd "$_tmpdir"
+  _init_git_repo
+  printf '.claudeloop/\n' > .gitignore
+  [ -n "$(git status --porcelain .gitignore)" ]
+  commit_gitignore
+  [ -z "$(git status --porcelain .gitignore)" ]
+  git log --oneline -1 | grep -qF "chore: add .claudeloop/ to .gitignore"
+}
+
+@test "commit_gitignore: no-op when .gitignore has no changes" {
+  cd "$_tmpdir"
+  _init_git_repo
+  printf '.claudeloop/\n' > .gitignore
+  git add .gitignore && git commit -q -m "add gitignore"
+  local before after
+  before=$(git rev-parse HEAD)
+  commit_gitignore
+  after=$(git rev-parse HEAD)
+  [ "$before" = "$after" ]
+}
+
+@test "commit_gitignore: non-fatal outside a git repo" {
+  cd "$_tmpdir"
+  # No git init — not a repo
+  printf '.claudeloop/\n' > .gitignore
+  run commit_gitignore
+  [ "$status" -eq 0 ]
+}
+
+@test "commit_gitignore: does not crash on empty repo (no prior commits)" {
+  cd "$_tmpdir"
+  git init -q
+  git config user.email "test@test.com"
+  git config user.name "Test"
+  printf '.claudeloop/\n' > .gitignore
+  run commit_gitignore
+  [ "$status" -eq 0 ]
+  # Should have committed (first commit in repo)
+  git log --oneline -1 | grep -qF "chore: add .claudeloop/ to .gitignore"
+}
+
+@test "commit_gitignore: does not disturb other staged files" {
+  cd "$_tmpdir"
+  _init_git_repo
+  printf '.claudeloop/\n' > .gitignore
+  printf 'other\n' > other.txt
+  git add other.txt
+  commit_gitignore
+  # other.txt should still be staged (not committed)
+  git status --porcelain other.txt | grep -q '^A'
 }

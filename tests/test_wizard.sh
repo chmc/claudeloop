@@ -310,7 +310,7 @@ _cl_wizard() {
 }
 
 # =============================================================================
-# setup_project: .gitignore management
+# .gitignore management (non-interactive fallback via write_config)
 # =============================================================================
 
 # Helper: replace setup()'s pre-baked .gitignore with one that lacks .claudeloop/
@@ -321,14 +321,14 @@ _reset_gitignore_without_claudeloop() {
   git -C "$TEST_DIR" commit -q -m "gitignore without claudeloop"
 }
 
-@test "setup_project: auto-adds .claudeloop/ to existing .gitignore (non-interactive)" {
+@test "gitignore: auto-adds .claudeloop/ to existing .gitignore (non-interactive)" {
   _reset_gitignore_without_claudeloop
   run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
 }
 
-@test "setup_project: auto-creates .gitignore when none exists (non-interactive)" {
+@test "gitignore: auto-creates .gitignore when none exists (non-interactive)" {
   git -C "$TEST_DIR" rm -q .gitignore
   git -C "$TEST_DIR" commit -q -m "remove gitignore"
   run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
@@ -337,7 +337,7 @@ _reset_gitignore_without_claudeloop() {
 }
 
 # Regression guard (passes even without the fix — ensures no-op stays a no-op after fix)
-@test "setup_project: no-op when .claudeloop/ already in .gitignore" {
+@test "gitignore: no-op when .claudeloop/ already in .gitignore" {
   # setup() pre-creates .gitignore with .claudeloop/ — should remain exactly as-is
   local before
   before=$(cat "$TEST_DIR/.gitignore")
@@ -408,4 +408,44 @@ _reset_gitignore_without_claudeloop() {
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
   [[ "$output" == *"using --verify"* ]]
   grep -q "^VERIFY_PHASES=true$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+# =============================================================================
+# Gitignore wizard question + auto-commit
+# =============================================================================
+
+@test "wizard: asks gitignore question and modifies .gitignore on Y" {
+  _reset_gitignore_without_claudeloop
+  # 11 defaults + gitignore=Y (Enter = default Y)
+  # Prompts: plan, progress, retries, quota, simple, skip, prompt, ai, granularity, verify, refactor, gitignore
+  _cl_wizard $'\n\n\n\n\n\n\n\n\n\n\n\n'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Add .claudeloop/ to .gitignore"* ]]
+  grep -qF '.claudeloop/' "$TEST_DIR/.gitignore"
+}
+
+@test "wizard: respects N for gitignore question" {
+  _reset_gitignore_without_claudeloop
+  # 11 defaults + gitignore=n
+  _cl_wizard $'\n\n\n\n\n\n\n\n\n\n\n'"n"$'\n'
+  [[ "$output" == *"Add .claudeloop/ to .gitignore"* ]]
+  # write_config should respect _GITIGNORE_APPROVED=false and NOT add .claudeloop/
+  ! grep -qF '.claudeloop' "$TEST_DIR/.gitignore"
+}
+
+@test "wizard: gitignore question skipped when .claudeloop already present" {
+  # Default setup has .claudeloop/ in .gitignore — question should not appear
+  _cl_wizard $'\n\n\n\n\n\n\n\n\n\n'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Add .claudeloop/ to .gitignore"* ]]
+}
+
+@test "wizard: gitignore auto-committed after wizard" {
+  _reset_gitignore_without_claudeloop
+  # 11 defaults + gitignore=Y
+  _cl_wizard $'\n\n\n\n\n\n\n\n\n\n\n\n'
+  [ "$status" -eq 0 ]
+  # .gitignore should be committed (clean in git status)
+  [ -z "$(git -C "$TEST_DIR" status --porcelain .gitignore)" ]
+  git -C "$TEST_DIR" log --oneline -1 -- .gitignore | grep -qF "chore: add .claudeloop/ to .gitignore"
 }

@@ -521,34 +521,6 @@ handle_orphan_recovery() {
   _PLAN_HAD_CHANGES=""
 }
 
-# Offer to set up .gitignore for claudeloop artifacts
-setup_project() {
-  if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
-    if [ ! -f ".gitignore" ]; then
-      if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
-        printf 'No .gitignore found. Create one? (Y/n) '
-        read -r response || true
-        case "$response" in
-          [Nn]) return 0 ;;
-        esac
-      fi
-      printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
-      print_success "Created .gitignore"
-      _add_platform_gitignore silent
-    else
-      if [ -t 0 ] && [ "$YES_MODE" = "false" ]; then
-        printf 'Add .claudeloop/ to .gitignore? (Y/n) '
-        read -r response || true
-        case "$response" in
-          [Nn]) return 0 ;;
-        esac
-      fi
-      printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
-      print_success "Added .claudeloop/ to .gitignore"
-      _add_platform_gitignore silent
-    fi
-  fi
-}
 
 # $1: "silent" to skip prompting (used when patching an existing .gitignore)
 _add_platform_gitignore() {
@@ -976,10 +948,25 @@ main() {
     exit 0
   fi
 
+  # Early environment validation (git must exist before gitignore work)
+  if ! $DRY_RUN; then
+    if [ -f "$PROGRESS_FILE" ] && grep -q "Status: completed" "$PROGRESS_FILE" 2>/dev/null; then
+      RESUME_MODE=true
+    fi
+    validate_environment
+  fi
+
+  _GITIGNORE_APPROVED=""
   run_setup_wizard
   [ -n "$_CL_VERIFY_PHASES" ]   && VERIFY_PHASES="$_CL_VERIFY_PHASES"
   [ -n "$_CL_REFACTOR_PHASES" ] && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
   write_config
+
+  # Commit .gitignore if wizard or write_config modified it
+  if ! $DRY_RUN; then
+    commit_gitignore
+  fi
+
   init_live_log
 
   # Validate plan and prompt files
@@ -1010,13 +997,8 @@ main() {
   printf '[%s] Found %s phases\n' "$(date '+%H:%M:%S')" "$PHASE_COUNT"
   log_live "Found $PHASE_COUNT phases"
 
-  # Environment validation and progress recovery (skip in dry-run)
+  # Re-initialize live log after plan parsing (skip in dry-run)
   if ! $DRY_RUN; then
-    if [ -f "$PROGRESS_FILE" ] && grep -q "Status: completed" "$PROGRESS_FILE" 2>/dev/null; then
-      RESUME_MODE=true
-    fi
-    validate_environment
-    setup_project
     init_live_log
   fi
 

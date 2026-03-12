@@ -63,11 +63,12 @@ write_config() {
   $DRY_RUN && return 0
 
   # Ensure .claudeloop/ is gitignored before creating the directory
-  if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
+  # (fallback for non-interactive / --yes mode where wizard was skipped)
+  if [ "$_GITIGNORE_APPROVED" != "false" ] && ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
     if [ -f ".gitignore" ]; then
-      printf '\n.claudeloop/\n' >> .gitignore
+      printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
     else
-      printf '.claudeloop/\n' > .gitignore
+      printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
     fi
   fi
 
@@ -115,6 +116,20 @@ write_config() {
   [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"
   [ -n "$_CLI_REFACTOR_PHASES" ]     && update_conf_key "$conf_file" REFACTOR_PHASES "$REFACTOR_PHASES"
   [ -n "$_CLI_REFACTOR_MAX_RETRIES" ] && update_conf_key "$conf_file" REFACTOR_MAX_RETRIES "$REFACTOR_MAX_RETRIES"
+  return 0
+}
+
+# commit_gitignore()
+# Commits .gitignore if it has uncommitted changes (tracked or untracked).
+# Uses pathspec (git commit .gitignore) to commit ONLY .gitignore,
+# leaving any other staged files untouched.
+# Non-fatal: logs warning on failure, always returns 0.
+commit_gitignore() {
+  [ -n "$(git status --porcelain .gitignore 2>/dev/null)" ] || return 0
+  if ! git add .gitignore 2>/dev/null || \
+     ! git commit -q .gitignore -m "chore: add .claudeloop/ to .gitignore" 2>/dev/null; then
+    print_warning "Could not auto-commit .gitignore"
+  fi
   return 0
 }
 
@@ -262,6 +277,28 @@ run_setup_wizard() {
     case "$response" in
       [Nn]|[Nn][Oo]) REFACTOR_PHASES=false ;;
       *) REFACTOR_PHASES=true ;;
+    esac
+  fi
+
+  # .gitignore
+  if ! grep -qF '.claudeloop' .gitignore 2>/dev/null; then
+    if [ ! -f ".gitignore" ]; then
+      printf 'No .gitignore found. Create one with .claudeloop/? (Y/n) '
+    else
+      printf 'Add .claudeloop/ to .gitignore? (Y/n) '
+    fi
+    read -r response || return 0
+    case "$response" in
+      [Nn]) _GITIGNORE_APPROVED=false ;;
+      *)
+        _GITIGNORE_APPROVED=true
+        if [ ! -f ".gitignore" ]; then
+          printf '# claudeloop runtime\n.claudeloop/\n' > .gitignore
+        else
+          printf '\n# claudeloop runtime\n.claudeloop/\n' >> .gitignore
+        fi
+        _add_platform_gitignore silent
+        ;;
     esac
   fi
 
