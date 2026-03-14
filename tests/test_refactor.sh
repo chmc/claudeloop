@@ -1086,6 +1086,51 @@ STUB
   grep -q "in_progress 1/20" "$progress_dir/progress_at_1"
 }
 
+# =============================================================================
+# Pipeline race: successful session bypasses exit code check
+# =============================================================================
+
+@test "refactor_phase: successful session bypasses non-zero exit code" {
+  REFACTOR_PHASES=true
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Stub: refactor call exits non-zero but has successful session markers,
+  # then verify passes
+  cat > "$TEST_DIR/bin/claude" << STUB
+#!/bin/sh
+cat > /dev/null
+n=\$(cat "$TEST_DIR/call_count")
+n=\$((n + 1))
+echo "\$n" > "$TEST_DIR/call_count"
+case \$n in
+  1)
+    # Refactor: make a commit but exit non-zero (race condition scenario)
+    echo "refactored" >> "$TEST_DIR/file.txt"
+    git -C "$TEST_DIR" add file.txt
+    git -C "$TEST_DIR" commit -q -m "refactor: restructure"
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo done"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactored.\\n"}}\n'
+    printf '{"type":"result","subtype":"success","duration_ms":5000,"num_turns":3,"session_id":"test","cost_usd":0.05,"usage":{"input_tokens":100,"output_tokens":50},"result":"done"}\n'
+    exit 1
+    ;;
+  2)
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
+    printf '{"type":"content_block_start","content_block":{"type":"text","text":"All tests pass.\\nVERIFICATION_PASSED\\n"}}\n'
+    exit 0
+    ;;
+esac
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Should have completed (not retried 5 times and discarded)
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  # Only 2 calls: refactor + verify (not 5 retries)
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
+}
+
 @test "refactor_phase: status denominator matches REFACTOR_MAX_RETRIES" {
   REFACTOR_PHASES=true
   REFACTOR_MAX_RETRIES=3

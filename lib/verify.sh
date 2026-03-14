@@ -147,10 +147,14 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
 check_verdict() {
   local _cv_log="$1" _cv_phase="$2" _cv_label="$3" _cv_exit="$4"
 
-  # Exit code check FIRST
+  # Exit code check FIRST — but tolerate pipeline race condition
   if [ "$_cv_exit" -ne 0 ]; then
-    print_error "$_cv_label failed for phase $_cv_phase (exit code $_cv_exit)"
-    return 1
+    if grep -q '"type":"result"' "$_cv_log" 2>/dev/null; then
+      log_ts "$_cv_label: exit code $_cv_exit but result event found — treating as pipeline race"
+    else
+      print_error "$_cv_label failed for phase $_cv_phase (exit code $_cv_exit)"
+      return 1
+    fi
   fi
 
   # Verdict check 1: VERIFICATION_FAILED takes priority (even if PASSED also appears)

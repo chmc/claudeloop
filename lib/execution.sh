@@ -179,6 +179,14 @@ run_claude_pipeline() {
     sleep "${_SENTINEL_POLL:-1}"
   done
 
+  # Wait for Claude CLI to write exit code (avoids race with stream processor exit)
+  _ec_wait=0
+  _ec_max=${_EXIT_CODE_WAIT:-5}
+  while [ ! -s "$_exit_tmp" ] && [ "$_ec_wait" -lt "$_ec_max" ]; do
+    sleep 1
+    _ec_wait=$((_ec_wait + 1))
+  done
+
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true

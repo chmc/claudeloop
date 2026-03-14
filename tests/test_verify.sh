@@ -448,6 +448,23 @@ STUB
   [ "$status" -eq 1 ]
 }
 
+@test "check_verdict: passes when exit code non-zero but result event found (pipeline race)" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf '{"type":"result","subtype":"success","cost_usd":0.05}\n' >> "$log_file"
+  printf 'All checks passed.\nVERIFICATION_PASSED\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "1"
+  [ "$status" -eq 0 ]
+}
+
+@test "check_verdict: fails when exit code non-zero and no result event" {
+  local log_file="$TEST_DIR/verdict_test.log"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n' > "$log_file"
+  printf 'VERIFICATION_PASSED\n' >> "$log_file"
+  run check_verdict "$log_file" "1" "Verification" "1"
+  [ "$status" -eq 1 ]
+}
+
 # =============================================================================
 # Original verify_phase tests (continued)
 # =============================================================================

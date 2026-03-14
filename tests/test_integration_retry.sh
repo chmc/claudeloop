@@ -44,6 +44,7 @@ setup() {
   export TEST_DIR
   export CLAUDELOOP="${CLAUDELOOP_DIR}/claudeloop"
   export _SENTINEL_POLL=0.1
+  export _EXIT_CODE_WAIT=0
 
   # Initialize git repo
   git -C "$TEST_DIR" init -q

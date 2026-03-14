@@ -186,10 +186,14 @@ $_err_ctx
     run_claude_pipeline "$_rp_prompt" "$_rp_phase" "$_rp_log" "$_rp_raw"
 
     if [ "$_LAST_CLAUDE_EXIT" -ne 0 ]; then
-      print_warning "Phase $_rp_phase: refactoring failed (exit code $_LAST_CLAUDE_EXIT)"
-      # Preserve partial work from crash
-      auto_commit_changes "$_rp_phase" "auto-commit after crash"
-      continue
+      if has_successful_session "$_rp_log"; then
+        log_ts "Phase $_rp_phase: exit code $_LAST_CLAUDE_EXIT but successful session detected — continuing"
+      else
+        print_warning "Phase $_rp_phase: refactoring failed (exit code $_LAST_CLAUDE_EXIT)"
+        # Preserve partial work from crash
+        auto_commit_changes "$_rp_phase" "auto-commit after crash"
+        continue
+      fi
     fi
 
     # Auto-commit any uncommitted refactoring changes

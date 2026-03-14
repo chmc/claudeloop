@@ -173,3 +173,19 @@ teardown() { rm -rf "$_tmpdir"; }
   [ "$(get_phase_fail_reason 1)" = "empty_log" ]
   [ "$(get_phase_consec_fail 1)" = "1" ]
 }
+
+# --- run_claude_pipeline: exit code wait loop ---
+
+@test "run_claude_pipeline: waits for exit code file when sentinel fires before exit_tmp written" {
+  # Verify source code has the wait loop for $_exit_tmp after sentinel detection
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # The wait loop should exist between the sentinel loop and the kill command
+  local sentinel_done_line kill_line wait_loop_line
+  sentinel_done_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  wait_loop_line=$(grep -n 'while \[ ! -s "$_exit_tmp" \]' "$src" | head -1 | cut -d: -f1)
+  [ -n "$wait_loop_line" ]
+  # Wait loop must be after sentinel loop and before kill
+  [ "$wait_loop_line" -gt "$sentinel_done_line" ]
+  [ "$wait_loop_line" -lt "$kill_line" ]
+}
