@@ -50,13 +50,13 @@ $_brp_file_sizes
 
 ## Steps
 1. Read the largest file listed above
-2. Any source file over 200 lines MUST be split into focused modules
+2. Any source file over 350 lines MUST be split into focused modules
 3. Extract related functions into their own files (e.g., utils, handlers, types)
 4. Update imports — keep the same public API from the original file
 5. Run the test suite to verify nothing broke
 6. Commit with message: \"refactor: restructure phase $_brp_phase output\"
 
-If ALL files are under 200 lines and well-organized, do nothing."
+If ALL files are under 350 lines and well-organized, do nothing."
 }
 
 # verify_refactor(phase_num [pre_sha])
