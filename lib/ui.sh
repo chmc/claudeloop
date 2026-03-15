@@ -8,6 +8,7 @@ COLOR_GREEN='\033[0;32m'
 COLOR_YELLOW='\033[1;33m'
 COLOR_RED='\033[0;31m'
 COLOR_BLUE='\033[0;34m'
+COLOR_CYAN='\033[0;36m'
 COLOR_RESET='\033[0m'
 
 # Simple mode flag (no fancy UI)
@@ -53,25 +54,23 @@ print_substep_header() {
   log_live "$1 $2"
 }
 
-# Print startup logo (space ghost)
+# Print startup logo (block letters with gradient)
 print_logo() {
   [ "$SIMPLE_MODE" = "true" ] && return 0
-  printf '%b' "${COLOR_BLUE}"
-  cat <<'EOF'
-    *  ·  .  *  ·  .  *  ·  .
-
-          .-""""""""-.
-    .    /  ◉      ◉  \    .
-     ·  |    .---.     |   ·
-    .   |   /~~~~~\    |    .
-     ·   \  `-----'   /   ·
-    .     `.~~~~~~~~~.'     .
-     ·   /  )       (  \   ·
-    .   /  /  ) ( (  \  \   .
-        ~~   ~~   ~~   ~~
-
-EOF
-  printf '%b' "${COLOR_RESET}"
+  printf '%b\n' ""
+  printf '%b\n' "${COLOR_BLUE}   ██████╗ ██╗      █████╗ ██╗   ██╗██████╗ ███████╗"
+  printf '%b\n' "${COLOR_BLUE}  ██╔════╝ ██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝"
+  printf '%b\n' "${COLOR_BLUE}  ██║      ██║     ███████║██║   ██║██║  ██║█████╗"
+  printf '%b\n' "${COLOR_CYAN}  ██║      ██║     ██╔══██║██║   ██║██║  ██║██╔══╝"
+  printf '%b\n' "${COLOR_CYAN}  ╚██████╗ ███████╗██║  ██║╚██████╔╝██████╔╝███████╗"
+  printf '%b\n' "${COLOR_CYAN}   ╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝"
+  printf '%b\n' "${COLOR_CYAN}       ██╗      ██████╗  ██████╗ ██████╗"
+  printf '%b\n' "${COLOR_GREEN}       ██║     ██╔═══██╗██╔═══██╗██╔══██╗"
+  printf '%b\n' "${COLOR_GREEN}       ██║     ██║   ██║██║   ██║██████╔╝"
+  printf '%b\n' "${COLOR_GREEN}       ██║     ██║   ██║██║   ██║██╔═══╝"
+  printf '%b\n' "${COLOR_GREEN}       ███████╗╚██████╔╝╚██████╔╝██║"
+  printf '%b\n' "${COLOR_GREEN}       ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝${COLOR_RESET}"
+  printf '%b\n' ""
   printf '        claudeloop%s\n\n' "${VERSION:+ v${VERSION}}"
 }
 
