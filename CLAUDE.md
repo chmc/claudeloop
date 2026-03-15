@@ -23,7 +23,7 @@ Before starting any work (planning, coding, committing), check the current branc
 
 ## Documentation
 
-Update documentation README.md QUICKSTART.md when implementation is changed
+When implementation is changed, check if the change affects user-facing behavior (CLI options, workflows, defaults, install steps, output format). If so, update stale sections in README.md and QUICKSTART.md, or add new sections for new features.
 
 ### ADR workflow (mandatory)
 
