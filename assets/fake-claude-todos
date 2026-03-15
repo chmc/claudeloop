@@ -1,0 +1,72 @@
+#!/bin/sh
+# Fake Claude CLI for todo tracking demo.
+# Standalone wrapper (not using tests/fake_claude) for paced NDJSON output.
+# Single call: execution with TodoWrite events spaced for GIF recording.
+
+FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+
+# Call counting
+count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+cat > /dev/null  # consume stdin
+
+case "$count" in
+  1)
+    # Execution call — TodoWrite with progressive completion
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.3
+
+    # Initial todo list: 4 pending items
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing handlers","status":"pending"},{"content":"Analyze error patterns","status":"pending"},{"content":"Implement error wrappers","status":"pending"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_td_001"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_001"}\n'
+    sleep 1.5
+
+    # Read source file
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/app.js"},"id":"toolu_td_010"}\n'
+    printf '{"type":"tool_result","content":"const express = require('"'"'express'"'"');\\nconst app = express();\\napp.get('"'"'/users'"'"', (req, res) => {\\n  db.query('"'"'SELECT * FROM users'"'"')\\n    .then(users => res.json(users));\\n});","id":"toolu_td_010"}\n'
+
+    # Update: 1 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing handlers","status":"completed"},{"content":"Analyze error patterns","status":"in_progress"},{"content":"Implement error wrappers","status":"pending"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_td_002"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_002"}\n'
+    sleep 1.5
+
+    # Read another file
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/utils.js"},"id":"toolu_td_011"}\n'
+    printf '{"type":"tool_result","content":"function formatError(err) {\\n  return { message: err.message, code: err.code || 500 };\\n}\\nmodule.exports = { formatError };","id":"toolu_td_011"}\n'
+
+    # Update: 2 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing handlers","status":"completed"},{"content":"Analyze error patterns","status":"completed"},{"content":"Implement error wrappers","status":"in_progress"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_td_003"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_003"}\n'
+    sleep 1.5
+
+    # Edit files
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/app.js","new_string":"app.get('"'"'/users'"'"', asyncHandler(async (req, res) => {"},"id":"toolu_td_012"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_012"}\n'
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/utils.js","new_string":"class AppError extends Error {"},"id":"toolu_td_013"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_013"}\n'
+
+    # Update: 3 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing handlers","status":"completed"},{"content":"Analyze error patterns","status":"completed"},{"content":"Implement error wrappers","status":"completed"},{"content":"Run test suite","status":"in_progress"}]},"id":"toolu_td_004"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_004"}\n'
+    sleep 1.5
+
+    # Run tests
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_td_014"}\n'
+    printf '{"type":"tool_result","content":"PASS src/app.test.js\\n  ✓ GET /users returns list (12ms)\\n  ✓ GET /users handles errors (8ms)\\n  ✓ POST /users validates input (5ms)\\n  ✓ error wrapper catches async errors (3ms)\\n\\nPASS src/utils.test.js\\n  ✓ formatError formats message (2ms)\\n  ✓ AppError sets status code (1ms)\\n\\nTests: 6 passed, 6 total","id":"toolu_td_014"}\n'
+
+    # All completed
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing handlers","status":"completed"},{"content":"Analyze error patterns","status":"completed"},{"content":"Implement error wrappers","status":"completed"},{"content":"Run test suite","status":"completed"}]},"id":"toolu_td_005"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_td_005"}\n'
+    sleep 1
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Error handling implemented. Added async wrappers and AppError class. All 6 tests pass.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.04,"duration_ms":18000,"num_turns":5,"usage":{"input_tokens":6200,"output_tokens":1800},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":6200,"output_tokens":1800}}}\n'
+    ;;
+  *)
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    printf '{"type":"result","total_cost_usd":0.001,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":100,"output_tokens":20}}}\n'
+    ;;
+esac
+
+exit 0

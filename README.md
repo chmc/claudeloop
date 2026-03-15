@@ -1,68 +1,134 @@
 # ClaudeLoop
 
+[![GitHub release](https://img.shields.io/github/v/release/chmc/claudeloop)](https://github.com/chmc/claudeloop/releases)
 [![Sponsor](https://img.shields.io/github/sponsors/chmc?style=social)](https://github.com/sponsors/chmc)
 
-A phase-by-phase execution tool that spawns fresh Claude CLI instances for each phase of a multi-phase plan, preventing context degradation and ensuring focused execution.
+> **Fresh context for every phase.** ClaudeLoop splits complex projects into phases and gives each one a brand-new Claude CLI instance — so phase 10 is as sharp as phase 1.
 
-## Install / Update
+<p align="center">
+  <img src="assets/demo-dryrun.gif" alt="ClaudeLoop dry-run demo" width="700">
+</p>
+
+## The Problem
+
+Long-running AI coding sessions hit a wall: context fills up, the model forgets earlier work, and quality drops. Other tools run everything in one session and hope for the best.
+
+ClaudeLoop takes a different approach: your plan is split into phases, each phase gets a **fresh Claude instance**, and progress is saved between phases. If something fails, smart retries with escalating strategies handle it automatically.
+
+<p align="center">
+  <img src="assets/demo-execution.gif" alt="ClaudeLoop execution demo" width="700">
+</p>
+
+## Features
+
+🔄 **Fresh context every phase** — Each phase spawns a new Claude CLI instance. No context window degradation.
+
+🔁 **Smart retries** — Exponential backoff with automatic strategy rotation: full → stripped → targeted error-focused prompts.
+
+📋 **Dependency graph** — Phases declare dependencies. ClaudeLoop resolves execution order automatically.
+
+📺 **Live monitoring** — `claudeloop --monitor` from a second terminal. Spinner shows todo/task progress.
+
+✅ **Verification** — `--verify` spawns a read-only Claude to check each phase's output.
+
+🔧 **Auto-refactor** — `--refactor` runs automatic code quality passes after each phase.
+
+🤖 **AI plan decomposition** — `--ai-parse` turns free-form notes into structured phases.
+
+🛡️ **Safe interrupts** — Ctrl+C saves progress. `--continue` resumes exactly where you left off.
+
+## See It In Action
+
+**Todo tracking** — Claude's task lists render as an interactive panel:
+
+<p align="center">
+  <img src="assets/demo-todos.gif" alt="Todo tracking demo" width="700">
+</p>
+
+**Verification** — a read-only Claude checks each phase's work:
+
+<p align="center">
+  <img src="assets/demo-verify.gif" alt="Verification demo" width="700">
+</p>
+
+**Auto-refactor** — automatic code quality improvements after each phase:
+
+<p align="center">
+  <img src="assets/demo-refactor.gif" alt="Auto-refactor demo" width="700">
+</p>
+
+## Install
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
 ```
 
-```sh
-claudeloop --version   # verify installation
-```
+See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative install methods.
 
-For full setup instructions see **[QUICKSTART.md](QUICKSTART.md)**.
+## Quick Start
 
-
-### Beta versions
-
-To install the latest beta:
-```sh
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | BETA=1 sh
-```
-
-To install a specific version (stable or beta):
-```sh
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | VERSION=0.14.0-beta.1 sh
-```
-
-**Uninstall:**
-```sh
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/uninstall.sh | sh
-```
-
-Releases and changelogs: [GitHub Releases](https://github.com/chmc/claudeloop/releases) — each release includes a download count badge and a structured changelog grouped by features, bug fixes, and other changes.
-
-## Why ClaudeLoop?
-
-Long-running tasks suffer from context window exhaustion and accumulated confusion. ClaudeLoop solves this by giving each phase a fresh Claude instance while maintaining overall progress.
-
-## Plan file format
+**1. Write a plan** — create `PLAN.md` in your project:
 
 ```markdown
-# Project Title
+# My Project
 
-## Phase 1: Title
-Description of what Claude should do.
+## Phase 1: Setup
+Initialize the project structure and install dependencies.
 
-## Phase 2: Title
+## Phase 2: Core Logic
 **Depends on:** Phase 1
 
-Description of the next task.
+Implement the main business logic.
+
+## Phase 3: Tests
+**Depends on:** Phase 2
+
+Write tests for all core functionality.
 ```
 
-Rules:
-- Headers must be `## Phase N: Title` where N is a number in ascending order (case-insensitive: `Phase`, `phase`, `PHASE` all work)
-- Gaps and decimals are allowed: `1, 2, 2.5, 2.6, 3` is valid (useful for inserting sub-phases)
-- Dependencies: `**Depends on:** Phase X, Phase Y` on the first line after the header
-- Phases can only depend on earlier phases
+**2. Validate** your plan:
 
-See `examples/PLAN.md.example` for a complete example.
+```sh
+claudeloop --dry-run
+```
 
-## Options
+**3. Execute:**
+
+```sh
+claudeloop
+```
+
+## How It Works
+
+```mermaid
+flowchart LR
+    A["📄 Parse PLAN.md"] --> B["🔍 Find next phase"]
+    B --> C["🚀 Spawn fresh Claude"]
+    C --> D{"✅ Success?"}
+    D -- Yes --> E["💾 Save progress"]
+    D -- No --> F["🔁 Retry with backoff"]
+    F --> C
+    E --> B
+    E -- "All done" --> G["🎉 Complete"]
+```
+
+1. Parse `PLAN.md` — extract phases and dependencies
+2. Find the next runnable phase (dependencies met, not yet completed)
+3. Spawn a fresh `claude` CLI instance with the phase description
+4. Optionally verify with a fresh read-only Claude instance (`--verify`)
+5. Optionally auto-refactor code structure (`--refactor`)
+6. Save result to `PROGRESS.md`
+7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
+8. Repeat until all phases complete
+
+Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
+
+If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it reports added/removed/renumbered phases and carries forward progress by matching phase titles.
+
+---
+
+<details>
+<summary><strong>All CLI Options</strong></summary>
 
 ```
 --plan <file>        Plan file to execute (default: PLAN.md)
@@ -92,7 +158,10 @@ See `examples/PLAN.md.example` for a complete example.
 --help               Show help
 ```
 
-## Config file
+</details>
+
+<details>
+<summary><strong>Config File</strong></summary>
 
 On first run, ClaudeLoop automatically creates `.claudeloop/.claudeloop.conf` with the active settings. You can then run `claudeloop` with no arguments and it will reuse those settings.
 
@@ -130,7 +199,35 @@ SKIP_PERMISSIONS=true
 
 The conf file is plain text — edit or delete it freely. One-time flags (`--reset`, `--phase`, `--mark-complete`, `--dry-run`, `--verbose`, `--continue`) are never persisted.
 
-## Custom phase prompts
+</details>
+
+<details>
+<summary><strong>Plan File Format</strong></summary>
+
+```markdown
+# Project Title
+
+## Phase 1: Title
+Description of what Claude should do.
+
+## Phase 2: Title
+**Depends on:** Phase 1
+
+Description of the next task.
+```
+
+Rules:
+- Headers must be `## Phase N: Title` where N is a number in ascending order (case-insensitive: `Phase`, `phase`, `PHASE` all work)
+- Gaps and decimals are allowed: `1, 2, 2.5, 2.6, 3` is valid (useful for inserting sub-phases)
+- Dependencies: `**Depends on:** Phase X, Phase Y` on the first line after the header
+- Phases can only depend on earlier phases
+
+See `examples/PLAN.md.example` for a complete example.
+
+</details>
+
+<details>
+<summary><strong>Custom Phase Prompts</strong></summary>
 
 By default ClaudeLoop generates a prompt for each phase from the phase title and description.
 Pass `--phase-prompt <file>` to use your own template instead.
@@ -163,7 +260,10 @@ You can also set the template path in `.claudeloop/.claudeloop.conf`:
 PHASE_PROMPT_FILE=prompts/my-template.md
 ```
 
-## AI plan decomposition
+</details>
+
+<details>
+<summary><strong>AI Plan Decomposition</strong></summary>
 
 Instead of writing a structured plan manually, use `--ai-parse` to let AI decompose any plan file into phases:
 
@@ -187,66 +287,10 @@ The AI parser:
 
 The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--continue`.
 
-## How it works
+</details>
 
-1. Parse `PLAN.md` — extract phases and dependencies
-2. Find the next runnable phase (dependencies met, not yet completed)
-3. Spawn a fresh `claude` CLI instance with the phase description
-4. Optionally verify with a fresh read-only Claude instance (`--verify`)
-5. Optionally auto-refactor code structure (`--refactor`) with up to 20 attempts (configurable via `--refactor-max-retries`), preserving work between retries and discarding on final failure
-6. Save result to `PROGRESS.md`
-7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
-8. Repeat until all phases complete
-
-Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
-
-If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it reports added/removed/renumbered phases and carries forward progress by matching phase titles. Phases not found in the new plan are treated as removed; new phases start as pending.
-
-## Architecture decisions
-
-Key design decisions are recorded in [docs/adr/](docs/adr/).
-
-## Project structure
-
-```
-claudeloop/
-├── claudeloop              # main executable
-├── lib/
-│   ├── parser.sh          # phase parsing
-│   ├── dependencies.sh    # dependency resolution
-│   ├── progress.sh        # progress tracking
-│   ├── retry.sh           # retry + backoff
-│   ├── ui.sh              # terminal output
-│   ├── ai_parser.sh       # AI plan decomposition
-│   ├── verify.sh          # phase verification
-│   └── release_notes.sh   # release changelog formatter
-├── tests/
-│   ├── run_all_tests.sh
-│   └── test_*.sh
-└── examples/
-    └── PLAN.md.example
-```
-
-## Output and logs
-
-Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`. ClaudeLoop also writes a combined live log to `.claudeloop/live.log`.
-
-When Claude uses task lists or todo lists, a compact summary is shown on the spinner line:
-
-    / 30s Todo 3/8
-    - 12s Task 2/5
-
-Inline summaries also appear as `[Tasks: 1/3 done]` and `[Todos: 3/8 done]`.
-
-To watch progress live from a second terminal, use:
-
-    claudeloop --monitor
-
-Or to tail the raw log directly:
-
-    tail -F .claudeloop/live.log
-
-## Troubleshooting
+<details>
+<summary><strong>Troubleshooting</strong></summary>
 
 **`claude: command not found`** — install the Claude CLI and ensure it's in your PATH
 
@@ -271,29 +315,14 @@ If the repo has uncommitted changes from the prior session, ClaudeLoop detects t
 - If `.claudeloop/ai-parsed-plan.md` exists: `[r]ecover` (recommended) switches to the AI-parsed plan and reconstructs progress from logs automatically, `[c]ontinue`, or `[a]bort`
 - If no AI-parsed plan exists: `[c]ontinue` or `[a]bort` (with `--reset` hint)
 
-## Testing
+</details>
 
-```bash
-./tests/run_all_tests.sh        # run all tests
-bats tests/test_parser.sh       # run one test file
-shellcheck -s sh lib/retry.sh   # lint
-./tests/mutate.sh               # mutation testing (all lib files)
-./tests/mutate.sh lib/retry.sh  # mutation testing (single file)
-```
+## Documentation
 
-Mutation testing applies small faults to source code one at a time, runs the corresponding tests, and reports which mutations survived undetected. Use `--with-deletions` to include line-deletion mutations and `--with-integration` to re-test survivors against the integration test suite.
-
-### Automated mutation testing
-
-A GitHub Actions workflow runs mutation testing weekly (Monday 06:00 UTC). You can also trigger it manually:
-
-```bash
-gh workflow run "Mutation Testing"                              # all lib files
-gh workflow run "Mutation Testing" -f file=lib/retry.sh         # single file
-gh workflow run "Mutation Testing" -f with-deletions=true       # include deletions
-```
-
-Results appear in the workflow's job summary. When survivors exist, the full report is available as a downloadable artifact.
+- [Quick Start Guide](QUICKSTART.md)
+- [Example Plan](examples/PLAN.md.example)
+- [Architecture Decisions](docs/adr/)
+- [Releases & Changelogs](https://github.com/chmc/claudeloop/releases)
 
 ## Credits
 

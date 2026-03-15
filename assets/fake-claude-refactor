@@ -1,0 +1,159 @@
+#!/bin/sh
+# Fake Claude CLI for auto-refactor demo.
+# 4 calls: execution → verification → refactoring → refactor-verification.
+# Calls 1 and 3 write real files so git diff detects changes.
+# Paced NDJSON output for GIF recording.
+
+FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+
+# Call counting
+count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+cat > /dev/null  # consume stdin
+
+case "$count" in
+  1)
+    # Execution call — create src/cache.js
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll implement the caching layer.\\n"}]}}\n'
+
+    # Actually write the file to disk
+    mkdir -p src
+    cat > src/cache.js << 'SRCEOF'
+const cache = new Map();
+const TTL = 60000;
+
+function get(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > TTL) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function set(key, value) {
+  cache.set(key, { value, ts: Date.now() });
+}
+
+function clear() {
+  cache.clear();
+}
+
+function stats() {
+  return { size: cache.size, keys: [...cache.keys()] };
+}
+
+module.exports = { get, set, clear, stats };
+SRCEOF
+
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/cache.js"},"id":"toolu_rf_001"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_rf_001"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"const c = require('"'"'./src/cache'"'"'); c.set('"'"'a'"'"',1); console.log(c.get('"'"'a'"'"'))\""},"id":"toolu_rf_002"}\n'
+    printf '{"type":"tool_result","content":"1","id":"toolu_rf_002"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Caching layer created with get/set/clear/stats. Verified with basic test.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.02,"duration_ms":8000,"num_turns":2,"usage":{"input_tokens":3000,"output_tokens":800},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":3000,"output_tokens":800}}}\n'
+    ;;
+  2)
+    # Verification call — read-only check of execution
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/cache.js"},"id":"toolu_rf_010"}\n'
+    printf '{"type":"tool_result","content":"const cache = new Map();\\nconst TTL = 60000;\\n\\nfunction get(key) { ... }\\nfunction set(key, value) { ... }\\nfunction clear() { cache.clear(); }\\nfunction stats() { return { size: cache.size }; }\\n\\nmodule.exports = { get, set, clear, stats };","id":"toolu_rf_010"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"const c = require('"'"'./src/cache'"'"'); c.set('"'"'x'"'"',42); console.log(c.get('"'"'x'"'"')); c.clear(); console.log(c.stats())\""},"id":"toolu_rf_011"}\n'
+    printf '{"type":"tool_result","content":"42\\n{ size: 0, keys: [] }","id":"toolu_rf_011"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Cache module works correctly. TTL expiration, get/set, clear, and stats all functional.\\nVERIFICATION_PASSED\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.015,"duration_ms":6000,"num_turns":2,"usage":{"input_tokens":2500,"output_tokens":600},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":2500,"output_tokens":600}}}\n'
+    ;;
+  3)
+    # Refactoring call — modify src/cache.js (extract helper)
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll extract the TTL check into a dedicated helper and split stats into its own module.\\n"}]}}\n'
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/cache.js"},"id":"toolu_rf_020"}\n'
+    printf '{"type":"tool_result","content":"const cache = new Map();\\nconst TTL = 60000;\\n...","id":"toolu_rf_020"}\n'
+    sleep 1
+
+    # Actually modify the file on disk
+    cat > src/cache.js << 'SRCEOF'
+const cache = new Map();
+const TTL = 60000;
+
+function isExpired(entry) {
+  return Date.now() - entry.ts > TTL;
+}
+
+function get(key) {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (isExpired(entry)) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function set(key, value) {
+  cache.set(key, { value, ts: Date.now() });
+}
+
+function clear() {
+  cache.clear();
+}
+
+function stats() {
+  return { size: cache.size, keys: [...cache.keys()] };
+}
+
+module.exports = { get, set, clear, stats };
+SRCEOF
+
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/cache.js","new_string":"function isExpired(entry) {\\n  return Date.now() - entry.ts > TTL;\\n}"},"id":"toolu_rf_021"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_rf_021"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"const c = require('"'"'./src/cache'"'"'); c.set('"'"'a'"'"',1); console.log(c.get('"'"'a'"'"'))\""},"id":"toolu_rf_022"}\n'
+    printf '{"type":"tool_result","content":"1","id":"toolu_rf_022"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Extracted isExpired helper. Tests still pass.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.018,"duration_ms":7000,"num_turns":3,"usage":{"input_tokens":2800,"output_tokens":700},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":2800,"output_tokens":700}}}\n'
+    ;;
+  4)
+    # Refactor verification call — check refactoring preserved behavior
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff --stat"},"id":"toolu_rf_030"}\n'
+    printf '{"type":"tool_result","content":" src/cache.js | 6 ++++--\\n 1 file changed, 4 insertions(+), 2 deletions(-)","id":"toolu_rf_030"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"const c = require('"'"'./src/cache'"'"'); c.set('"'"'test'"'"',99); console.log(c.get('"'"'test'"'"')); c.clear(); console.log(c.stats())\""},"id":"toolu_rf_031"}\n'
+    printf '{"type":"tool_result","content":"99\\n{ size: 0, keys: [] }","id":"toolu_rf_031"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Refactoring preserved all behavior. The isExpired extraction is a clean structural improvement.\\nVERIFICATION_PASSED\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.012,"duration_ms":5000,"num_turns":2,"usage":{"input_tokens":2200,"output_tokens":500},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":2200,"output_tokens":500}}}\n'
+    ;;
+  *)
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    printf '{"type":"result","total_cost_usd":0.001,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":100,"output_tokens":20}}}\n'
+    ;;
+esac
+
+exit 0

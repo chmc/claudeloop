@@ -145,6 +145,87 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - `--refactor` adds up to 40 more API calls per phase (20 attempts × refactoring + verification each); up to 42 total with `--verify`
 - Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run
 
+## Output and Logs
+
+Claude's output streams live to the terminal as each phase runs. All output is also saved to `.claudeloop/logs/phase-N.log`. ClaudeLoop also writes a combined live log to `.claudeloop/live.log`.
+
+When Claude uses task lists or todo lists, a compact summary is shown on the spinner line:
+
+    / 30s Todo 3/8
+    - 12s Task 2/5
+
+Inline summaries also appear as `[Tasks: 1/3 done]` and `[Todos: 3/8 done]`.
+
+To watch progress live from a second terminal, use:
+
+    claudeloop --monitor
+
+Or to tail the raw log directly:
+
+    tail -F .claudeloop/live.log
+
+Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run.
+
+## Project Structure
+
+```
+claudeloop/
+├── claudeloop              # main executable
+├── lib/
+│   ├── parser.sh          # phase parsing
+│   ├── dependencies.sh    # dependency resolution
+│   ├── progress.sh        # progress tracking
+│   ├── retry.sh           # retry + backoff
+│   ├── ui.sh              # terminal output
+│   ├── ai_parser.sh       # AI plan decomposition
+│   ├── verify.sh          # phase verification
+│   └── release_notes.sh   # release changelog formatter
+├── tests/
+│   ├── run_all_tests.sh
+│   └── test_*.sh
+└── examples/
+    └── PLAN.md.example
+```
+
+## Testing
+
+```bash
+./tests/run_all_tests.sh        # run all tests
+bats tests/test_parser.sh       # run one test file
+shellcheck -s sh lib/retry.sh   # lint
+./tests/mutate.sh               # mutation testing (all lib files)
+./tests/mutate.sh lib/retry.sh  # mutation testing (single file)
+```
+
+Mutation testing applies small faults to source code one at a time, runs the corresponding tests, and reports which mutations survived undetected. Use `--with-deletions` to include line-deletion mutations and `--with-integration` to re-test survivors against the integration test suite.
+
+### Automated mutation testing
+
+A GitHub Actions workflow runs mutation testing weekly (Monday 06:00 UTC). You can also trigger it manually:
+
+```bash
+gh workflow run "Mutation Testing"                              # all lib files
+gh workflow run "Mutation Testing" -f file=lib/retry.sh         # single file
+gh workflow run "Mutation Testing" -f with-deletions=true       # include deletions
+```
+
+Results appear in the workflow's job summary. When survivors exist, the full report is available as a downloadable artifact.
+
+## Detailed Execution Flow
+
+1. Parse `PLAN.md` — extract phases and dependencies
+2. Find the next runnable phase (dependencies met, not yet completed)
+3. Spawn a fresh `claude` CLI instance with the phase description
+4. Optionally verify with a fresh read-only Claude instance (`--verify`)
+5. Optionally auto-refactor code structure (`--refactor`) with up to 20 attempts (configurable via `--refactor-max-retries`), preserving work between retries and discarding on final failure
+6. Save result to `PROGRESS.md`
+7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full phase description, later retries strip boilerplate and focus on the specific error
+8. Repeat until all phases complete
+
+Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
+
+If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it reports added/removed/renumbered phases and carries forward progress by matching phase titles. Phases not found in the new plan are treated as removed; new phases start as pending.
+
 ## CI
 
 Mutation testing runs automatically every Monday via GitHub Actions. Trigger it manually with `gh workflow run "Mutation Testing"`. Results appear in the job summary; survivor reports are uploaded as artifacts.

@@ -1,0 +1,65 @@
+#!/bin/sh
+# Fake Claude CLI for verification demo.
+# Two calls: execution (call 1) + verification (call 2).
+# Paced NDJSON output for GIF recording.
+
+FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+
+# Call counting
+count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+cat > /dev/null  # consume stdin
+
+case "$count" in
+  1)
+    # Execution call — implement input validation
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll add input validation to the API routes.\\n"}]}}\n'
+
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/routes.js","new_string":"function validateTodoInput(req, res, next) {"},"id":"toolu_vr_001"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_vr_001"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/validators.js"},"id":"toolu_vr_002"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_vr_002"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_vr_003"}\n'
+    printf '{"type":"tool_result","content":"PASS src/routes.test.js\\n  ✓ POST /todos validates title (5ms)\\n  ✓ POST /todos rejects empty body (3ms)\\n  ✓ PUT /todos/:id validates fields (4ms)\\n  ✓ GET /todos returns list (8ms)\\n\\nTests: 4 passed, 4 total","id":"toolu_vr_003"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Input validation added with middleware pattern. All 4 tests pass.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.02,"duration_ms":9000,"num_turns":3,"usage":{"input_tokens":3500,"output_tokens":900},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":3500,"output_tokens":900}}}\n'
+    ;;
+  2)
+    # Verification call — read-only check
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Running verification checks on the input validation changes.\\n"}]}}\n'
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff --stat HEAD~1"},"id":"toolu_vr_010"}\n'
+    printf '{"type":"tool_result","content":" src/routes.js     | 18 +++++++++++++-----\\n src/validators.js | 25 +++++++++++++++++++++++++\\n 2 files changed, 38 insertions(+), 5 deletions(-)","id":"toolu_vr_010"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_vr_011"}\n'
+    printf '{"type":"tool_result","content":"PASS src/routes.test.js\\n  ✓ POST /todos validates title (5ms)\\n  ✓ POST /todos rejects empty body (3ms)\\n  ✓ PUT /todos/:id validates fields (4ms)\\n  ✓ GET /todos returns list (8ms)\\n\\nTests: 4 passed, 4 total","id":"toolu_vr_011"}\n'
+    sleep 1
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/validators.js"},"id":"toolu_vr_012"}\n'
+    printf '{"type":"tool_result","content":"const { body, param, validationResult } = require('"'"'express-validator'"'"');\\n\\nconst validateTodo = [\\n  body('"'"'title'"'"').trim().notEmpty().withMessage('"'"'Title is required'"'"'),\\n  body('"'"'completed'"'"').optional().isBoolean(),\\n  (req, res, next) => {\\n    const errors = validationResult(req);\\n    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });\\n    next();\\n  }\\n];\\n\\nmodule.exports = { validateTodo };","id":"toolu_vr_012"}\n'
+    sleep 0.5
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All checks pass. The validation middleware is correctly implemented using express-validator, tests cover the key cases, and no issues found.\\nVERIFICATION_PASSED\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.015,"duration_ms":8000,"num_turns":3,"usage":{"input_tokens":2800,"output_tokens":700},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":2800,"output_tokens":700}}}\n'
+    ;;
+  *)
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    printf '{"type":"result","total_cost_usd":0.001,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":100,"output_tokens":20}}}\n'
+    ;;
+esac
+
+exit 0
