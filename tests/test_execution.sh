@@ -144,6 +144,95 @@ teardown() { rm -rf "$_tmpdir"; }
   [ -z "$output" ]
 }
 
+# --- build_default_prompt: signal file instruction ---
+
+@test "build_default_prompt: includes signal file instruction" {
+  run build_default_prompt "5" "Review" "Check everything works" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"signals/phase-"* ]]
+  [[ "$output" == *"no code changes"* ]]
+}
+
+# --- evaluate_phase_result: signal file tests ---
+
+# Helper to set up stubs needed by evaluate_phase_result
+_setup_epr_stubs() {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/retry.sh"
+  PROGRESS_FILE="$_tmpdir/progress"
+  PLAN_FILE="$_tmpdir/plan"
+  CURRENT_PHASE=""
+  REFACTOR_PHASES="false"
+  # Stub functions called by evaluate_phase_result
+  update_phase_status() { phase_set STATUS "$1" "$2"; }
+  write_progress() { :; }
+  print_error() { :; }
+  print_warning() { :; }
+  print_success() { :; }
+  auto_commit_changes() { :; }
+  run_refactor_if_needed() { :; }
+  run_adaptive_verification() { return 0; }
+}
+
+@test "evaluate_phase_result: succeeds with signal file + successful session despite no write actions" {
+  _setup_epr_stubs
+  local log="$_tmpdir/phase-1.log"
+  local raw="$_tmpdir/phase-1.raw.json"
+  # Log with successful session but no write actions
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$log"
+  printf '[Session: duration=30.0s turns=15 tokens=5000in/2000out]\n' >> "$log"
+  printf '=== RESPONSE ===\nAll checks passed.\n' >> "$log"
+  # Raw log with only read actions (no writes)
+  printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$raw"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
+  # Create signal file
+  mkdir -p .claudeloop/signals
+  printf 'Phase already implemented. Tests pass.\n' > ".claudeloop/signals/phase-1.md"
+  phase_set ATTEMPTS 1 "1"
+  run evaluate_phase_result 1 0 1 "$log" "$raw"
+  [ "$status" -eq 0 ]
+  rm -rf .claudeloop/signals
+}
+
+@test "evaluate_phase_result: fails with signal file but no successful session" {
+  _setup_epr_stubs
+  local log="$_tmpdir/phase-2.log"
+  local raw="$_tmpdir/phase-2.raw.json"
+  # Log with NO successful session (turns=0)
+  printf '=== EXECUTION START phase=2 attempt=1 ===\n' > "$log"
+  printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$log"
+  printf '=== RESPONSE ===\nDone.\n' >> "$log"
+  # Raw log with no write actions
+  printf '=== EXECUTION START phase=2 attempt=1 ===\n' > "$raw"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
+  # Create signal file
+  mkdir -p .claudeloop/signals
+  printf 'No changes needed.\n' > ".claudeloop/signals/phase-2.md"
+  phase_set ATTEMPTS 2 "1"
+  run evaluate_phase_result 2 0 1 "$log" "$raw"
+  [ "$status" -eq 1 ]
+  rm -rf .claudeloop/signals
+}
+
+@test "evaluate_phase_result: still fails without write actions or signal file" {
+  _setup_epr_stubs
+  local log="$_tmpdir/phase-3.log"
+  local raw="$_tmpdir/phase-3.raw.json"
+  # Log with successful session
+  printf '=== EXECUTION START phase=3 attempt=1 ===\n' > "$log"
+  printf '[Session: duration=30.0s turns=15 tokens=5000in/2000out]\n' >> "$log"
+  printf '=== RESPONSE ===\nAll done.\n' >> "$log"
+  # Raw log with no write actions
+  printf '=== EXECUTION START phase=3 attempt=1 ===\n' > "$raw"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
+  # NO signal file
+  rm -f ".claudeloop/signals/phase-3.md"
+  phase_set ATTEMPTS 3 "1"
+  run evaluate_phase_result 3 0 1 "$log" "$raw"
+  [ "$status" -eq 1 ]
+}
+
 # --- update_fail_reason() ---
 
 @test "update_fail_reason: same reason increments consec" {

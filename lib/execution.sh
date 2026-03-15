@@ -49,6 +49,7 @@ $_bdp_desc
 - Review recent git history and existing code before implementing
 - When done, ensure all changes are tested and working
 - Commit your changes when complete
+- If the phase requires no code changes (already implemented, verification-only), write a brief summary of your findings to .claudeloop/signals/phase-${_bdp_phase}.md explaining why no changes were needed
 ${_bdp_git}
 ## Task
 Implement the above phase completely. Make sure to:
@@ -267,6 +268,20 @@ evaluate_phase_result() {
 
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$_epr_raw"; then
+      # Allow no-change completion if signal file exists AND Claude had a real session
+      if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
+        log_verbose "execute_phase: phase $_epr_phase has no-changes signal file with successful session — accepting"
+        print_success "Phase $_epr_phase completed (no code changes needed — signal file present)"
+        update_phase_status "$_epr_phase" "completed"
+        auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
+        if [ "$REFACTOR_PHASES" = "true" ]; then
+          phase_set REFACTOR_STATUS "$_epr_phase" "pending"
+        fi
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        CURRENT_PHASE=""
+        run_refactor_if_needed "$_epr_phase"
+        return 0
+      fi
       if has_trapped_tool_calls "$_epr_raw"; then
         update_fail_reason "$_epr_phase" "trapped_tool_calls"
         log_verbose "execute_phase: phase $_epr_phase has tool calls trapped in thinking blocks"
@@ -358,6 +373,8 @@ execute_phase() {
   # Set current phase for interrupt handler
   CURRENT_PHASE="$phase_num"
   mkdir -p ".claudeloop/logs"
+  mkdir -p ".claudeloop/signals"
+  rm -f ".claudeloop/signals/phase-${phase_num}.md"
   log_verbose "execute_phase: phase=$phase_num title=$title"
 
   # Update status

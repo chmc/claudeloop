@@ -65,6 +65,7 @@ PHASE_NUMBERS         (space-separated ordered list, e.g. "1 2 2.5 2.6 3")
 VERIFY_PHASES         (true|false, default false)
 REFACTOR_PHASES       (true|false, default false)
 LIVE_LOG              (path to .claudeloop/live.log; empty string during dry-run)
+.claudeloop/signals/phase-N.md  (no-changes signal file; written by Claude when phase needs no code changes)
 ```
 
 Phase numbers may be decimals (e.g. `2.5`). The dot is replaced with underscore for variable
@@ -97,7 +98,7 @@ done
 | `lib/parser.sh` | `parse_plan` → sets all `PHASE_*_N` vars and `PHASE_COUNT` |
 | `lib/dependencies.sh` | `find_next_phase`, `is_phase_runnable`, `detect_dependency_cycles` (DFS, space-separated visited/stack strings) |
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
-| `lib/retry.sh` | `calculate_backoff`, `should_retry_phase`, `has_write_actions`, `retry_strategy`, `escalate_strategy`, `verify_mode`, `extract_error_context`, `extract_verify_error`, `build_retry_context` |
+| `lib/retry.sh` | `calculate_backoff`, `should_retry_phase`, `has_write_actions`, `has_signal_file`, `retry_strategy`, `escalate_strategy`, `verify_mode`, `extract_error_context`, `extract_verify_error`, `build_retry_context` |
 | `lib/stream_processor.sh` | `process_stream_json` (AWK-based stream parser), `inject_heartbeats` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning`, `log_verbose` |
 | `lib/config.sh` | `load_config`, `write_config`, `update_conf_key`, `run_setup_wizard` |
@@ -111,6 +112,7 @@ done
 ```
 main → parse_plan → init_progress → main_loop
   find_next_phase → execute_phase → verify_phase → refactor_phase → update_phase_status → write_progress
+  no-changes:  signal file (.claudeloop/signals/phase-N.md) + successful session → skip verification → complete
   on failure:  should_retry_phase → retry_strategy → calculate_backoff → sleep → retry (standard/stripped/targeted)
   on Ctrl+C:   handle_interrupt → rollback refactor (if active) → write_progress → save_state → exit 130
   --monitor:   run_monitor → tail -f .claudeloop/live.log

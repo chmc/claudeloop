@@ -788,3 +788,19 @@ teardown() { rm -f "$_log"; }
   [ "$status" -eq 0 ]
   echo "$output" | grep -q "test assertion failed"
 }
+
+# --- has_signal_file() ---
+
+@test "has_signal_file: returns 0 when signal file exists" {
+  mkdir -p ".claudeloop/signals"
+  printf 'No changes needed\n' > ".claudeloop/signals/phase-1.md"
+  run has_signal_file "1"
+  [ "$status" -eq 0 ]
+  rm -rf ".claudeloop/signals"
+}
+
+@test "has_signal_file: returns 1 when no signal file" {
+  rm -f ".claudeloop/signals/phase-99.md"
+  run has_signal_file "99"
+  [ "$status" -eq 1 ]
+}

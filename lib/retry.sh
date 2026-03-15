@@ -86,6 +86,14 @@ has_write_actions() {
   ' "$raw_log"
 }
 
+# Check if a no-changes signal file exists for a phase
+# Written by Claude when a phase requires no code changes (verification-only)
+# Args: $1 - phase number
+# Returns: 0 if signal file exists, 1 otherwise
+has_signal_file() {
+  [ -f ".claudeloop/signals/phase-${1}.md" ]
+}
+
 # Check if the most recent execution block contains tool call patterns
 # trapped inside thinking content (model formatting bug where tool calls
 # are emitted as XML inside thinking instead of proper tool_use blocks).

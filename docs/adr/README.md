@@ -36,3 +36,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0028](0028-decoupled-refactor-lifecycle.md) | Decoupled refactor lifecycle with persistent state | 2026-03-10 | Accepted |
 | [0029](0029-refactor-retry-improvements.md) | Refactor retry improvements | 2026-03-11 | Accepted |
 | [0030](0030-regression-based-refactor-verification.md) | Regression-based refactor verification | 2026-03-12 | Accepted |
+| [0031](0031-no-changes-signal-file.md) | No-changes signal file for verification-only phases | 2026-03-15 | Accepted |
