@@ -25,6 +25,10 @@ Before starting any work (planning, coding, committing), check the current branc
 
 When implementation is changed, check if the change affects user-facing behavior (CLI options, workflows, defaults, install steps, output format). If so, update stale sections in README.md and QUICKSTART.md, or add new sections for new features.
 
+### Visual assets (mandatory)
+
+When changes affect terminal output (logo, colors, spinners, progress display, phase formatting), regenerate all demo GIFs and screenshots via VHS tapes. See `assets/README.md` for commands. All tapes can run in parallel.
+
 ### ADR workflow (mandatory)
 
 When making an architectural decision (new pattern, technology choice, significant design change), create an ADR:
@@ -146,3 +150,5 @@ When found failing suites that are pre-existing, mandatory rule to fix them.
 ### Completion gate (mandatory)
 
 After all implementation and tests pass, run `/verify` before reporting the task as done. The verify skill selects appropriate checks (smoke, stub, GUI) based on which files changed. Skip only for documentation-only or test-only changes with no implementation modifications.
+
+If the change affects terminal output, also regenerate visual assets (`assets/README.md`) before reporting done.

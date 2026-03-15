@@ -55,7 +55,7 @@ Map changed files to functional categories. Pick the row(s) that match, then fol
 | Category | Examples | Execution mode | What to observe |
 |---|---|---|---|
 | **Plan parsing / dependencies** | Parser, dependency resolver, plan validation | `--dry-run` + stub execution | Phase ordering, dependency display, parsed plan output |
-| **UI / display / stream processing** | Terminal output, colors, spinners, progress display, live log | GUI + stub (Terminal.app with fake_claude `success_verbose`) | Logo, header, spinners, colors, phase icons, scrollback integrity, todo/task summaries, session summaries with cache tokens |
+| **UI / display / stream processing** | Terminal output, colors, spinners, progress display, live log | GUI + stub (Terminal.app with fake_claude `success_verbose`) | Logo, header, spinners, colors, phase icons, scrollback integrity, todo/task summaries, session summaries with cache tokens + regenerate demo GIFs (`assets/README.md`) |
 | **Retry / error handling** | Backoff, retry logic, quota handling, failure detection | Stub with configured failures | Retry messages, backoff timing, error display |
 | **Verification logic** | Post-phase verification, verdict parsing | Stub with `--verify` | Verification verdict output, pass/fail display |
 | **State / progress** | Progress tracking, resume, state persistence | Stub execution | PROGRESS.md content + progress display during run |

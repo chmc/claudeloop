@@ -2,6 +2,15 @@
 
 Visual assets for the ClaudeLoop README.
 
+## When to regenerate
+
+Regenerate **all** GIFs and screenshots when any of these change:
+- `lib/ui.sh` — logo, headers, colors, phase icons
+- `lib/stream_processor.sh` — spinner, tool formatting, todo/task panels
+- `lib/execution.sh` — phase output structure
+- `lib/verify.sh` / `lib/refactor.sh` — verification/refactor display
+- `examples/PLAN.md.example` — dry-run demo content
+
 ## Regenerating GIFs
 
 Requires [VHS](https://github.com/charmbracelet/vhs) and [gifsicle](https://www.lcdf.org/gifsicle/):
