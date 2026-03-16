@@ -41,6 +41,7 @@ _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
 . "$SCRIPT_DIR/lib/verify.sh"
 . "$SCRIPT_DIR/lib/refactor.sh"
 . "$SCRIPT_DIR/lib/execution.sh"
+. "$SCRIPT_DIR/lib/archive.sh"
 
 # Default configuration
 PLAN_FILE="PLAN.md"
@@ -91,6 +92,9 @@ YES_MODE="${YES_MODE:-false}"
 RESUME_MODE=false
 MARK_COMPLETE_PHASE=""
 RECOVER_PROGRESS=false
+ARCHIVE_MODE=false
+LIST_ARCHIVES=false
+RESTORE_ARCHIVE=""
 
 
 # Save current state to state file
@@ -282,6 +286,9 @@ Options:
                          (up to 4 API calls per phase with --verify)
   --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
+  --archive              Archive current run state and exit
+  --list-archives        List archived runs and exit
+  --restore <name>       Restore an archived run and exit
   --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
   --help                 Show this help message
@@ -416,6 +423,19 @@ parse_args() {
       --recover-progress)
         RECOVER_PROGRESS=true
         shift
+        ;;
+      --archive)
+        ARCHIVE_MODE=true
+        shift
+        ;;
+      --list-archives)
+        LIST_ARCHIVES=true
+        shift
+        ;;
+      --restore)
+        if [ $# -lt 2 ]; then echo "Error: --restore requires an argument" >&2; exit 1; fi
+        RESTORE_ARCHIVE="$2"
+        shift 2
         ;;
       --monitor)
         MONITOR_MODE=true
@@ -948,6 +968,24 @@ main() {
     exit 0
   fi
 
+  # Archive mode: archive current run and exit
+  if [ "$ARCHIVE_MODE" = "true" ]; then
+    archive_current_run
+    exit 0
+  fi
+
+  # List archives mode
+  if [ "$LIST_ARCHIVES" = "true" ]; then
+    list_archives
+    exit 0
+  fi
+
+  # Restore mode
+  if [ -n "$RESTORE_ARCHIVE" ]; then
+    restore_archive "$RESTORE_ARCHIVE"
+    exit 0
+  fi
+
   # Early environment validation (git must exist before gitignore work)
   if ! $DRY_RUN; then
     if [ -f "$PROGRESS_FILE" ] && grep -q "Status: completed" "$PROGRESS_FILE" 2>/dev/null; then
@@ -1005,6 +1043,11 @@ main() {
   init_and_recover_progress
   apply_phase_overrides
 
+  # Detect completed previous run and offer to archive
+  if ! $DRY_RUN && is_run_complete; then
+    prompt_archive_completed_run --internal
+  fi
+
   # Print header and phase list
   print_header "$PLAN_FILE"
   echo ""
@@ -1027,6 +1070,11 @@ main() {
 
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
   [ $exit_code -eq 0 ] && clear_state
+
+  # Auto-archive on successful completion
+  if [ $exit_code -eq 0 ] && [ "${_CLAUDELOOP_NO_AUTO_ARCHIVE:-0}" != "1" ]; then
+    archive_current_run --internal
+  fi
 
   echo ""
   print_header "$PLAN_FILE"

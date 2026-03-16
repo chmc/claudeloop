@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLAUDELOOP="${SCRIPT_DIR}/../claudeloop"
 FIXTURES="${SCRIPT_DIR}/fixtures/smoke-plans"
 
+export _CLAUDELOOP_NO_AUTO_ARCHIVE=1
+
 PASS_COUNT=0
 FAIL_COUNT=0
 TMPDIR_ROOT=""

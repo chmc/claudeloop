@@ -109,6 +109,7 @@ done
 | `lib/verify.sh` | `verify_phase`, `check_verdict` — read-only verification, verdict-based pass/fail (`VERIFICATION_PASSED`/`VERIFICATION_FAILED`), JSON-aware anti-skip check, stream processor integration, timeout |
 | `lib/refactor.sh` | `build_refactor_prompt`, `verify_refactor`, `refactor_phase`, `run_refactor_if_needed` — opt-in auto-refactoring with git rollback |
 | `lib/execution.sh` | `execute_phase`, `run_claude_pipeline`, `evaluate_phase_result`, `run_adaptive_verification`, `update_fail_reason` |
+| `lib/archive.sh` | `archive_current_run`, `list_archives`, `restore_archive`, `generate_archive_metadata`, `is_run_complete`, `prompt_archive_completed_run` |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |
 
 ### Execution flow

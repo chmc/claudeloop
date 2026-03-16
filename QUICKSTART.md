@@ -85,6 +85,9 @@ claudeloop --dangerously-skip-permissions  # skip write permission prompts
 claudeloop --phase-prompt prompts/template.md  # use a custom prompt template
 claudeloop --force             # kill any running instance and take over (preserves progress)
 claudeloop --recover-progress  # reconstruct progress from logs after corruption
+claudeloop --archive           # archive current run state and exit
+claudeloop --list-archives     # list past archived runs
+claudeloop --restore 20260316-143022  # restore an archived run
 claudeloop --monitor           # watch live output from a second terminal
 claudeloop --max-phase-time 1800  # kill and retry phases that run longer than 30 min
 claudeloop --idle-timeout 300    # exit stream processor after 5 min of no activity (default: 600)

@@ -170,6 +170,9 @@ If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it rep
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
+--archive            Archive current run state and exit
+--list-archives      List archived runs and exit
+--restore <name>     Restore an archived run and exit
 --monitor            Watch live output of a running claudeloop instance
 --version, -V        Print version and exit
 --help               Show help
@@ -326,6 +329,14 @@ If the repo has uncommitted changes from the prior session, ClaudeLoop detects t
 **Progress corrupted (wrong plan file overwrote PROGRESS.md)** — ClaudeLoop now backs up PROGRESS.md before overwriting and warns on drastic plan changes. If progress was already lost, reconstruct it from execution logs:
 
     claudeloop --plan your-plan.md --recover-progress
+
+**Run archiving** — When all phases complete successfully, ClaudeLoop auto-archives the run state (PROGRESS.md, logs, signals) to `.claudeloop/archive/{timestamp}/`. On next startup with a completed run, it prompts to archive before starting fresh. Manual control:
+
+    claudeloop --archive           # Archive current run
+    claudeloop --list-archives     # List past runs
+    claudeloop --restore 20260316-143022  # Restore a past run
+
+Disable auto-archive with `_CLAUDELOOP_NO_AUTO_ARCHIVE=1`.
 
 **Orphan log detection** — When ClaudeLoop finds log files for phases not in the current plan (e.g., after switching between `--ai-parse` and manual plans), it warns and offers options:
 

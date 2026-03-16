@@ -1,0 +1,348 @@
+#!/usr/bin/env bats
+# bats file_tags=archive
+
+# Unit tests for lib/archive.sh
+
+CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
+
+setup() {
+  TEST_DIR="$BATS_TEST_TMPDIR"
+  export TEST_DIR
+
+  # Source libraries in dependency order
+  . "$CLAUDELOOP_DIR/lib/parser.sh"
+  . "$CLAUDELOOP_DIR/lib/phase_state.sh"
+  . "$CLAUDELOOP_DIR/lib/progress.sh"
+  . "$CLAUDELOOP_DIR/lib/ui.sh"
+  . "$CLAUDELOOP_DIR/lib/archive.sh"
+
+  # Defaults
+  SIMPLE_MODE=false
+  LIVE_LOG=""
+  YES_MODE=false
+  RESUME_MODE=false
+  DRY_RUN=false
+
+  # Set up minimal 2-phase plan
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Setup"
+  PHASE_DESCRIPTION_1="Initialize"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_TITLE_2="Build"
+  PHASE_DESCRIPTION_2="Build it"
+  PHASE_DEPENDENCIES_2=""
+
+  PLAN_FILE="$TEST_DIR/PLAN.md"
+  PROGRESS_FILE="$TEST_DIR/.claudeloop/PROGRESS.md"
+  LOCK_FILE="$TEST_DIR/.claudeloop/lock"
+
+  cd "$TEST_DIR"
+}
+
+# Helper: create typical run state
+_create_run_state() {
+  mkdir -p .claudeloop/state .claudeloop/logs .claudeloop/signals
+  cat > .claudeloop/PROGRESS.md << 'EOF'
+# Progress
+
+### Phase 1: Setup
+Status: completed
+Attempts: 1
+
+### Phase 2: Build
+Status: completed
+Attempts: 1
+EOF
+  echo '{"current_phase":"2"}' > .claudeloop/state/current.json
+  echo "phase 1 log" > .claudeloop/logs/phase-1.log
+  echo "phase 2 log" > .claudeloop/logs/phase-2.log
+  echo "live output" > .claudeloop/live.log
+  cat > "$PLAN_FILE" << 'EOF'
+## Phase 1: Setup
+Initialize
+
+## Phase 2: Build
+Build it
+EOF
+}
+
+# =============================================================================
+# archive_current_run
+# =============================================================================
+
+@test "archive_current_run: archives all run-state files into timestamped directory" {
+  _create_run_state
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+
+  # Archive dir should exist
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -n "$archive_dir" ]
+
+  # Archived files present
+  [ -f "${archive_dir}PROGRESS.md" ]
+  [ -f "${archive_dir}state/current.json" ]
+  [ -d "${archive_dir}logs" ]
+  [ -f "${archive_dir}plan.md" ]
+  [ -f "${archive_dir}metadata.txt" ]
+  [ -f "${archive_dir}live.log" ]
+
+  # Original state moved away
+  [ ! -f .claudeloop/PROGRESS.md ]
+  [ ! -d .claudeloop/state ]
+  [ ! -d .claudeloop/logs ]
+  [ ! -f .claudeloop/live.log ]
+}
+
+@test "archive_current_run: creates correct metadata.txt with phase counts" {
+  _create_run_state
+
+  # Set up phase state for metadata generation
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  grep -q "phase_count=2" "${archive_dir}metadata.txt"
+  grep -q "completed=2" "${archive_dir}metadata.txt"
+  grep -q "plan_file=" "${archive_dir}metadata.txt"
+}
+
+@test "archive_current_run: preserves .claudeloop.conf and lock" {
+  _create_run_state
+  echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
+  echo "$$" > .claudeloop/lock
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+
+  [ -f .claudeloop/.claudeloop.conf ]
+  [ -f .claudeloop/lock ]
+}
+
+@test "archive_current_run: nothing to archive when no state exists" {
+  mkdir -p .claudeloop
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Nothing to archive"* ]]
+}
+
+@test "archive_current_run: refuses with active lock PID (external mode)" {
+  _create_run_state
+  # Write a PID that looks alive (our own PID)
+  echo "$$" > .claudeloop/lock
+
+  run archive_current_run
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"running"* ]] || [[ "$output" == *"lock"* ]]
+}
+
+@test "archive_current_run: --internal flag skips lock check" {
+  _create_run_state
+  echo "$$" > .claudeloop/lock
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+  # Should succeed despite lock being held by us
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -n "$archive_dir" ]
+}
+
+@test "archive_current_run: removes stale lock and proceeds (external mode)" {
+  _create_run_state
+  # Write a PID that is definitely not running
+  echo "99999" > .claudeloop/lock
+
+  run archive_current_run
+  [ "$status" -eq 0 ]
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -n "$archive_dir" ]
+}
+
+@test "archive_current_run: handles missing live-*.log gracefully" {
+  _create_run_state
+  rm -f .claudeloop/live.log
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+}
+
+@test "archive_current_run: copies plan file (does not move original)" {
+  _create_run_state
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+
+  # Original plan still exists
+  [ -f "$PLAN_FILE" ]
+
+  # Copy in archive
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -f "${archive_dir}plan.md" ]
+}
+
+# =============================================================================
+# list_archives
+# =============================================================================
+
+@test "list_archives: prints table of archived runs" {
+  _create_run_state
+  archive_current_run --internal
+
+  run list_archives
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"20"* ]]  # contains timestamp year
+}
+
+@test "list_archives: no archived runs found" {
+  mkdir -p .claudeloop
+  run list_archives
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No archived runs"* ]]
+}
+
+@test "list_archives: handles missing metadata.txt gracefully" {
+  mkdir -p .claudeloop/archive/20260316-120000
+  echo "dummy" > .claudeloop/archive/20260316-120000/PROGRESS.md
+
+  run list_archives
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"20260316-120000"* ]]
+}
+
+# =============================================================================
+# restore_archive
+# =============================================================================
+
+@test "restore_archive: moves files back and removes archive dir" {
+  _create_run_state
+  archive_current_run --internal
+
+  local archive_name
+  archive_name=$(ls .claudeloop/archive/ 2>/dev/null | head -1)
+  [ -n "$archive_name" ]
+
+  run restore_archive "$archive_name"
+  [ "$status" -eq 0 ]
+
+  [ -f .claudeloop/PROGRESS.md ]
+  [ -d .claudeloop/logs ]
+  [ -d .claudeloop/state ]
+  [ ! -d ".claudeloop/archive/$archive_name" ]
+}
+
+@test "restore_archive: errors when active state exists" {
+  _create_run_state
+  mkdir -p .claudeloop/archive/20260316-120000
+  echo "dummy" > .claudeloop/archive/20260316-120000/PROGRESS.md
+
+  run restore_archive "20260316-120000"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Active state exists"* ]] || [[ "$output" == *"active"* ]]
+}
+
+@test "restore_archive: errors when archive not found" {
+  mkdir -p .claudeloop
+  run restore_archive "nonexistent"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not found"* ]] || [[ "$output" == *"No archive"* ]]
+}
+
+# =============================================================================
+# is_run_complete
+# =============================================================================
+
+@test "is_run_complete: returns true when all phases completed" {
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+
+  run is_run_complete
+  [ "$status" -eq 0 ]
+}
+
+@test "is_run_complete: returns false when any phase is pending" {
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "pending"
+
+  run is_run_complete
+  [ "$status" -eq 1 ]
+}
+
+@test "is_run_complete: returns false when any phase is failed" {
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "failed"
+
+  run is_run_complete
+  [ "$status" -eq 1 ]
+}
+
+@test "is_run_complete: returns false when PHASE_COUNT is 0" {
+  PHASE_COUNT=0
+  PHASE_NUMBERS=""
+
+  run is_run_complete
+  [ "$status" -eq 1 ]
+}
+
+# =============================================================================
+# prompt_archive_completed_run
+# =============================================================================
+
+@test "prompt_archive_completed_run: archives in YES_MODE" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+
+  run prompt_archive_completed_run --internal
+  [ "$status" -eq 0 ]
+
+  # Should have archived
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -n "$archive_dir" ]
+}
+
+@test "prompt_archive_completed_run: skips when user says no (interactive)" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+
+  # Use _ARCHIVE_FORCE_INTERACTIVE to bypass TTY check, pipe "n"
+  run sh -c '
+. "'"$CLAUDELOOP_DIR"'/lib/parser.sh"
+. "'"$CLAUDELOOP_DIR"'/lib/phase_state.sh"
+. "'"$CLAUDELOOP_DIR"'/lib/progress.sh"
+. "'"$CLAUDELOOP_DIR"'/lib/ui.sh"
+. "'"$CLAUDELOOP_DIR"'/lib/archive.sh"
+SIMPLE_MODE=false
+LIVE_LOG=""
+YES_MODE=false
+_ARCHIVE_FORCE_INTERACTIVE=1
+PHASE_COUNT=2
+PHASE_NUMBERS="1 2"
+PHASE_TITLE_1="Setup"
+PHASE_DESCRIPTION_1="Initialize"
+PHASE_TITLE_2="Build"
+PHASE_DESCRIPTION_2="Build it"
+PLAN_FILE="'"$PLAN_FILE"'"
+PROGRESS_FILE="'"$PROGRESS_FILE"'"
+LOCK_FILE="'"$LOCK_FILE"'"
+phase_set STATUS "1" "completed"
+phase_set STATUS "2" "completed"
+cd "'"$TEST_DIR"'"
+printf "n\n" | prompt_archive_completed_run --internal
+# Check state was NOT archived
+if [ -f .claudeloop/PROGRESS.md ]; then exit 0; else exit 1; fi
+'
+  [ "$status" -eq 0 ]
+}
