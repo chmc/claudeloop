@@ -852,3 +852,9 @@ EOF
   run extract_log_phase_num "/some/dir/other-file.txt"
   [ "$output" = "" ]
 }
+
+@test "extract_progress_phase_title: strips trailing whitespace" {
+  run extract_progress_phase_title "### ✅ Phase 3: Selection Style — Teal Left Border       "
+  [ "$status" -eq 0 ]
+  [ "$output" = "Selection Style — Teal Left Border" ]
+}

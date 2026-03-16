@@ -30,6 +30,8 @@ read_progress() {
   # Parse PROGRESS.md to restore state
   local current_phase=""
   while IFS= read -r line || [ -n "$line" ]; do
+    # Strip trailing whitespace (handles dirty PROGRESS.md from older versions)
+    line="${line%"${line##*[![:space:]]}"}"
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
     if is_progress_phase_header "$line"; then
       current_phase=$(extract_progress_phase_num "$line")
@@ -237,6 +239,8 @@ read_old_phase_list() {
 
   local current_phase=""
   while IFS= read -r line || [ -n "$line" ]; do
+    # Strip trailing whitespace (handles dirty PROGRESS.md from older versions)
+    line="${line%"${line##*[![:space:]]}"}"
     # Match phase headers: ### ✅ Phase 1: Title or ### ✅ Phase 2.5: Title
     if is_progress_phase_header "$line"; then
       current_phase=$(extract_progress_phase_num "$line")

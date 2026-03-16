@@ -129,7 +129,7 @@ load_state() {
     # the archive flow in main() will handle this case
     _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
     if [ "$_sc" -gt 0 ] \
-       && ! grep "^Status: " "$PROGRESS_FILE" | grep -qv "^Status: completed"; then
+       && ! grep "^Status: " "$PROGRESS_FILE" | sed 's/[[:space:]]*$//' | grep -qv "^Status: completed$"; then
       return 1
     fi
 

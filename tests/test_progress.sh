@@ -1614,3 +1614,41 @@ EOF
   [ "$(old_phase_get REFACTOR_SHA 1)" = "deadbeef" ]
   [ "$(old_phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
 }
+
+# --- Trailing whitespace regression tests ---
+
+@test "read_old_phase_list: strips trailing whitespace from titles and status" {
+  printf '### ✅ Phase 1: Phase One   \nStatus: completed   \nAttempts: 1\n### ⏳ Phase 2: Phase Two   \nStatus: pending   \n' > "$TEST_DIR/PROGRESS.md"
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$(old_phase_get TITLE 1)" = "Phase One" ]
+  [ "$(old_phase_get STATUS 1)" = "completed" ]
+  [ "$(old_phase_get TITLE 2)" = "Phase Two" ]
+  [ "$(old_phase_get STATUS 2)" = "pending" ]
+}
+
+@test "read_progress: strips trailing whitespace from status values" {
+  init_progress "$TEST_DIR/PROGRESS.md"
+  printf '### ✅ Phase 1: Phase One\nStatus: completed   \n### ⏳ Phase 2: Phase Two\nStatus: pending   \n### 🔄 Phase 3: Phase Three\nStatus: in_progress   \n' > "$TEST_DIR/PROGRESS.md"
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+  # in_progress should be normalized to pending even with trailing whitespace
+  [ "$PHASE_STATUS_3" = "pending" ]
+}
+
+@test "detect_plan_changes: matches phases despite trailing whitespace in PROGRESS.md" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="Phase One"
+  PHASE_TITLE_2="Phase Two"
+  PHASE_DEPENDENCIES_1="" PHASE_DEPENDENCIES_2=""
+  printf '### ✅ Phase 1: Phase One   \nStatus: completed   \nAttempts: 1\n### ⏳ Phase 2: Phase Two   \nStatus: pending   \nAttempts: 0\n' > "$TEST_DIR/PROGRESS.md"
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > "$TEST_DIR/out.txt" 2>&1
+  # Should NOT report any plan changes (titles match after stripping)
+  [ ! -s "$TEST_DIR/out.txt" ]
+  # Status should be carried forward correctly
+  [ "$PHASE_STATUS_1" = "completed" ]
+  [ "$PHASE_STATUS_2" = "pending" ]
+}

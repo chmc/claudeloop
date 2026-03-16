@@ -169,7 +169,7 @@ extract_progress_phase_num() {
 # Args: $1 - line
 # Prints title or empty string
 extract_progress_phase_title() {
-  printf '%s\n' "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p'
+  printf '%s\n' "$1" | sed -n 's/^###[[:space:]]*[^[:space:]]*[[:space:]]*Phase[[:space:]]*[0-9][0-9]*\(\.[0-9][0-9]*\)\{0,1\}:[[:space:]]*\(.*\)/\2/p' | sed 's/[[:space:]]*$//'
 }
 
 # Extract phase number from a log filename
