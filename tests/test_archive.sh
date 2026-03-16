@@ -346,3 +346,48 @@ if [ -f .claudeloop/PROGRESS.md ]; then exit 0; else exit 1; fi
 '
   [ "$status" -eq 0 ]
 }
+
+# =============================================================================
+# run_ai_parsing: all-completed progress skips re-parse prompt (Bug fix)
+# =============================================================================
+
+@test "all-completed progress file detected by grep check" {
+  _create_run_state  # all "Status: completed"
+  RESET_PROGRESS=false
+
+  # Run the grep logic from run_ai_parsing inline
+  _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
+  [ "$_sc" -gt 0 ]
+  # No non-completed status lines → grep -qv should fail (exit 1)
+  run sh -c 'grep "^Status: " "'"$PROGRESS_FILE"'" | grep -qv "^Status: completed"'
+  [ "$status" -eq 1 ]
+}
+
+@test "partial-completed progress file not detected as all-complete" {
+  mkdir -p .claudeloop
+  cat > "$PROGRESS_FILE" << 'EOF'
+# Progress
+
+### Phase 1: Setup
+Status: completed
+Attempts: 1
+
+### Phase 2: Build
+Status: pending
+Attempts: 0
+EOF
+
+  _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
+  [ "$_sc" -gt 0 ]
+  # Has non-completed status → grep -qv should succeed (exit 0)
+  run sh -c 'grep "^Status: " "'"$PROGRESS_FILE"'" | grep -qv "^Status: completed"'
+  [ "$status" -eq 0 ]
+}
+
+@test "empty progress file not detected as all-complete" {
+  mkdir -p .claudeloop
+  : > "$PROGRESS_FILE"
+
+  _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
+  [ "$_sc" -eq 0 ]
+}

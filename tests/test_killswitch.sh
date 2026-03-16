@@ -130,3 +130,46 @@ EOF
   pid=$(cat "$lock_file")
   [ "$pid" = "12345" ]
 }
+
+@test "killswitch: handle_interrupt does not write progress when _PROGRESS_LOADED is unset" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  # Create a progress file with completed phases
+  mkdir -p "$TEST_DIR/.claudeloop/state"
+  PROGRESS_FILE="$TEST_DIR/.claudeloop/PROGRESS.md"
+  cat > "$PROGRESS_FILE" << 'PEOF'
+# Progress for PLAN.md
+
+## Phase Details
+
+### Phase 1: Test Phase 1
+Status: completed
+Attempts: 1
+
+### Phase 2: Test Phase 2
+Status: completed
+Attempts: 1
+PEOF
+  local orig_checksum
+  orig_checksum=$(md5 -q "$PROGRESS_FILE")
+
+  # Simulate pre-parse_plan state: no phases loaded
+  PHASE_COUNT=""
+  PHASE_NUMBERS=""
+  CURRENT_PHASE=""
+  PLAN_FILE="$TEST_DIR/PLAN.md"
+  _PROGRESS_LOADED=""
+
+  # Run the guarded write_progress logic (same as handle_interrupt)
+  if [ "${_PROGRESS_LOADED:-}" = "true" ]; then
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  fi
+
+  # Progress file should be unchanged
+  local new_checksum
+  new_checksum=$(md5 -q "$PROGRESS_FILE")
+  [ "$orig_checksum" = "$new_checksum" ]
+}

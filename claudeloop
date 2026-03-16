@@ -227,8 +227,10 @@ handle_interrupt() {
     fi
   fi
 
-  # Save progress
-  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  # Save progress (only after progress has been fully loaded from disk)
+  if [ "${_PROGRESS_LOADED:-}" = "true" ]; then
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  fi
 
   # Save state for resume
   save_state
@@ -828,10 +830,19 @@ run_ai_parsing() {
   if [ "$AI_PARSE" = "true" ] && { ! $DRY_RUN || [ -n "$_CLI_AI_PARSE" ]; }; then
     local ai_plan=".claudeloop/ai-parsed-plan.md"
     if [ -f "$ai_plan" ] && [ -f "$PROGRESS_FILE" ] && [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
-      print_warning "AI-parsed plan already exists. Re-parsing will invalidate progress."
-      printf 'Re-parse? (y/N) '
-      read -r _ans
-      case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan"; _parse_msg="Using cached plan" ;; esac
+      # If all phases completed and not resetting, skip re-parse prompt —
+      # the archive prompt in main() will handle the completed-run flow
+      _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
+      if [ "$_sc" -gt 0 ] && ! $RESET_PROGRESS \
+         && ! grep "^Status: " "$PROGRESS_FILE" | grep -qv "^Status: completed"; then
+        PLAN_FILE="$ai_plan"
+        _parse_msg="Using cached plan"
+      else
+        print_warning "AI-parsed plan already exists. Re-parsing will invalidate progress."
+        printf 'Re-parse? (y/N) '
+        read -r _ans
+        case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan"; _parse_msg="Using cached plan" ;; esac
+      fi
     fi
     if [ "$PLAN_FILE" != "$ai_plan" ]; then
       if ! ai_parse_and_verify "$PLAN_FILE" "$GRANULARITY"; then
@@ -1042,6 +1053,7 @@ main() {
 
   init_and_recover_progress
   apply_phase_overrides
+  _PROGRESS_LOADED=true
 
   # Detect completed previous run and offer to archive
   if ! $DRY_RUN && is_run_complete; then
