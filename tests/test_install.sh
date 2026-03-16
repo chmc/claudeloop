@@ -4,13 +4,13 @@
 REPO_DIR=$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)
 
 setup() {
-  TMP_ROOT=$(mktemp -d)
+  TMP_ROOT="$BATS_TEST_TMPDIR"
   export INSTALL_DIR_OVERRIDE="$TMP_ROOT/lib/claudeloop"
   export BIN_DIR_OVERRIDE="$TMP_ROOT/bin"
 }
 
 teardown() {
-  rm -rf "$TMP_ROOT"
+  :
 }
 
 run_installer() {

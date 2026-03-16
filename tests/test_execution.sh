@@ -9,10 +9,10 @@ setup() {
   log_ts() { :; }
   VERBOSE_MODE=false
   source "${BATS_TEST_DIRNAME}/../lib/execution.sh"
-  _tmpdir="$(mktemp -d)"
+  _tmpdir="$BATS_TEST_TMPDIR"
 }
 
-teardown() { rm -rf "$_tmpdir"; }
+teardown() { :; }
 
 # --- build_default_prompt() ---
 

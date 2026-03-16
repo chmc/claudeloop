@@ -4,7 +4,7 @@
 # Tests for lib/progress.sh POSIX-compatible implementation
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
@@ -20,7 +20,7 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # --- init_progress() ---

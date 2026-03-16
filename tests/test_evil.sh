@@ -4,7 +4,7 @@
 # Adversarial test suite: injection attacks, numeric bugs, safety regressions, boundaries
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
@@ -13,7 +13,7 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # Helper: set up a single-phase environment for progress tests

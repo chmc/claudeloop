@@ -5,12 +5,12 @@
 # Written FIRST (TDD approach)
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/prompt.sh"
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # ── Substitution mode (template contains {{...}}) ──────────────────────────

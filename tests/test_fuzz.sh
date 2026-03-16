@@ -5,7 +5,7 @@
 # Deterministic via seeded LCG PRNG (FUZZ_SEED env var, default 42)
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
@@ -17,7 +17,7 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # LCG PRNG: returns pseudo-random number and updates state

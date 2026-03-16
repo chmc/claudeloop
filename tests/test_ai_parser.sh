@@ -5,7 +5,7 @@
 # TDD: tests written FIRST
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   mkdir -p "$TEST_DIR/bin" "$TEST_DIR/.claudeloop"
   export LIVE_LOG=""
   export SIMPLE_MODE=false
@@ -28,7 +28,7 @@ HELPER
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # Helper: create a mock claude that outputs given text as stream-json

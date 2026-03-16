@@ -5,7 +5,7 @@
 # Tests interrupt handling, state saving, and resume
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   export CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 
   # Create a test plan
@@ -22,7 +22,7 @@ EOF
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 @test "killswitch: handle_interrupt function saves state" {

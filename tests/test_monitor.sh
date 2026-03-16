@@ -6,7 +6,7 @@
 CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 
 setup() {
-  TEST_DIR=$(mktemp -d)
+  TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
   export CLAUDELOOP="${CLAUDELOOP_DIR}/claudeloop"
   export _SENTINEL_POLL=0.1
@@ -36,7 +36,7 @@ CONF
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 @test "--monitor times out with error when no live log exists" {

@@ -11,13 +11,13 @@ strip_ansi() {
 }
 
 setup() {
-  _log="$(mktemp)"
-  _raw="$(mktemp)"
+  _log="$BATS_TEST_TMPDIR/log"
+  _raw="$BATS_TEST_TMPDIR/raw"
   . "$STREAM_PROCESSOR_LIB"   # makes process_stream_json available
 }
 
 teardown() {
-  rm -f "$_log" "$_raw"
+  :
 }
 
 # Helper: run processor with given stdin
@@ -1116,7 +1116,7 @@ JSON"
   # Feed continuous data but close pipe after 1 line read
   bash -c '
     . "'"${BATS_TEST_DIRNAME}"'/../lib/stream_processor.sh"
-    { echo "line1"; sleep 3; } | inject_heartbeats | head -1
+    { echo "line1"; sleep 1; } | inject_heartbeats | head -1
   ' 2>"$stderr_out"
   local stderr_content
   stderr_content=$(cat "$stderr_out")

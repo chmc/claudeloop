@@ -5,7 +5,7 @@
 # These tests are written FIRST (TDD approach)
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
 
   # Extract functions from release.sh (can't source directly due to imperative code)
   # Use sed to extract function bodies between markers
@@ -34,7 +34,7 @@ setup() {
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 # ── strip_prerelease ──────────────────────────────────────────────────────────

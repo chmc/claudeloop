@@ -7,14 +7,15 @@
 FAKE_CLAUDE="${BATS_TEST_DIRNAME}/fake_claude"
 
 setup() {
-  FAKE_DIR=$(mktemp -d)
+  FAKE_DIR="$BATS_TEST_TMPDIR/fake"
+  mkdir -p "$FAKE_DIR"
   export FAKE_CLAUDE_DIR="$FAKE_DIR"
   # Source retry.sh for detection helpers
   . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
 }
 
 teardown() {
-  rm -rf "$FAKE_DIR"
+  :
 }
 
 # Helper: run fake_claude with a scenario

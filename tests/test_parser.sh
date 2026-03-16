@@ -5,13 +5,13 @@
 # These tests are written FIRST (TDD approach)
 
 setup() {
-  export TEST_DIR="$(mktemp -d)"
+  export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
 }
 
 teardown() {
-  rm -rf "$TEST_DIR"
+  :
 }
 
 @test "parse_simple_plan: extracts correct number of phases" {

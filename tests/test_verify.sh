@@ -6,7 +6,7 @@
 CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 
 setup() {
-  TEST_DIR=$(mktemp -d)
+  TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
   export _SENTINEL_POLL=0.1
   export _SKIP_HEARTBEATS=1
@@ -62,7 +62,6 @@ teardown() {
   # Kill any leftover background processes
   jobs -p 2>/dev/null | xargs kill 2>/dev/null || true
   cd /
-  rm -rf "$TEST_DIR"
 }
 
 # =============================================================================

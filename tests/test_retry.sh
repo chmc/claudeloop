@@ -9,10 +9,10 @@ setup() {
   source "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   MAX_RETRIES=3
   BASE_DELAY=5
-  _log="$(mktemp)"
+  _log="$BATS_TEST_TMPDIR/log"
 }
 
-teardown() { rm -f "$_log"; }
+teardown() { :; }
 
 # --- calculate_backoff() ---
 

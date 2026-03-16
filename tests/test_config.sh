@@ -5,7 +5,7 @@
 
 setup() {
   source "${BATS_TEST_DIRNAME}/../lib/config.sh"
-  _tmpdir="$(mktemp -d)"
+  _tmpdir="$BATS_TEST_TMPDIR"
   MAX_RETRIES=10
   SKIP_PERMISSIONS=false
   VERIFY_PHASES=false
@@ -19,7 +19,7 @@ setup() {
   export -f print_warning
 }
 
-teardown() { rm -rf "$_tmpdir"; }
+teardown() { :; }
 
 # --- bool_yn() ---
 
