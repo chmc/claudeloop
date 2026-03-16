@@ -21,6 +21,30 @@ Two long-lived branches:
 
 Before starting any work (planning, coding, committing), check the current branch with `git branch --show-current`. Flag to the developer whether the current branch targets stable (`main`) or beta (`beta`) and ask how to proceed before making changes. If the work doesn't match the current branch, offer to switch.
 
+## Planning
+
+### Exploration must produce constraints, not summaries
+
+Explore agents must output a structured constraints brief, not prose summaries:
+
+1. **Conventions observed** — patterns, error handling, naming. Cite files and lines.
+2. **Touch points** — every function, variable, and file the change interacts with. Include signatures and callers.
+3. **Traps and gotchas** — anything that would surprise a naive implementation (e.g., `set -eu` behavior, `eval`-based dynamic vars, lock file semantics, `_CLAUDELOOP_NO_*` env vars for test isolation).
+4. **Existing tests to update** — which test files cover the functions being modified, with specifics.
+
+### Plan agents must justify decisions from constraints
+
+Every design decision must trace to a constraint from exploration or an explicit trade-off. If the planner is making an assumption about the codebase, that's a gap — flag it, don't guess. Plans must:
+
+- List every file to create/modify with specific functions and variables
+- For each modified function, state current signature, proposed change, affected callers
+- For each edge case, state the scenario and handling (not "handle errors" — say what error, what happens)
+- State what is NOT changing and why
+
+### One review pass, not three
+
+Single fact-checking pass: for each file in the plan, verify function signatures exist, callers are accounted for, and tests are updated. This is fact-checking, not design critique. If it finds issues, the exploration was insufficient — improve exploration, don't add more review rounds.
+
 ## Documentation
 
 When implementation is changed, check if the change affects user-facing behavior (CLI options, workflows, defaults, install steps, output format). If so, update stale sections in README.md and QUICKSTART.md, or add new sections for new features.
