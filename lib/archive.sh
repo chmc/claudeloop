@@ -94,7 +94,8 @@ archive_current_run() {
     .claudeloop/state \
     .claudeloop/logs \
     .claudeloop/signals \
-    .claudeloop/live.log; do
+    .claudeloop/live.log \
+    .claudeloop/ai-parsed-plan.md; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true
   done
@@ -210,6 +211,9 @@ prompt_archive_completed_run() {
     _internal_flag="--internal"
   fi
 
+  _ARCHIVE_COMPLETED=false
+  _ARCHIVE_DECLINED=false
+
   print_warning "Previous run is complete (all phases finished)"
 
   local _response="y"
@@ -222,15 +226,20 @@ prompt_archive_completed_run() {
 
   case "$_response" in
     [Nn])
+      _ARCHIVE_DECLINED=true
       return 0
       ;;
   esac
 
   archive_current_run $_internal_flag
 
-  # Re-initialize progress: reset all phases to pending
+  # Remove config for truly fresh start (wizard re-runs)
+  rm -f .claudeloop/.claudeloop.conf
+
+  # Re-initialize progress: reset all phases to pending (safety net if exec fails)
   for _phase_num in $PHASE_NUMBERS; do
     reset_phase_full "$_phase_num"
   done
   RESUME_MODE=false
+  _ARCHIVE_COMPLETED=true
 }

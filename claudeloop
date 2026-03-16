@@ -1064,8 +1064,14 @@ main() {
   _PROGRESS_LOADED=true
 
   # Detect completed previous run and offer to archive
+  _ARCHIVE_COMPLETED=false
+  _ARCHIVE_DECLINED=false
   if ! $DRY_RUN && is_run_complete; then
     prompt_archive_completed_run --internal
+    if [ "$_ARCHIVE_COMPLETED" = true ]; then
+      remove_lock
+      exec "$0" "$@"
+    fi
   fi
 
   # Print header and phase list
@@ -1092,7 +1098,8 @@ main() {
   [ $exit_code -eq 0 ] && clear_state
 
   # Auto-archive on successful completion
-  if [ $exit_code -eq 0 ] && [ "${_CLAUDELOOP_NO_AUTO_ARCHIVE:-0}" != "1" ]; then
+  if [ $exit_code -eq 0 ] && [ "${_CLAUDELOOP_NO_AUTO_ARCHIVE:-0}" != "1" ] \
+     && [ "${_ARCHIVE_DECLINED:-}" != "true" ]; then
     archive_current_run --internal
   fi
 

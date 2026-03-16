@@ -392,7 +392,7 @@ EOF
   [ "$_sc" -eq 0 ]
 }
 
-@test "archive_current_run: ai-parsed-plan.md is copied not moved" {
+@test "archive_current_run: ai-parsed-plan.md is moved into archive" {
   mkdir -p .claudeloop/logs
   printf 'test\n' > .claudeloop/PROGRESS.md
   printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
@@ -400,10 +400,77 @@ EOF
 
   archive_current_run --internal
 
-  # Plan is copied to archive
+  # Plan is copied to archive as plan.md
   local _archive_dir
   _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
   [ -f "${_archive_dir}plan.md" ]
-  # Original plan file still exists (not moved)
-  [ -f ".claudeloop/ai-parsed-plan.md" ]
+  # ai-parsed-plan.md is also moved into archive
+  [ -f "${_archive_dir}ai-parsed-plan.md" ]
+  # Original no longer exists (moved)
+  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
+}
+
+@test "archive_current_run: ai-parsed-plan.md moved even with external plan file" {
+  _create_run_state
+  printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
+
+  archive_current_run --internal
+
+  local _archive_dir
+  _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
+  [ -f "${_archive_dir}ai-parsed-plan.md" ]
+  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
+}
+
+@test "prompt_archive_completed_run: sets _ARCHIVE_COMPLETED=true in YES_MODE" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+
+  prompt_archive_completed_run --internal
+
+  [ "$_ARCHIVE_COMPLETED" = "true" ]
+}
+
+@test "prompt_archive_completed_run: sets _ARCHIVE_DECLINED=true when user says no" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+
+  # Use redirect instead of pipe to avoid subshell (pipe loses variable changes)
+  _ARCHIVE_FORCE_INTERACTIVE=1
+  prompt_archive_completed_run --internal <<< "n"
+
+  [ "$_ARCHIVE_DECLINED" = "true" ]
+  # State should NOT be archived
+  [ -f .claudeloop/PROGRESS.md ]
+}
+
+@test "prompt_archive_completed_run: removes .claudeloop.conf after archive" {
+  _create_run_state
+  echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+
+  prompt_archive_completed_run --internal
+
+  [ ! -f .claudeloop/.claudeloop.conf ]
+}
+
+@test "prompt_archive_completed_run: only archive/ remains after archive" {
+  _create_run_state
+  echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
+  printf 'parsed plan\n' > .claudeloop/ai-parsed-plan.md
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+
+  prompt_archive_completed_run --internal
+
+  # Only archive/ should remain in .claudeloop/
+  local _remaining
+  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' || true)
+  [ -z "$_remaining" ]
 }
