@@ -391,3 +391,19 @@ EOF
   _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
   [ "$_sc" -eq 0 ]
 }
+
+@test "archive_current_run: ai-parsed-plan.md is copied not moved" {
+  mkdir -p .claudeloop/logs
+  printf 'test\n' > .claudeloop/PROGRESS.md
+  printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
+  PLAN_FILE=".claudeloop/ai-parsed-plan.md"
+
+  archive_current_run --internal
+
+  # Plan is copied to archive
+  local _archive_dir
+  _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
+  [ -f "${_archive_dir}plan.md" ]
+  # Original plan file still exists (not moved)
+  [ -f ".claudeloop/ai-parsed-plan.md" ]
+}

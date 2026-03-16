@@ -224,3 +224,57 @@ PROGRESS
   # Only 1 call: phase 1 already completed, phase 2 runs
   [ "$(_call_count)" -eq 1 ]
 }
+
+@test "completed_run: interrupted state skips resume prompt when all phases done" {
+  mkdir -p "$TEST_DIR/.claudeloop/state"
+  cat > "$TEST_DIR/.claudeloop/state/current.json" << 'EOF'
+{
+  "plan_file": "PLAN.md",
+  "progress_file": ".claudeloop/PROGRESS.md",
+  "current_phase": "2",
+  "interrupted": true,
+  "timestamp": "2026-01-01T00:00:00Z"
+}
+EOF
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+# Progress for PLAN.md
+Last updated: 2026-01-01 00:00:00
+
+## Status Summary
+- Total phases: 2
+- Completed: 2
+- In progress: 0
+- Pending: 0
+- Failed: 0
+
+## Phase Details
+
+### ✅ Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+
+### ✅ Phase 2: Build
+Status: completed
+Started: 2026-01-01 00:01:00
+Completed: 2026-01-01 00:02:00
+Attempts: 1
+PROGRESS
+
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  # Unset so startup archive detection fires (setup() exports it at line 48)
+  unset _CLAUDELOOP_NO_AUTO_ARCHIVE
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --yes"
+  local _cl_output="$output"
+  local _cl_status="$status"
+  [ "$_cl_status" -eq 0 ]
+  # Must NOT show interrupted session prompt
+  run sh -c 'printf "%s" "$1" | grep -q "Found interrupted session"' _ "$_cl_output"
+  [ "$status" -ne 0 ]
+  # Must show archive prompt instead
+  echo "$_cl_output" | grep -q "Previous run is complete"
+}

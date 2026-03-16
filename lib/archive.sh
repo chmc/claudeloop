@@ -94,7 +94,6 @@ archive_current_run() {
     .claudeloop/state \
     .claudeloop/logs \
     .claudeloop/signals \
-    .claudeloop/ai-parsed-plan.md \
     .claudeloop/live.log; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true

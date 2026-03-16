@@ -125,6 +125,14 @@ load_state() {
 
   # Simple parsing of JSON (basic implementation)
   if grep -q '"interrupted": true' "$STATE_FILE"; then
+    # Skip interrupted prompt if all phases already completed;
+    # the archive flow in main() will handle this case
+    _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
+    if [ "$_sc" -gt 0 ] \
+       && ! grep "^Status: " "$PROGRESS_FILE" | grep -qv "^Status: completed"; then
+      return 1
+    fi
+
     _phase=$(grep '"current_phase"' "$STATE_FILE" | sed 's/.*"current_phase": *"\([^"]*\)".*/\1/')
 
     print_warning "Found interrupted session"
