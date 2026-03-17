@@ -9,6 +9,10 @@ argument-hint: "[sync|promote]"
 
 Safe rebase operations for the two-branch model. Always restores the original branch on exit.
 
+## Execution style
+
+Run pre-flight checks (fetch, dirty check, ancestry check, unpushed commits) in parallel where possible. Only stop for user input when a conditional warning triggers (e.g., unpushed local commits that would be lost). On the happy path, run straight through to completion — show commits being promoted/synced as informational output, not as a confirmation gate.
+
 ## Operations
 
 ### `sync` — Update beta with latest main
@@ -26,12 +30,11 @@ Rebases `beta` on top of `origin/main`, then force-pushes.
 7. `git reset --hard origin/beta` (sync local to remote state)
 8. Show incoming commits: `git log origin/beta..origin/main --oneline`
 9. **Warn**: "The VERSION line will likely conflict (stable vs beta version). If so, keep the beta version and continue the rebase."
-10. **Confirm** before proceeding.
-11. `git rebase origin/main`
-12. **On conflict**: `git rebase --abort`, inform user about the conflict, restore original branch (`git checkout "$ORIGINAL_BRANCH"`), and stop.
-13. On success: `git push --force-with-lease origin beta`
-14. **On push failure**: "Remote changed since fetch. Re-run `/rebase sync`." Restore original branch and stop.
-15. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on beta)
+10. `git rebase origin/main`
+11. **On conflict**: `git rebase --abort`, inform user about the conflict, restore original branch (`git checkout "$ORIGINAL_BRANCH"`), and stop.
+12. On success: `git push --force-with-lease origin beta`
+13. **On push failure**: "Remote changed since fetch. Re-run `/rebase sync`." Restore original branch and stop.
+14. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on beta)
 
 ### `promote` — Fast-forward main to beta
 
@@ -48,12 +51,11 @@ Fast-forwards `main` to match `origin/beta`, then pushes.
 7. Check for unpushed local commits: `git log origin/main..main --oneline`. If any exist, **warn and confirm** — these commits will be lost by the reset in step 8.
 8. `git reset --hard origin/main` (sync local to remote state)
 9. Show commits being promoted: `git log origin/main..origin/beta --oneline`
-10. **Confirm** before proceeding.
-11. `git merge --ff-only origin/beta`
-12. `git push origin main` (plain push — no force needed for fast-forward; detects races)
-13. **On push failure**: "Someone pushed to main between fetch and push. Re-run `/rebase promote`." Restore original branch and stop.
-14. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on main)
-15. **Post-promote reminder**: "Consider running `/release stable` if this is a release-worthy promotion."
+10. `git merge --ff-only origin/beta`
+11. `git push origin main` (plain push — no force needed for fast-forward; detects races)
+12. **On push failure**: "Someone pushed to main between fetch and push. Re-run `/rebase promote`." Restore original branch and stop.
+13. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on main)
+14. **Post-promote reminder**: "Consider running `/release stable` if this is a release-worthy promotion."
 
 ## Error handling
 
