@@ -552,3 +552,91 @@ EOF
   run generate_flight_recorder "$TEST_DIR/nonexistent"
   [ "$status" -eq 0 ]
 }
+
+# =============================================================================
+# rec_extract_prompt_text tests
+# =============================================================================
+
+@test "rec_extract_prompt_text: extracts text between markers" {
+  local logfile="$TEST_DIR/prompt.log"
+  cat > "$logfile" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+=== PROMPT ===
+Do something useful
+with multiple lines
+=== RESPONSE ===
+Done
+[Session: model=claude-sonnet-4-20250514 cost=$0.01 duration=5.0s turns=2 tokens=100in/50out]
+=== EXECUTION END exit_code=0 duration=10s time=2026-03-01T10:00:10 ===
+EOF
+  result=$(rec_extract_prompt_text "$logfile")
+  [ "$result" = "Do something useful\nwith multiple lines" ]
+}
+
+@test "rec_extract_prompt_text: returns null for missing file" {
+  result=$(rec_extract_prompt_text "$TEST_DIR/nonexistent.log")
+  [ "$result" = "null" ]
+}
+
+@test "rec_extract_prompt_text: returns null when no PROMPT marker" {
+  local logfile="$TEST_DIR/noprompt.log"
+  echo "no markers here" > "$logfile"
+  result=$(rec_extract_prompt_text "$logfile")
+  [ "$result" = "null" ]
+}
+
+@test "rec_extract_prompt_text: truncates oversized prompts" {
+  local logfile="$TEST_DIR/bigprompt.log"
+  {
+    echo "=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ==="
+    echo "=== PROMPT ==="
+    # Generate 250 lines
+    local i=1
+    while [ "$i" -le 250 ]; do
+      echo "line $i of the prompt"
+      i=$((i + 1))
+    done
+    echo "=== RESPONSE ==="
+    echo "Done"
+  } > "$logfile"
+  result=$(rec_extract_prompt_text "$logfile")
+  # Should contain first 80 lines
+  echo "$result" | grep -q 'line 1 of the prompt'
+  echo "$result" | grep -q 'line 80 of the prompt'
+  # Should contain omission notice
+  echo "$result" | grep -q '90 lines omitted'
+  # Should contain last 80 lines
+  echo "$result" | grep -q 'line 171 of the prompt'
+  echo "$result" | grep -q 'line 250 of the prompt'
+  # Should NOT contain middle lines
+  ! echo "$result" | grep -q 'line 100 of the prompt'
+}
+
+@test "rec_extract_prompt_text: JSON-escapes special chars" {
+  local logfile="$TEST_DIR/escape_prompt.log"
+  cat > "$logfile" << 'LOGEOF'
+=== PROMPT ===
+Say "hello" and use backslash\here
+=== RESPONSE ===
+Done
+LOGEOF
+  result=$(rec_extract_prompt_text "$logfile")
+  # Should have escaped quotes and backslashes
+  echo "$result" | grep -q '\\"hello\\"'
+  echo "$result" | grep -q 'backslash\\\\here'
+}
+
+# =============================================================================
+# assemble_recorder_json: prompt_text inclusion
+# =============================================================================
+
+@test "assemble_recorder_json: includes prompt_text in attempts" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 1 attempt should have prompt_text with "Do phase 1"
+  echo "$result" | grep -q '"prompt_text":"Do phase 1"'
+  # Phase 2 attempt 1 should have "Do phase 2"
+  echo "$result" | grep -q '"prompt_text":"Do phase 2"'
+  # Phase 2 attempt 2 should have "Retry phase 2"
+  echo "$result" | grep -q '"prompt_text":"Retry phase 2"'
+}

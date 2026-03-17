@@ -572,6 +572,220 @@ body {
   margin-left: 6px;
 }
 
+/* Retry Filmstrip */
+.filmstrip-section {
+  margin-bottom: 24px;
+}
+
+.filmstrip-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.filmstrip-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.filmstrip-card {
+  flex-shrink: 0;
+  width: 140px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: center;
+}
+
+.filmstrip-card:hover {
+  border-color: var(--accent);
+}
+
+.filmstrip-card.filmstrip-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.filmstrip-card .fs-attempt-num {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.filmstrip-card .fs-outcome {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.filmstrip-card .fs-outcome.fs-fail { color: var(--error); }
+.filmstrip-card .fs-outcome.fs-pass { color: var(--success); }
+
+.filmstrip-card .fs-tools {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.filmstrip-connector {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* Diff panel */
+.diff-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.diff-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-tab {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  transition: color 0.15s, border-color 0.15s;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.diff-tab:hover {
+  color: var(--text-primary);
+}
+
+.diff-tab.diff-tab-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.diff-pair-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.diff-pair-selector select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.diff-content {
+  padding: 12px 16px;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.diff-line {
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-line.diff-add {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.diff-line.diff-del {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+}
+
+.diff-line.diff-ctx {
+  color: var(--text-muted);
+}
+
+.diff-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* Tool comparison */
+.tool-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.tool-compare-col h4 {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+}
+
+.tool-compare-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.tool-compare-row .tool-delta {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.tool-delta.delta-new { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.tool-delta.delta-removed { background: color-mix(in srgb, var(--error) 15%, transparent); color: var(--error); }
+.tool-delta.delta-changed { background: color-mix(in srgb, var(--warning) 15%, transparent); color: var(--warning); }
+
+/* File comparison */
+.file-diff-list {
+  font-size: 12px;
+}
+
+.file-diff-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.file-diff-item .file-diff-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.file-diff-badge.new-file { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.file-diff-badge.same-file { background: var(--badge-bg); color: var(--text-muted); }
+
 /* Scrollbar styling */
 .sidebar-phases::-webkit-scrollbar,
 .main::-webkit-scrollbar {
@@ -784,6 +998,8 @@ function renderTimeline() {
 }
 
 /* ── Render: Phase Detail ── */
+var _filmstripState = {}; // { phaseNum: { selectedPair: [a, b], activeTab: 'prompt'|'tools'|'files' } }
+
 function renderPhaseDetail(num) {
   var phase = DATA.phases.find(function(p) { return p.number === num; });
   if (!phase) return;
@@ -812,6 +1028,11 @@ function renderPhaseDetail(num) {
     html += '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px;">' + escapeHtml(phase.description) + '</p>';
   }
 
+  // Filmstrip for multi-attempt phases
+  if (phase.attempts.length > 1) {
+    html += renderFilmstrip(phase);
+  }
+
   // Attempts
   html += '<div class="attempts-section">';
   html += '<h3>Attempts</h3>';
@@ -821,6 +1042,321 @@ function renderPhaseDetail(num) {
   html += '</div>';
 
   document.getElementById('main-panel').innerHTML = html;
+
+  // Bind filmstrip events after DOM insertion
+  if (phase.attempts.length > 1) {
+    bindFilmstripEvents(phase);
+  }
+}
+
+/* ── Filmstrip ── */
+function renderFilmstrip(phase) {
+  var state = _filmstripState[phase.number];
+  if (!state) {
+    state = { selectedA: 0, selectedB: 1, activeTab: 'prompt' };
+    _filmstripState[phase.number] = state;
+  }
+
+  var html = '<div class="filmstrip-section">';
+  html += '<h3>Retry Filmstrip</h3>';
+
+  // Thumbnail strip
+  html += '<div class="filmstrip-strip">';
+  phase.attempts.forEach(function(attempt, idx) {
+    var selected = (idx === state.selectedA || idx === state.selectedB);
+    var toolCount = 0;
+    if (attempt.tools) attempt.tools.forEach(function(t) { toolCount += t.count; });
+
+    html += '<div class="filmstrip-card' + (selected ? ' filmstrip-selected' : '') + '" data-attempt-idx="' + idx + '">';
+    html += '<div class="fs-attempt-num">#' + attempt.number + '</div>';
+
+    var outcomeClass = attempt.fail_reason ? 'fs-fail' : 'fs-pass';
+    var outcomeText = attempt.fail_reason ? escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) : '✅ Success';
+    html += '<div class="fs-outcome ' + outcomeClass + '">' + outcomeText + '</div>';
+
+    html += '<span class="strategy-badge strategy-' + attempt.strategy + '">' + attempt.strategy + '</span>';
+    html += '<div class="fs-tools">' + toolCount + ' tool calls</div>';
+    html += '</div>';
+
+    if (idx < phase.attempts.length - 1) {
+      html += '<div class="filmstrip-connector">→</div>';
+    }
+  });
+  html += '</div>';
+
+  // Diff panel
+  html += '<div class="diff-panel" id="diff-panel-' + phase.number + '">';
+
+  // Tabs
+  html += '<div class="diff-tabs">';
+  var tabs = ['prompt', 'tools', 'files'];
+  tabs.forEach(function(tab) {
+    var active = (tab === state.activeTab) ? ' diff-tab-active' : '';
+    var label = tab === 'prompt' ? 'Prompt Diff' : tab === 'tools' ? 'Tool Diff' : 'File Diff';
+    html += '<button class="diff-tab' + active + '" data-tab="' + tab + '">' + label + '</button>';
+  });
+  html += '</div>';
+
+  // Pair selector
+  html += '<div class="diff-pair-selector">';
+  html += 'Comparing: <select id="diff-select-a-' + phase.number + '">';
+  phase.attempts.forEach(function(a, idx) {
+    var sel = (idx === state.selectedA) ? ' selected' : '';
+    html += '<option value="' + idx + '"' + sel + '>Attempt ' + a.number + '</option>';
+  });
+  html += '</select> vs <select id="diff-select-b-' + phase.number + '">';
+  phase.attempts.forEach(function(a, idx) {
+    var sel = (idx === state.selectedB) ? ' selected' : '';
+    html += '<option value="' + idx + '"' + sel + '>Attempt ' + a.number + '</option>';
+  });
+  html += '</select></div>';
+
+  // Diff content
+  html += '<div class="diff-content" id="diff-content-' + phase.number + '">';
+  html += renderDiffContent(phase, state);
+  html += '</div>';
+
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function bindFilmstripEvents(phase) {
+  var pn = phase.number;
+  var panel = document.getElementById('diff-panel-' + pn);
+  if (!panel) return;
+
+  // Tab clicks
+  panel.querySelectorAll('.diff-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      _filmstripState[pn].activeTab = btn.getAttribute('data-tab');
+      updateDiffPanel(phase);
+    });
+  });
+
+  // Pair selectors
+  var selA = document.getElementById('diff-select-a-' + pn);
+  var selB = document.getElementById('diff-select-b-' + pn);
+  if (selA) selA.addEventListener('change', function() {
+    _filmstripState[pn].selectedA = parseInt(selA.value);
+    updateDiffPanel(phase);
+    updateFilmstripHighlight(phase);
+  });
+  if (selB) selB.addEventListener('change', function() {
+    _filmstripState[pn].selectedB = parseInt(selB.value);
+    updateDiffPanel(phase);
+    updateFilmstripHighlight(phase);
+  });
+
+  // Filmstrip card clicks — toggle between A and B
+  document.querySelectorAll('.filmstrip-card[data-attempt-idx]').forEach(function(card) {
+    card.addEventListener('click', function() {
+      var idx = parseInt(card.getAttribute('data-attempt-idx'));
+      var st = _filmstripState[pn];
+      // If clicking current A, swap; otherwise set as B
+      if (idx === st.selectedA) {
+        st.selectedA = st.selectedB;
+        st.selectedB = idx;
+      } else {
+        st.selectedB = idx;
+      }
+      // Ensure A < B
+      if (st.selectedA > st.selectedB) {
+        var tmp = st.selectedA;
+        st.selectedA = st.selectedB;
+        st.selectedB = tmp;
+      }
+      var sa = document.getElementById('diff-select-a-' + pn);
+      var sb = document.getElementById('diff-select-b-' + pn);
+      if (sa) sa.value = st.selectedA;
+      if (sb) sb.value = st.selectedB;
+      updateDiffPanel(phase);
+      updateFilmstripHighlight(phase);
+    });
+  });
+}
+
+function updateFilmstripHighlight(phase) {
+  var st = _filmstripState[phase.number];
+  document.querySelectorAll('.filmstrip-card[data-attempt-idx]').forEach(function(card) {
+    var idx = parseInt(card.getAttribute('data-attempt-idx'));
+    if (idx === st.selectedA || idx === st.selectedB) {
+      card.classList.add('filmstrip-selected');
+    } else {
+      card.classList.remove('filmstrip-selected');
+    }
+  });
+}
+
+function updateDiffPanel(phase) {
+  var pn = phase.number;
+  var st = _filmstripState[pn];
+  var content = document.getElementById('diff-content-' + pn);
+  if (content) content.innerHTML = renderDiffContent(phase, st);
+
+  // Update tab active state
+  var panel = document.getElementById('diff-panel-' + pn);
+  if (panel) {
+    panel.querySelectorAll('.diff-tab').forEach(function(btn) {
+      if (btn.getAttribute('data-tab') === st.activeTab) {
+        btn.classList.add('diff-tab-active');
+      } else {
+        btn.classList.remove('diff-tab-active');
+      }
+    });
+  }
+}
+
+function renderDiffContent(phase, state) {
+  var a = phase.attempts[state.selectedA];
+  var b = phase.attempts[state.selectedB];
+  if (!a || !b) return '<div class="diff-empty">Select two attempts to compare.</div>';
+  if (state.selectedA === state.selectedB) return '<div class="diff-empty">Select different attempts to see a diff.</div>';
+
+  switch (state.activeTab) {
+    case 'prompt': return renderPromptDiff(a, b);
+    case 'tools': return renderToolDiff(a, b);
+    case 'files': return renderFileDiff(a, b);
+    default: return '';
+  }
+}
+
+/* ── Prompt Diff (simple line-based unified diff) ── */
+function computeLineDiff(linesA, linesB) {
+  // Simple LCS-based diff
+  var m = linesA.length, n = linesB.length;
+  // Build LCS table
+  var dp = [];
+  for (var i = 0; i <= m; i++) {
+    dp[i] = [];
+    for (var j = 0; j <= n; j++) {
+      if (i === 0 || j === 0) dp[i][j] = 0;
+      else if (linesA[i-1] === linesB[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+      else dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+    }
+  }
+  // Backtrack to produce diff ops
+  var result = [];
+  var i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && linesA[i-1] === linesB[j-1]) {
+      result.unshift({ type: 'ctx', text: linesA[i-1] });
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      result.unshift({ type: 'add', text: linesB[j-1] });
+      j--;
+    } else {
+      result.unshift({ type: 'del', text: linesA[i-1] });
+      i--;
+    }
+  }
+  return result;
+}
+
+function renderPromptDiff(a, b) {
+  var textA = a.prompt_text || '';
+  var textB = b.prompt_text || '';
+  if (!textA && !textB) return '<div class="diff-empty">No prompt text available for these attempts.</div>';
+
+  var linesA = textA.split('\n');
+  var linesB = textB.split('\n');
+
+  // For very large prompts, limit diff input
+  if (linesA.length > 500) linesA = linesA.slice(0, 500);
+  if (linesB.length > 500) linesB = linesB.slice(0, 500);
+
+  var diff = computeLineDiff(linesA, linesB);
+
+  if (diff.every(function(d) { return d.type === 'ctx'; })) {
+    return '<div class="diff-empty">Prompts are identical between these attempts.</div>';
+  }
+
+  var html = '';
+  diff.forEach(function(d) {
+    var prefix = d.type === 'add' ? '+' : d.type === 'del' ? '-' : ' ';
+    html += '<div class="diff-line diff-' + d.type + '">' + prefix + ' ' + escapeHtml(d.text) + '</div>';
+  });
+  return html;
+}
+
+/* ── Tool Diff ── */
+function renderToolDiff(a, b) {
+  var toolsA = {};
+  var toolsB = {};
+  if (a.tools) a.tools.forEach(function(t) { toolsA[t.name] = t.count; });
+  if (b.tools) b.tools.forEach(function(t) { toolsB[t.name] = t.count; });
+
+  var allTools = {};
+  Object.keys(toolsA).forEach(function(k) { allTools[k] = true; });
+  Object.keys(toolsB).forEach(function(k) { allTools[k] = true; });
+  var names = Object.keys(allTools).sort();
+
+  if (names.length === 0) return '<div class="diff-empty">No tool data available for these attempts.</div>';
+
+  var html = '<div class="tool-compare">';
+
+  // Attempt A column
+  html += '<div class="tool-compare-col"><h4>Attempt ' + a.number + '</h4>';
+  names.forEach(function(name) {
+    var countA = toolsA[name] || 0;
+    var countB = toolsB[name] || 0;
+    html += '<div class="tool-compare-row">';
+    html += '<span class="tool-chip tool-' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>';
+    html += '<span>' + countA + '</span>';
+    if (countA > 0 && countB === 0) html += '<span class="tool-delta delta-removed">removed</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Attempt B column
+  html += '<div class="tool-compare-col"><h4>Attempt ' + b.number + '</h4>';
+  names.forEach(function(name) {
+    var countA = toolsA[name] || 0;
+    var countB = toolsB[name] || 0;
+    var delta = countB - countA;
+    html += '<div class="tool-compare-row">';
+    html += '<span class="tool-chip tool-' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>';
+    html += '<span>' + countB + '</span>';
+    if (countA === 0 && countB > 0) html += '<span class="tool-delta delta-new">new</span>';
+    else if (delta !== 0) html += '<span class="tool-delta delta-changed">' + (delta > 0 ? '+' : '') + delta + '</span>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  return html;
+}
+
+/* ── File Diff ── */
+function renderFileDiff(a, b) {
+  var filesA = {};
+  var filesB = {};
+  if (a.files) a.files.forEach(function(f) { filesA[f.path] = f.ops; });
+  if (b.files) b.files.forEach(function(f) { filesB[f.path] = f.ops; });
+
+  var allPaths = {};
+  Object.keys(filesA).forEach(function(k) { allPaths[k] = true; });
+  Object.keys(filesB).forEach(function(k) { allPaths[k] = true; });
+  var paths = Object.keys(allPaths).sort();
+
+  if (paths.length === 0) return '<div class="diff-empty">No file data available for these attempts.</div>';
+
+  var html = '<div class="file-diff-list">';
+  paths.forEach(function(path) {
+    var inA = !!filesA[path];
+    var inB = !!filesB[path];
+    html += '<div class="file-diff-item">';
+    if (inB && !inA) {
+      html += '<span class="file-diff-badge new-file">NEW in #' + b.number + '</span>';
+    } else if (inA && !inB) {
+      html += '<span class="file-diff-badge" style="background:color-mix(in srgb,var(--error) 15%,transparent);color:var(--error);">ONLY in #' + a.number + '</span>';
+    } else {
+      html += '<span class="file-diff-badge same-file">BOTH</span>';
+    }
+    html += '<span>' + escapeHtml(path) + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
 }
 
 function renderAttemptCard(attempt) {

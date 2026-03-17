@@ -267,9 +267,10 @@ assemble_recorder_json() {
         log_file="$run_dir/logs/phase-${pn}.log"
       fi
 
-      local exec_meta session tools files git_commits
+      local exec_meta session tools files git_commits prompt_text
       exec_meta=$(rec_extract_exec_meta "$log_file")
       session=$(rec_extract_session "$log_file")
+      prompt_text=$(rec_extract_prompt_text "$log_file")
 
       # Tools and files only from the last attempt's raw.json
       if [ "$attempt_num" -eq "$total_attempts" ]; then
@@ -289,8 +290,16 @@ assemble_recorder_json() {
       a_exit=$(printf '%s' "$exec_meta" | sed -n 's/.*"exit_code":\([^,}]*\).*/\1/p')
       a_duration=$(printf '%s' "$exec_meta" | sed -n 's/.*"duration_s":\([^,}]*\).*/\1/p')
 
-      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"standard","fail_reason":null,"session":%s,"tools":%s,"files":%s,"git_commits":%s}' \
-        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$session" "$tools" "$files" "$git_commits"
+      # Format prompt_text as JSON value (already escaped, wrap in quotes; or null)
+      local prompt_json
+      if [ "$prompt_text" = "null" ]; then
+        prompt_json="null"
+      else
+        prompt_json="\"$prompt_text\""
+      fi
+
+      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"standard","fail_reason":null,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
+        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
 
       attempt_num=$((attempt_num + 1))
     done

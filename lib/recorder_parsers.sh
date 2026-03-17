@@ -234,6 +234,46 @@ rec_verify_verdict() {
   fi
 }
 
+# Extract prompt text between === PROMPT === and === RESPONSE === markers.
+# If prompt exceeds 200 lines, truncates to first 80 + last 80 with omission notice.
+# Args: $1 - log file path
+# Prints: JSON-escaped prompt text, or "null" if missing
+rec_extract_prompt_text() {
+  local log_file="$1"
+
+  if [ ! -f "$log_file" ]; then
+    echo "null"
+    return 0
+  fi
+
+  # Extract lines between markers using awk
+  local raw_text
+  raw_text=$(awk '
+    /^=== PROMPT ===/ { capture = 1; next }
+    /^=== RESPONSE ===/ { capture = 0 }
+    capture { print }
+  ' "$log_file")
+
+  if [ -z "$raw_text" ]; then
+    echo "null"
+    return 0
+  fi
+
+  # Count lines
+  local line_count
+  line_count=$(printf '%s\n' "$raw_text" | wc -l | tr -d ' ')
+
+  if [ "$line_count" -gt 200 ]; then
+    local head_part tail_part omitted
+    omitted=$((line_count - 160))
+    head_part=$(printf '%s\n' "$raw_text" | head -n 80)
+    tail_part=$(printf '%s\n' "$raw_text" | tail -n 80)
+    raw_text=$(printf '%s\n... %s lines omitted ...\n%s' "$head_part" "$omitted" "$tail_part")
+  fi
+
+  json_escape "$raw_text"
+}
+
 # Extract git commits for a phase.
 # Args: $1 - phase number
 # Prints: JSON array of {sha, message}
