@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # bats file_tags=execution
 
-# Tests for lib/execution.sh — build_default_prompt, rotate_phase_log, capture_git_context
+# Tests for lib/execution.sh and lib/prompt.sh — build_default_prompt, rotate_phase_log, capture_git_context
 
 setup() {
   # Stub log_verbose before sourcing (called at definition-time? no, only at call-time)
   log_verbose() { :; }
   log_ts() { :; }
   VERBOSE_MODE=false
+  source "${BATS_TEST_DIRNAME}/../lib/prompt.sh"
   source "${BATS_TEST_DIRNAME}/../lib/execution.sh"
   _tmpdir="$BATS_TEST_TMPDIR"
 }
