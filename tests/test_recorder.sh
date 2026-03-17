@@ -117,6 +117,27 @@ EOF
 {"type":"tool_use","name":"Edit","input":{"file_path":"src/foo.ts","old_string":"e","new_string":"f"}}
 EOF
 
+  # Raw JSON for phase 2 attempt 1 (failed attempt)
+  cat > "$run_dir/logs/phase-2.attempt-1.raw.json" << 'EOF'
+{"type":"tool_use","name":"Read","input":{"file_path":"src/main.ts"}}
+{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}
+EOF
+
+  # Raw JSON for phase 2 attempt 2 (failed attempt)
+  cat > "$run_dir/logs/phase-2.attempt-2.raw.json" << 'EOF'
+{"type":"tool_use","name":"Read","input":{"file_path":"src/main.ts"}}
+{"type":"tool_use","name":"Edit","input":{"file_path":"src/main.ts","old_string":"x","new_string":"y"}}
+{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}
+EOF
+
+  # Raw JSON for phase 2 current attempt (success)
+  cat > "$run_dir/logs/phase-2.raw.json" << 'EOF'
+{"type":"tool_use","name":"Read","input":{"file_path":"src/main.ts"}}
+{"type":"tool_use","name":"Edit","input":{"file_path":"src/main.ts","old_string":"a","new_string":"b"}}
+{"type":"tool_use","name":"Edit","input":{"file_path":"src/util.ts","old_string":"c","new_string":"d"}}
+{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}
+EOF
+
   # Verification log for phase 1
   cat > "$run_dir/logs/phase-1.verify.log" << 'EOF'
 Verifying phase 1...
@@ -639,4 +660,22 @@ LOGEOF
   echo "$result" | grep -q '"prompt_text":"Do phase 2"'
   # Phase 2 attempt 2 should have "Retry phase 2"
   echo "$result" | grep -q '"prompt_text":"Retry phase 2"'
+}
+
+@test "assemble_recorder_json: includes tools and files for all attempts" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 2 attempt 1 should have tools from its raw.json (Read:1, Bash:1)
+  # Phase 2 attempt 2 should have tools from its raw.json (Read:1, Edit:1, Bash:1)
+  # Phase 2 attempt 3 should have tools from phase-2.raw.json (Read:1, Edit:2, Bash:1)
+  # All attempts should have non-empty tools arrays
+  # Count occurrences of "Bash" tool in the output — should appear in all attempts
+  local bash_count
+  bash_count=$(echo "$result" | grep -o '"name":"Bash"' | wc -l | tr -d ' ')
+  # Phase 1 (1 Bash) + Phase 2 attempt 1 (1 Bash) + attempt 2 (1 Bash) + attempt 3 (1 Bash) = 4
+  [ "$bash_count" -eq 4 ]
+  # Phase 2 attempt 1 should have files (src/main.ts only from Read)
+  echo "$result" | grep -q '"path":"src/main.ts"'
+  # Phase 2 attempt 3 should have src/util.ts (new file in last attempt)
+  echo "$result" | grep -q '"path":"src/util.ts"'
 }

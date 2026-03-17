@@ -272,14 +272,15 @@ assemble_recorder_json() {
       session=$(rec_extract_session "$log_file")
       prompt_text=$(rec_extract_prompt_text "$log_file")
 
-      # Tools and files only from the last attempt's raw.json
-      if [ "$attempt_num" -eq "$total_attempts" ]; then
-        tools=$(rec_extract_tools "$run_dir/logs/phase-${pn}.raw.json")
-        files=$(rec_extract_files "$run_dir/logs/phase-${pn}.raw.json")
+      # Tools and files from per-attempt raw.json
+      local raw_file
+      if [ "$attempt_num" -lt "$total_attempts" ]; then
+        raw_file="$run_dir/logs/phase-${pn}.attempt-${attempt_num}.raw.json"
       else
-        tools="[]"
-        files="[]"
+        raw_file="$run_dir/logs/phase-${pn}.raw.json"
       fi
+      tools=$(rec_extract_tools "$raw_file")
+      files=$(rec_extract_files "$raw_file")
 
       git_commits=$(rec_extract_git_commits "$pn")
 

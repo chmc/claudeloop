@@ -74,9 +74,13 @@ apply_retry_strategy() {
   _strategy=$(retry_strategy "$_ars_attempt" "$MAX_RETRIES")
   _strategy=$(escalate_strategy "$_strategy" "$_fail_reason" "$_consec")
 
-  # Archive previous attempt log
+  # Archive previous attempt log and raw JSON
   if [ -f "$_ars_log" ]; then
     cp "$_ars_log" "${_ars_log%.log}.attempt-$((_ars_attempt - 1)).log"
+  fi
+  local _ars_raw="${_ars_log%.log}.raw.json"
+  if [ -f "$_ars_raw" ]; then
+    cp "$_ars_raw" "${_ars_log%.log}.attempt-$((_ars_attempt - 1)).raw.json"
   fi
 
   _prev_verify_log=".claudeloop/logs/phase-$_ars_phase.verify.log"
