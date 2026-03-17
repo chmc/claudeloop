@@ -188,6 +188,12 @@ body {
   border-radius: 8px;
   padding: 16px;
   box-shadow: var(--card-shadow);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.summary-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  transform: translateY(-1px);
 }
 
 .summary-card .card-label {
@@ -333,6 +339,11 @@ body {
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: var(--card-shadow);
+  transition: box-shadow 0.15s;
+}
+
+.attempt-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 
 .attempt-card-header {
@@ -598,12 +609,13 @@ body {
   border: 2px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
   text-align: center;
 }
 
 .filmstrip-card:hover {
   border-color: var(--accent);
+  transform: translateY(-2px);
 }
 
 .filmstrip-card.filmstrip-selected {
@@ -786,6 +798,30 @@ body {
 .file-diff-badge.new-file { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
 .file-diff-badge.same-file { background: var(--badge-bg); color: var(--text-muted); }
 
+/* Phase description */
+.phase-description {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Empty / no-data states */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.empty-state .empty-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.empty-state .empty-text {
+  font-size: 13px;
+}
+
 /* Scrollbar styling */
 .sidebar-phases::-webkit-scrollbar,
 .main::-webkit-scrollbar {
@@ -796,6 +832,28 @@ body {
 .main::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 3px;
+}
+
+/* Responsive: collapse sidebar on narrow screens */
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    min-width: unset;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-phases { display: flex; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+  .phase-item { padding: 8px 12px; white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+  .phase-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .phase-item .phase-meta,
+  .phase-item .attempt-list { display: none; }
+  .main { padding: 16px; }
+  .summary-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .tt-state-panel { grid-template-columns: 1fr; }
+  .tt-state-stats { grid-column: 1; }
+  .tool-compare { grid-template-columns: 1fr; }
 }
 
 /* Time-travel slider */
@@ -1272,7 +1330,7 @@ function renderPhaseDetail(num) {
 
   // Description
   if (phase.description) {
-    html += '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px;">' + escapeHtml(phase.description) + '</p>';
+    html += '<p class="phase-description">' + escapeHtml(phase.description) + '</p>';
   }
 
   // Filmstrip for multi-attempt phases
@@ -1734,7 +1792,7 @@ function renderFilesView() {
   html += '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">' + matrix.paths.length + ' files touched across ' + DATA.phases.length + ' phases</p>';
 
   if (matrix.paths.length === 0) {
-    html += '<p style="color:var(--text-muted);font-size:13px;">No file operations recorded.</p>';
+    html += '<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">No file operations recorded.</div></div>';
     document.getElementById('main-panel').innerHTML = html;
     return;
   }
@@ -1966,7 +2024,7 @@ function reconstructState(timestamp) {
 function renderTimeTravel() {
   var dur = totalDuration();
   if (!dur || dur === 0) {
-    document.getElementById('main-panel').innerHTML = '<h2>Time Travel</h2><p style="color:var(--text-muted)">No timing data available for this run.</p>';
+    document.getElementById('main-panel').innerHTML = '<h2>Time Travel</h2><div class="empty-state"><div class="empty-icon">⏪</div><div class="empty-text">No timing data available for this run.</div></div>';
     return;
   }
 

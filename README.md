@@ -54,6 +54,8 @@ ClaudeLoop takes a different approach: your plan is split into phases, each phas
 
 🛡️ **Safe interrupts** — Ctrl+C saves progress. `--continue` resumes exactly where you left off.
 
+📊 **Flight recorder** — Auto-generated HTML report at `.claudeloop/replay.html`. Timeline, retry filmstrip with prompt diffs, time-travel slider. Updates live during execution.
+
 ## See It In Action
 
 **Todo tracking** — Claude's task lists render as an interactive panel:
@@ -306,6 +308,24 @@ The AI parser:
 5. Shows you the plan for confirmation before proceeding
 
 The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--continue`.
+
+</details>
+
+<details>
+<summary><strong>Flight Recorder</strong></summary>
+
+ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/replay.html` during execution. Open it in any browser to inspect your run — no server or external dependencies required.
+
+**What it shows:**
+
+- **Execution timeline** — phase-by-phase overview with status, duration, cost, and token usage
+- **Retry filmstrip** — when a phase retries, see each attempt side-by-side with prompt diffs highlighting what changed between retries
+- **Time-travel slider** — scrub through execution history to see the state of the run at any point in time
+- **Tool usage** — which tools Claude called (Edit, Write, Read, etc.) and how often
+- **File impact** — which files were touched during each phase
+- **Git commits** — commits associated with each phase
+
+The report updates automatically as phases complete — just refresh your browser. It also works on archived runs (`.claudeloop/archive/*/replay.html`).
 
 </details>
 

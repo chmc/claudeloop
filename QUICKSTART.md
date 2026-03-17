@@ -169,6 +169,17 @@ Or to tail the raw log directly:
 
 Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run.
 
+## Flight Recorder
+
+ClaudeLoop auto-generates a visual HTML report at `.claudeloop/replay.html`. Open it in a browser to see:
+
+- Execution timeline with phase status, duration, cost, and tokens
+- Retry filmstrip with prompt diffs between attempts
+- Time-travel slider to scrub through execution history
+- Tool usage breakdown and file impact per phase
+
+The report updates as phases complete — just refresh the browser. No external dependencies; everything is inlined in a single HTML file.
+
 ## Project Structure
 
 ```
@@ -182,6 +193,7 @@ claudeloop/
 │   ├── ui.sh              # terminal output
 │   ├── ai_parser.sh       # AI plan decomposition
 │   ├── verify.sh          # phase verification
+│   ├── recorder.sh        # flight recorder (JSON extraction + HTML generation)
 │   └── release_notes.sh   # release changelog formatter
 ├── tests/
 │   ├── run_all_tests.sh
