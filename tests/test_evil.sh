@@ -9,6 +9,7 @@ setup() {
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/plan_changes.sh"
   . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   . "${BATS_TEST_DIRNAME}/../lib/dependencies.sh"
 }

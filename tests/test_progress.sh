@@ -9,6 +9,7 @@ setup() {
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/plan_changes.sh"
   PHASE_COUNT=3
   PHASE_NUMBERS="1 2 3"
   PHASE_TITLE_1="Phase One"
