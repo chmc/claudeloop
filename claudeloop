@@ -1069,8 +1069,9 @@ main() {
   if ! $DRY_RUN && is_run_complete; then
     prompt_archive_completed_run --internal
     if [ "$_ARCHIVE_COMPLETED" = true ]; then
-      remove_lock
-      exec "$0" "$@"
+      LIVE_LOG=""
+      init_live_log
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     fi
   fi
 

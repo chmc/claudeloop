@@ -94,8 +94,7 @@ archive_current_run() {
     .claudeloop/state \
     .claudeloop/logs \
     .claudeloop/signals \
-    .claudeloop/live.log \
-    .claudeloop/ai-parsed-plan.md; do
+    .claudeloop/live.log; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true
   done
@@ -231,10 +230,8 @@ prompt_archive_completed_run() {
       ;;
   esac
 
+  log_ts "Archiving completed run..."
   archive_current_run $_internal_flag
-
-  # Remove config for truly fresh start (wizard re-runs)
-  rm -f .claudeloop/.claudeloop.conf
 
   # Re-initialize progress: reset all phases to pending (safety net if exec fails)
   for _phase_num in $PHASE_NUMBERS; do

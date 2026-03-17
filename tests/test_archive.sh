@@ -392,7 +392,7 @@ EOF
   [ "$_sc" -eq 0 ]
 }
 
-@test "archive_current_run: ai-parsed-plan.md is moved into archive" {
+@test "archive_current_run: ai-parsed-plan.md is NOT moved (persists for reuse)" {
   mkdir -p .claudeloop/logs
   printf 'test\n' > .claudeloop/PROGRESS.md
   printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
@@ -404,13 +404,12 @@ EOF
   local _archive_dir
   _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
   [ -f "${_archive_dir}plan.md" ]
-  # ai-parsed-plan.md is also moved into archive
-  [ -f "${_archive_dir}ai-parsed-plan.md" ]
-  # Original no longer exists (moved)
-  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
+  # ai-parsed-plan.md is NOT moved — it persists for reuse
+  [ ! -f "${_archive_dir}ai-parsed-plan.md" ]
+  [ -f ".claudeloop/ai-parsed-plan.md" ]
 }
 
-@test "archive_current_run: ai-parsed-plan.md moved even with external plan file" {
+@test "archive_current_run: ai-parsed-plan.md persists even with external plan file" {
   _create_run_state
   printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
 
@@ -418,8 +417,8 @@ EOF
 
   local _archive_dir
   _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
-  [ -f "${_archive_dir}ai-parsed-plan.md" ]
-  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
+  [ ! -f "${_archive_dir}ai-parsed-plan.md" ]
+  [ -f ".claudeloop/ai-parsed-plan.md" ]
 }
 
 @test "prompt_archive_completed_run: sets _ARCHIVE_COMPLETED=true in YES_MODE" {
@@ -431,6 +430,18 @@ EOF
   prompt_archive_completed_run --internal
 
   [ "$_ARCHIVE_COMPLETED" = "true" ]
+}
+
+@test "prompt_archive_completed_run: prints archiving feedback message" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+
+  local _output
+  _output=$(prompt_archive_completed_run --internal 2>&1)
+
+  echo "$_output" | grep -q "Archiving completed run"
 }
 
 @test "prompt_archive_completed_run: sets _ARCHIVE_DECLINED=true when user says no" {
@@ -447,7 +458,7 @@ EOF
   [ -f .claudeloop/PROGRESS.md ]
 }
 
-@test "prompt_archive_completed_run: removes .claudeloop.conf after archive" {
+@test "prompt_archive_completed_run: preserves .claudeloop.conf after archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   phase_set STATUS "1" "completed"
@@ -456,10 +467,10 @@ EOF
 
   prompt_archive_completed_run --internal
 
-  [ ! -f .claudeloop/.claudeloop.conf ]
+  [ -f .claudeloop/.claudeloop.conf ]
 }
 
-@test "prompt_archive_completed_run: only archive/ remains after archive" {
+@test "prompt_archive_completed_run: archive/ conf and parsed plan remain after archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   printf 'parsed plan\n' > .claudeloop/ai-parsed-plan.md
@@ -469,8 +480,10 @@ EOF
 
   prompt_archive_completed_run --internal
 
-  # Only archive/ should remain in .claudeloop/
+  # archive/, .claudeloop.conf, and ai-parsed-plan.md should remain
   local _remaining
-  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' || true)
+  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' | grep -v '^\.claudeloop\.conf$' | grep -v '^ai-parsed-plan\.md$' || true)
   [ -z "$_remaining" ]
+  [ -f .claudeloop/.claudeloop.conf ]
+  [ -f .claudeloop/ai-parsed-plan.md ]
 }
