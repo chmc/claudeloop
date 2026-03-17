@@ -396,6 +396,182 @@ body {
   color: var(--error);
 }
 
+/* Tool chips */
+.tool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--badge-bg);
+  color: var(--text-secondary);
+}
+
+.tool-chip.tool-Read { color: #3b82f6; }
+.tool-chip.tool-Edit { color: #f59e0b; }
+.tool-chip.tool-Write { color: #8b5cf6; }
+.tool-chip.tool-Bash { color: #22c55e; }
+.tool-chip.tool-Grep { color: #06b6d4; }
+.tool-chip.tool-Glob { color: #ec4899; }
+
+.tool-chip .tool-count {
+  opacity: 0.7;
+  font-size: 10px;
+}
+
+/* Git commits section */
+.git-commits-section {
+  margin-top: 12px;
+}
+
+.git-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.git-toggle-btn:hover {
+  background: var(--badge-bg);
+}
+
+.git-toggle-btn .toggle-arrow {
+  font-size: 8px;
+  transition: transform 0.15s;
+}
+
+.git-toggle-btn.open .toggle-arrow {
+  transform: rotate(90deg);
+}
+
+.git-commits-list {
+  margin-top: 8px;
+  display: none;
+}
+
+.git-commits-list.visible {
+  display: block;
+}
+
+.git-commit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.git-commit .commit-sha {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.git-commit .commit-msg {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Files view */
+.files-table-wrapper {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.files-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.files-table th,
+.files-table td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.files-table th {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+}
+
+.files-table th.file-col {
+  text-align: left;
+  min-width: 200px;
+}
+
+.files-table td.file-cell {
+  text-align: left;
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.files-table td.ops-cell {
+  white-space: nowrap;
+}
+
+.op-badge {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  margin: 0 1px;
+}
+
+.op-badge.op-R { background: color-mix(in srgb, #3b82f6 20%, transparent); color: #3b82f6; }
+.op-badge.op-W { background: color-mix(in srgb, #8b5cf6 20%, transparent); color: #8b5cf6; }
+.op-badge.op-E { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #f59e0b; }
+
+.files-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.files-count-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--badge-bg);
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+
 /* Scrollbar styling */
 .sidebar-phases::-webkit-scrollbar,
 .main::-webkit-scrollbar {
@@ -496,6 +672,11 @@ function renderSidebar() {
   // Overview item
   html += '<div class="phase-item overview-item' + (currentView === 'overview' ? ' active' : '') + '" onclick="showOverview()">';
   html += '<div class="phase-label"><span class="icon">📊</span><span class="title">Overview</span></div>';
+  html += '</div>';
+
+  // Files item
+  html += '<div class="phase-item overview-item' + (currentView === 'files' ? ' active' : '') + '" onclick="showFiles()">';
+  html += '<div class="phase-label"><span class="icon">📁</span><span class="title">Files</span><span class="files-count-badge">' + countAllFiles() + '</span></div>';
   html += '</div>';
 
   DATA.phases.forEach(function(phase) {
@@ -673,9 +854,39 @@ function renderAttemptCard(attempt) {
   html += metric('Time', formatTime(attempt.started_at) + ' → ' + formatTime(attempt.ended_at));
   html += '</div>';
 
+  // Tool chips
+  if (attempt.tools && attempt.tools.length > 0) {
+    html += '<div class="tool-chips">';
+    attempt.tools.forEach(function(t) {
+      html += '<span class="tool-chip tool-' + escapeHtml(t.name) + '">';
+      html += escapeHtml(t.name);
+      html += '<span class="tool-count">×' + t.count + '</span>';
+      html += '</span>';
+    });
+    html += '</div>';
+  }
+
   // Fail reason
   if (attempt.fail_reason) {
     html += '<div class="fail-reason">Failure: ' + escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) + '</div>';
+  }
+
+  // Git commits
+  if (attempt.git_commits && attempt.git_commits.length > 0) {
+    var toggleId = 'git-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
+    html += '<div class="git-commits-section">';
+    html += '<button class="git-toggle-btn" onclick="toggleCommits(this, \'' + toggleId + '\')">';
+    html += '<span class="toggle-arrow">▶</span> Git Commits (' + attempt.git_commits.length + ')';
+    html += '</button>';
+    html += '<div class="git-commits-list" id="' + toggleId + '">';
+    attempt.git_commits.forEach(function(c) {
+      html += '<div class="git-commit">';
+      html += '<span class="commit-sha">' + escapeHtml(c.sha) + '</span>';
+      html += '<span class="commit-msg">' + escapeHtml(c.message) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
   }
 
   html += '</div>';
@@ -689,6 +900,115 @@ function metric(label, value) {
     '</div>';
 }
 
+/* ── Helpers: Files view ── */
+function countAllFiles() {
+  var seen = {};
+  DATA.phases.forEach(function(p) {
+    p.attempts.forEach(function(a) {
+      if (a.files) a.files.forEach(function(f) { seen[f.path] = true; });
+    });
+  });
+  return Object.keys(seen).length;
+}
+
+function buildFileMatrix() {
+  // Build map: path -> { phases: { phaseNum: Set<op> }, touchCount }
+  var fileMap = {};
+  DATA.phases.forEach(function(phase) {
+    phase.attempts.forEach(function(attempt) {
+      if (!attempt.files) return;
+      attempt.files.forEach(function(f) {
+        if (!fileMap[f.path]) fileMap[f.path] = { phases: {}, touchCount: 0 };
+        if (!fileMap[f.path].phases[phase.number]) fileMap[f.path].phases[phase.number] = {};
+        f.ops.forEach(function(op) {
+          fileMap[f.path].phases[phase.number][op] = true;
+        });
+      });
+    });
+  });
+  // Count total phase touches per file
+  Object.keys(fileMap).forEach(function(path) {
+    fileMap[path].touchCount = Object.keys(fileMap[path].phases).length;
+  });
+  // Sort by most-touched, then alphabetically
+  var paths = Object.keys(fileMap).sort(function(a, b) {
+    var diff = fileMap[b].touchCount - fileMap[a].touchCount;
+    return diff !== 0 ? diff : a.localeCompare(b);
+  });
+  return { fileMap: fileMap, paths: paths };
+}
+
+function opToLetter(op) {
+  if (op === 'Read') return 'R';
+  if (op === 'Write') return 'W';
+  if (op === 'Edit') return 'E';
+  return op.charAt(0);
+}
+
+function renderFilesView() {
+  var matrix = buildFileMatrix();
+  var html = '<h2>File Impact</h2>';
+  html += '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">' + matrix.paths.length + ' files touched across ' + DATA.phases.length + ' phases</p>';
+
+  if (matrix.paths.length === 0) {
+    html += '<p style="color:var(--text-muted);font-size:13px;">No file operations recorded.</p>';
+    document.getElementById('main-panel').innerHTML = html;
+    return;
+  }
+
+  // Get phases that have any file activity
+  var activePhases = [];
+  DATA.phases.forEach(function(p) {
+    var hasFiles = false;
+    p.attempts.forEach(function(a) { if (a.files && a.files.length > 0) hasFiles = true; });
+    if (hasFiles) activePhases.push(p);
+  });
+
+  html += '<div class="files-table-wrapper">';
+  html += '<table class="files-table">';
+  html += '<thead><tr><th class="file-col">File</th>';
+  activePhases.forEach(function(p) {
+    html += '<th title="Phase ' + p.number + ': ' + escapeHtml(p.title) + '">P' + escapeHtml(p.number) + '</th>';
+  });
+  html += '</tr></thead>';
+  html += '<tbody>';
+
+  matrix.paths.forEach(function(path) {
+    var entry = matrix.fileMap[path];
+    html += '<tr>';
+    html += '<td class="file-cell" title="' + escapeHtml(path) + '">' + escapeHtml(path) + '</td>';
+    activePhases.forEach(function(p) {
+      var ops = entry.phases[p.number];
+      if (ops) {
+        html += '<td class="ops-cell">';
+        Object.keys(ops).sort().forEach(function(op) {
+          var letter = opToLetter(op);
+          html += '<span class="op-badge op-' + letter + '">' + letter + '</span>';
+        });
+        html += '</td>';
+      } else {
+        html += '<td></td>';
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  document.getElementById('main-panel').innerHTML = html;
+}
+
+/* ── Toggle git commits ── */
+function toggleCommits(btn, id) {
+  var list = document.getElementById(id);
+  if (list.classList.contains('visible')) {
+    list.classList.remove('visible');
+    btn.classList.remove('open');
+  } else {
+    list.classList.add('visible');
+    btn.classList.add('open');
+  }
+}
+
 /* ── Navigation ── */
 function showOverview() {
   currentView = 'overview';
@@ -700,6 +1020,12 @@ function showPhaseDetail(num) {
   currentView = 'phase:' + num;
   renderSidebar();
   renderPhaseDetail(num);
+}
+
+function showFiles() {
+  currentView = 'files';
+  renderSidebar();
+  renderFilesView();
 }
 
 /* ── Init ── */
