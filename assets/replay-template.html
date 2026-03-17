@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeLoop Flight Recorder</title>
+<style>
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-card: #ffffff;
+  --bg-sidebar: #fafafa;
+  --text-primary: #1a1a2e;
+  --text-secondary: #555555;
+  --text-muted: #888888;
+  --border: #e0e0e0;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --pending: #94a3b8;
+  --badge-bg: #f0f0f0;
+  --timeline-bg: #e5e7eb;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --sidebar-active: #ededfd;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-primary: #1a1b26;
+    --bg-secondary: #16161e;
+    --bg-card: #24283b;
+    --bg-sidebar: #1f2335;
+    --text-primary: #c0caf5;
+    --text-secondary: #a9b1d6;
+    --text-muted: #565f89;
+    --border: #3b4261;
+    --accent: #7aa2f7;
+    --accent-hover: #89b4fa;
+    --success: #9ece6a;
+    --error: #f7768e;
+    --warning: #e0af68;
+    --pending: #565f89;
+    --badge-bg: #292e42;
+    --timeline-bg: #3b4261;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --sidebar-active: #292e42;
+  }
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-header h1 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.sidebar-header .plan-name {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-phases {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.phase-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+
+.phase-item:hover {
+  background: var(--bg-secondary);
+}
+
+.phase-item.active {
+  background: var(--sidebar-active);
+  border-left-color: var(--accent);
+}
+
+.phase-item.overview-item {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.phase-item .phase-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.phase-item .phase-label .icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.phase-item .phase-label .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phase-item .phase-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  padding-left: 22px;
+}
+
+.phase-item .attempt-list {
+  padding-left: 22px;
+  margin-top: 4px;
+}
+
+.phase-item .attempt-entry {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.phase-item .attempt-entry .attempt-icon {
+  font-size: 10px;
+}
+
+/* Main panel */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.main h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* Summary cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: var(--card-shadow);
+}
+
+.summary-card .card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.summary-card .card-value {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.summary-card .card-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* Timeline bar */
+.timeline-section {
+  margin-bottom: 24px;
+}
+
+.timeline-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.timeline-bar {
+  display: flex;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--timeline-bg);
+}
+
+.timeline-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-width: 2px;
+  position: relative;
+}
+
+.timeline-segment:hover {
+  opacity: 0.85;
+}
+
+.timeline-segment .seg-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+}
+
+.timeline-segment.status-completed { background: var(--success); }
+.timeline-segment.status-failed { background: var(--error); }
+.timeline-segment.status-in_progress { background: var(--accent); }
+.timeline-segment.status-pending { background: var(--pending); }
+
+.timeline-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.timeline-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.legend-completed::before { background: var(--success) !important; }
+.legend-failed::before { background: var(--error) !important; }
+.legend-pending::before { background: var(--pending) !important; }
+
+/* Phase detail */
+.phase-detail-header {
+  margin-bottom: 20px;
+}
+
+.phase-detail-header h2 {
+  margin-bottom: 4px;
+}
+
+.phase-detail-header .phase-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-completed { background: var(--success); color: #fff; }
+.badge-failed { background: var(--error); color: #fff; }
+.badge-in_progress { background: var(--accent); color: #fff; }
+.badge-pending { background: var(--pending); color: #fff; }
+
+.phase-detail-meta {
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.phase-detail-meta .meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Attempt cards */
+.attempts-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.attempt-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--card-shadow);
+}
+
+.attempt-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.attempt-card-header .attempt-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.strategy-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--badge-bg);
+  color: var(--text-secondary);
+}
+
+.strategy-badge.strategy-standard { color: var(--accent); }
+.strategy-badge.strategy-stripped { color: var(--warning); }
+.strategy-badge.strategy-targeted { color: var(--error); }
+.strategy-badge.strategy-escalated { color: var(--error); }
+
+.attempt-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+}
+
+.attempt-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.attempt-metric .metric-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.attempt-metric .metric-value {
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.fail-reason {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+  border-left: 3px solid var(--error);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--error);
+}
+
+/* Scrollbar styling */
+.sidebar-phases::-webkit-scrollbar,
+.main::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-phases::-webkit-scrollbar-thumb,
+.main::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1>Flight Recorder</h1>
+    <div class="plan-name" id="plan-name"></div>
+  </div>
+  <div class="sidebar-phases" id="sidebar-phases"></div>
+</div>
+
+<div class="main" id="main-panel"></div>
+
+<script>
+// <!--JSON_DATA-->
+const DATA = {
+  "version": 1,
+  "generated_at": "2026-03-17T14:30:00",
+  "run": {
+    "plan_file": "PLAN.md",
+    "phase_count": 5,
+    "completed": 3,
+    "failed": 1,
+    "pending": 1,
+    "started_at": "2026-03-17 10:00:00",
+    "ended_at": "2026-03-17 12:45:00",
+    "total_cost_usd": 2.8731,
+    "total_input_tokens": 185000,
+    "total_output_tokens": 62000,
+    "total_cache_read": 45000,
+    "total_cache_write": 22000
+  },
+  "phases": [
+    {
+      "number": "1",
+      "title": "Setup project structure",
+      "description": "Create initial files, directories, and configuration",
+      "status": "completed",
+      "dependencies": [],
+      "started_at": "2026-03-17 10:00:00",
+      "ended_at": "2026-03-17 10:12:00",
+      "signal_no_changes": false,
+      "refactor_status": "",
+      "verification_verdict": "passed",
+      "attempts": [
+        {
+          "number": 1,
+          "started_at": "2026-03-17T10:00:00",
+          "ended_at": "2026-03-17T10:12:00",
+          "exit_code": 0,
+          "duration_s": 720,
+          "strategy": "standard",
+          "fail_reason": null,
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.1823,
+            "duration_s": 45.2,
+            "turns": 18,
+            "input_tokens": 25000,
+            "output_tokens": 8000,
+            "cache_read": 6000,
+            "cache_write": 3000
+          },
+          "tools": [
+            {"name": "Read", "count": 12},
+            {"name": "Edit", "count": 8},
+            {"name": "Write", "count": 3},
+            {"name": "Bash", "count": 5}
+          ],
+          "files": [
+            {"path": "src/index.ts", "ops": ["Write"]},
+            {"path": "src/config.ts", "ops": ["Write"]},
+            {"path": "package.json", "ops": ["Read", "Edit"]}
+          ],
+          "git_commits": [
+            {"sha": "a1b2c3d", "message": "Phase 1: setup project structure"}
+          ]
+        }
+      ]
+    },
+    {
+      "number": "2",
+      "title": "Implement core API endpoints",
+      "description": "Build REST API with authentication and validation",
+      "status": "completed",
+      "dependencies": ["1"],
+      "started_at": "2026-03-17 10:12:00",
+      "ended_at": "2026-03-17 10:58:00",
+      "signal_no_changes": false,
+      "refactor_status": "completed",
+      "verification_verdict": "passed",
+      "attempts": [
+        {
+          "number": 1,
+          "started_at": "2026-03-17T10:12:00",
+          "ended_at": "2026-03-17T10:30:00",
+          "exit_code": 1,
+          "duration_s": 1080,
+          "strategy": "standard",
+          "fail_reason": "exit_code_1",
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.2150,
+            "duration_s": 62.1,
+            "turns": 22,
+            "input_tokens": 30000,
+            "output_tokens": 10000,
+            "cache_read": 8000,
+            "cache_write": 4000
+          },
+          "tools": [
+            {"name": "Read", "count": 15},
+            {"name": "Edit", "count": 12},
+            {"name": "Bash", "count": 8}
+          ],
+          "files": [
+            {"path": "src/api/routes.ts", "ops": ["Write", "Edit"]},
+            {"path": "src/api/auth.ts", "ops": ["Write"]},
+            {"path": "tests/api.test.ts", "ops": ["Write"]}
+          ],
+          "git_commits": []
+        },
+        {
+          "number": 2,
+          "started_at": "2026-03-17T10:32:00",
+          "ended_at": "2026-03-17T10:45:00",
+          "exit_code": 1,
+          "duration_s": 780,
+          "strategy": "stripped",
+          "fail_reason": "verification_failed",
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.1980,
+            "duration_s": 55.3,
+            "turns": 19,
+            "input_tokens": 28000,
+            "output_tokens": 9000,
+            "cache_read": 7000,
+            "cache_write": 3500
+          },
+          "tools": [
+            {"name": "Read", "count": 10},
+            {"name": "Edit", "count": 15},
+            {"name": "Bash", "count": 12}
+          ],
+          "files": [
+            {"path": "src/api/routes.ts", "ops": ["Edit"]},
+            {"path": "src/api/auth.ts", "ops": ["Edit"]},
+            {"path": "tests/api.test.ts", "ops": ["Edit"]}
+          ],
+          "git_commits": []
+        },
+        {
+          "number": 3,
+          "started_at": "2026-03-17T10:47:00",
+          "ended_at": "2026-03-17T10:58:00",
+          "exit_code": 0,
+          "duration_s": 660,
+          "strategy": "targeted",
+          "fail_reason": null,
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.2456,
+            "duration_s": 48.7,
+            "turns": 16,
+            "input_tokens": 32000,
+            "output_tokens": 11000,
+            "cache_read": 9000,
+            "cache_write": 4500
+          },
+          "tools": [
+            {"name": "Read", "count": 8},
+            {"name": "Edit", "count": 6},
+            {"name": "Bash", "count": 10}
+          ],
+          "files": [
+            {"path": "src/api/routes.ts", "ops": ["Edit"]},
+            {"path": "src/api/validation.ts", "ops": ["Write"]},
+            {"path": "tests/api.test.ts", "ops": ["Edit"]}
+          ],
+          "git_commits": [
+            {"sha": "d4e5f6a", "message": "Phase 2: implement core API endpoints"}
+          ]
+        }
+      ]
+    },
+    {
+      "number": "3",
+      "title": "Database schema and migrations",
+      "description": "Design database schema and create migration scripts",
+      "status": "completed",
+      "dependencies": ["1"],
+      "started_at": "2026-03-17 10:58:00",
+      "ended_at": "2026-03-17 11:20:00",
+      "signal_no_changes": false,
+      "refactor_status": "",
+      "verification_verdict": "passed",
+      "attempts": [
+        {
+          "number": 1,
+          "started_at": "2026-03-17T10:58:00",
+          "ended_at": "2026-03-17T11:20:00",
+          "exit_code": 0,
+          "duration_s": 1320,
+          "strategy": "standard",
+          "fail_reason": null,
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.3200,
+            "duration_s": 72.5,
+            "turns": 24,
+            "input_tokens": 35000,
+            "output_tokens": 12000,
+            "cache_read": 8000,
+            "cache_write": 4000
+          },
+          "tools": [
+            {"name": "Read", "count": 6},
+            {"name": "Write", "count": 5},
+            {"name": "Bash", "count": 14}
+          ],
+          "files": [
+            {"path": "db/schema.sql", "ops": ["Write"]},
+            {"path": "db/migrations/001.sql", "ops": ["Write"]},
+            {"path": "db/seed.sql", "ops": ["Write"]}
+          ],
+          "git_commits": [
+            {"sha": "b7c8d9e", "message": "Phase 3: database schema and migrations"}
+          ]
+        }
+      ]
+    },
+    {
+      "number": "4",
+      "title": "Frontend dashboard components",
+      "description": "Build React dashboard with charts and data tables",
+      "status": "failed",
+      "dependencies": ["2", "3"],
+      "started_at": "2026-03-17 11:20:00",
+      "ended_at": "2026-03-17 12:45:00",
+      "signal_no_changes": false,
+      "refactor_status": "",
+      "verification_verdict": "failed",
+      "attempts": [
+        {
+          "number": 1,
+          "started_at": "2026-03-17T11:20:00",
+          "ended_at": "2026-03-17T12:00:00",
+          "exit_code": 1,
+          "duration_s": 2400,
+          "strategy": "standard",
+          "fail_reason": "exit_code_1",
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.4500,
+            "duration_s": 95.3,
+            "turns": 35,
+            "input_tokens": 45000,
+            "output_tokens": 18000,
+            "cache_read": 12000,
+            "cache_write": 6000
+          },
+          "tools": [
+            {"name": "Read", "count": 20},
+            {"name": "Write", "count": 8},
+            {"name": "Edit", "count": 15},
+            {"name": "Bash", "count": 18}
+          ],
+          "files": [
+            {"path": "src/components/Dashboard.tsx", "ops": ["Write"]},
+            {"path": "src/components/Chart.tsx", "ops": ["Write"]},
+            {"path": "src/components/DataTable.tsx", "ops": ["Write"]}
+          ],
+          "git_commits": []
+        },
+        {
+          "number": 2,
+          "started_at": "2026-03-17T12:05:00",
+          "ended_at": "2026-03-17T12:45:00",
+          "exit_code": 1,
+          "duration_s": 2400,
+          "strategy": "stripped",
+          "fail_reason": "verification_failed",
+          "session": {
+            "model": "claude-sonnet-4-20250514",
+            "cost_usd": 0.5122,
+            "duration_s": 102.8,
+            "turns": 38,
+            "input_tokens": 48000,
+            "output_tokens": 20000,
+            "cache_read": 14000,
+            "cache_write": 7000
+          },
+          "tools": [
+            {"name": "Read", "count": 18},
+            {"name": "Edit", "count": 22},
+            {"name": "Bash", "count": 20}
+          ],
+          "files": [
+            {"path": "src/components/Dashboard.tsx", "ops": ["Edit"]},
+            {"path": "src/components/Chart.tsx", "ops": ["Edit"]},
+            {"path": "src/styles/dashboard.css", "ops": ["Write"]}
+          ],
+          "git_commits": []
+        }
+      ]
+    },
+    {
+      "number": "5",
+      "title": "Integration tests and CI pipeline",
+      "description": "Write end-to-end tests and configure CI/CD",
+      "status": "pending",
+      "dependencies": ["4"],
+      "started_at": null,
+      "ended_at": null,
+      "signal_no_changes": false,
+      "refactor_status": "",
+      "verification_verdict": null,
+      "attempts": []
+    }
+  ]
+};
+
+/* ── State ── */
+let currentView = 'overview';
+
+/* ── Helpers ── */
+function statusIcon(status) {
+  switch (status) {
+    case 'completed': return '✅';
+    case 'failed': return '❌';
+    case 'in_progress': return '🔄';
+    case 'pending': return '⏳';
+    default: return '⏳';
+  }
+}
+
+function formatDuration(seconds) {
+  if (seconds == null) return '—';
+  if (seconds < 60) return seconds + 's';
+  var m = Math.floor(seconds / 60);
+  var s = seconds % 60;
+  if (m < 60) return m + 'm ' + s + 's';
+  var h = Math.floor(m / 60);
+  m = m % 60;
+  return h + 'h ' + m + 'm';
+}
+
+function formatCost(usd) {
+  if (usd == null) return '—';
+  return '$' + usd.toFixed(4);
+}
+
+function formatTokens(n) {
+  if (n == null || n === 0) return '0';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return '' + n;
+}
+
+function formatTime(ts) {
+  if (!ts) return '—';
+  // Extract HH:MM from various formats
+  var m = ts.match(/(\d{2}:\d{2}):\d{2}/);
+  return m ? m[1] : ts;
+}
+
+function totalDuration() {
+  var r = DATA.run;
+  if (!r.started_at || !r.ended_at) return null;
+  var s = new Date(r.started_at.replace(' ', 'T'));
+  var e = new Date(r.ended_at.replace(' ', 'T'));
+  return Math.round((e - s) / 1000);
+}
+
+function phaseDuration(phase) {
+  if (!phase.started_at || !phase.ended_at) return null;
+  var s = new Date(phase.started_at.replace(' ', 'T'));
+  var e = new Date(phase.ended_at.replace(' ', 'T'));
+  return Math.round((e - s) / 1000);
+}
+
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/* ── Render: Sidebar ── */
+function renderSidebar() {
+  var el = document.getElementById('sidebar-phases');
+  var html = '';
+
+  // Overview item
+  html += '<div class="phase-item overview-item' + (currentView === 'overview' ? ' active' : '') + '" onclick="showOverview()">';
+  html += '<div class="phase-label"><span class="icon">📊</span><span class="title">Overview</span></div>';
+  html += '</div>';
+
+  DATA.phases.forEach(function(phase) {
+    var isActive = currentView === 'phase:' + phase.number;
+    html += '<div class="phase-item' + (isActive ? ' active' : '') + '" onclick="showPhaseDetail(\'' + phase.number + '\')">';
+    html += '<div class="phase-label">';
+    html += '<span class="icon">' + statusIcon(phase.status) + '</span>';
+    html += '<span class="title">Phase ' + escapeHtml(phase.number) + ': ' + escapeHtml(phase.title) + '</span>';
+    html += '</div>';
+
+    // Meta line
+    var dur = phaseDuration(phase);
+    var cost = 0;
+    phase.attempts.forEach(function(a) { if (a.session) cost += a.session.cost_usd; });
+    var parts = [];
+    if (dur != null) parts.push(formatDuration(dur));
+    if (cost > 0) parts.push(formatCost(cost));
+    if (phase.attempts.length > 1) parts.push(phase.attempts.length + ' attempts');
+    if (parts.length) {
+      html += '<div class="phase-meta">' + parts.join(' · ') + '</div>';
+    }
+
+    // Attempt sub-entries for multi-attempt phases
+    if (phase.attempts.length > 1) {
+      html += '<div class="attempt-list">';
+      phase.attempts.forEach(function(a) {
+        var icon = a.fail_reason ? '❌' : '✅';
+        html += '<div class="attempt-entry"><span class="attempt-icon">' + icon + '</span> Attempt ' + a.number;
+        if (a.strategy !== 'standard') html += ' <span style="opacity:0.6">(' + a.strategy + ')</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+
+  // Plan name
+  document.getElementById('plan-name').textContent = DATA.run.plan_file;
+}
+
+/* ── Render: Overview ── */
+function renderOverview() {
+  var r = DATA.run;
+  var dur = totalDuration();
+  var totalTokens = r.total_input_tokens + r.total_output_tokens;
+  var totalAttempts = 0;
+  DATA.phases.forEach(function(p) { totalAttempts += p.attempts.length; });
+
+  var html = '<h2>Run Overview</h2>';
+
+  // Summary cards
+  html += '<div class="summary-cards">';
+  html += renderSummaryCard('Duration', formatDuration(dur), r.started_at ? formatTime(r.started_at) + ' → ' + formatTime(r.ended_at) : '');
+  html += renderSummaryCard('Cost', formatCost(r.total_cost_usd), 'across ' + totalAttempts + ' attempts');
+  html += renderSummaryCard('Phases', r.completed + '/' + r.phase_count + ' done', r.failed > 0 ? r.failed + ' failed' : 'none failed');
+  html += renderSummaryCard('Tokens', formatTokens(totalTokens), formatTokens(r.total_input_tokens) + ' in / ' + formatTokens(r.total_output_tokens) + ' out');
+  html += renderSummaryCard('Cache', formatTokens(r.total_cache_read + r.total_cache_write), formatTokens(r.total_cache_read) + ' read / ' + formatTokens(r.total_cache_write) + ' write');
+  html += '</div>';
+
+  // Timeline
+  html += renderTimeline();
+
+  document.getElementById('main-panel').innerHTML = html;
+}
+
+function renderSummaryCard(label, value, sub) {
+  return '<div class="summary-card">' +
+    '<div class="card-label">' + escapeHtml(label) + '</div>' +
+    '<div class="card-value">' + escapeHtml(value) + '</div>' +
+    (sub ? '<div class="card-sub">' + escapeHtml(sub) + '</div>' : '') +
+    '</div>';
+}
+
+function renderTimeline() {
+  var dur = totalDuration();
+  if (!dur || dur === 0) return '';
+
+  var runStart = new Date(DATA.run.started_at.replace(' ', 'T')).getTime();
+  var html = '<div class="timeline-section">';
+  html += '<h3>Timeline</h3>';
+  html += '<div class="timeline-bar">';
+
+  DATA.phases.forEach(function(phase) {
+    var pd = phaseDuration(phase);
+    if (pd == null || pd === 0) return;
+    var pct = (pd / dur * 100).toFixed(1);
+    html += '<div class="timeline-segment status-' + phase.status + '" style="width:' + pct + '%" onclick="showPhaseDetail(\'' + phase.number + '\')" title="Phase ' + phase.number + ': ' + escapeHtml(phase.title) + ' (' + formatDuration(pd) + ')">';
+    if (parseFloat(pct) > 8) {
+      html += '<span class="seg-label">P' + phase.number + '</span>';
+    }
+    html += '</div>';
+  });
+
+  html += '</div>';
+  html += '<div class="timeline-legend">';
+  html += '<span class="legend-completed">Completed</span>';
+  html += '<span class="legend-failed">Failed</span>';
+  html += '<span class="legend-pending">Pending</span>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+/* ── Render: Phase Detail ── */
+function renderPhaseDetail(num) {
+  var phase = DATA.phases.find(function(p) { return p.number === num; });
+  if (!phase) return;
+
+  var html = '<div class="phase-detail-header">';
+  html += '<h2>Phase ' + escapeHtml(phase.number) + ': ' + escapeHtml(phase.title) + '</h2>';
+  html += '<span class="phase-status-badge badge-' + phase.status + '">' + phase.status.replace('_', ' ') + '</span>';
+
+  // Meta
+  var dur = phaseDuration(phase);
+  var cost = 0;
+  phase.attempts.forEach(function(a) { if (a.session) cost += a.session.cost_usd; });
+  html += '<div class="phase-detail-meta">';
+  if (dur != null) html += '<span class="meta-item">⏱ ' + formatDuration(dur) + '</span>';
+  if (cost > 0) html += '<span class="meta-item">💰 ' + formatCost(cost) + '</span>';
+  html += '<span class="meta-item">🔄 ' + phase.attempts.length + ' attempt' + (phase.attempts.length !== 1 ? 's' : '') + '</span>';
+  if (phase.dependencies.length) html += '<span class="meta-item">⤵ depends on: ' + phase.dependencies.join(', ') + '</span>';
+  if (phase.verification_verdict) html += '<span class="meta-item">' + (phase.verification_verdict === 'passed' ? '✅' : '❌') + ' verify: ' + phase.verification_verdict + '</span>';
+  if (phase.signal_no_changes) html += '<span class="meta-item">📝 no changes</span>';
+  if (phase.refactor_status) html += '<span class="meta-item">♻️ refactor: ' + phase.refactor_status + '</span>';
+  html += '</div>';
+  html += '</div>';
+
+  // Description
+  if (phase.description) {
+    html += '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:20px;">' + escapeHtml(phase.description) + '</p>';
+  }
+
+  // Attempts
+  html += '<div class="attempts-section">';
+  html += '<h3>Attempts</h3>';
+  phase.attempts.forEach(function(attempt) {
+    html += renderAttemptCard(attempt);
+  });
+  html += '</div>';
+
+  document.getElementById('main-panel').innerHTML = html;
+}
+
+function renderAttemptCard(attempt) {
+  var html = '<div class="attempt-card">';
+
+  // Header
+  html += '<div class="attempt-card-header">';
+  html += '<span class="attempt-title">';
+  html += (attempt.fail_reason ? '❌' : '✅') + ' Attempt ' + attempt.number;
+  html += '</span>';
+  html += '<span class="strategy-badge strategy-' + attempt.strategy + '">' + attempt.strategy + '</span>';
+  html += '</div>';
+
+  // Metrics
+  html += '<div class="attempt-metrics">';
+  if (attempt.session) {
+    var s = attempt.session;
+    html += metric('Model', s.model ? s.model.replace('claude-', '').replace(/-\d{8}$/, '') : '—');
+    html += metric('Cost', formatCost(s.cost_usd));
+    html += metric('Duration', formatDuration(attempt.duration_s));
+    html += metric('Turns', '' + (s.turns || 0));
+    html += metric('Tokens In', formatTokens(s.input_tokens));
+    html += metric('Tokens Out', formatTokens(s.output_tokens));
+    html += metric('Cache Read', formatTokens(s.cache_read));
+    html += metric('Cache Write', formatTokens(s.cache_write));
+  } else {
+    html += metric('Duration', formatDuration(attempt.duration_s));
+    html += metric('Session', 'No data');
+  }
+  html += metric('Exit Code', attempt.exit_code != null ? '' + attempt.exit_code : '—');
+  html += metric('Time', formatTime(attempt.started_at) + ' → ' + formatTime(attempt.ended_at));
+  html += '</div>';
+
+  // Fail reason
+  if (attempt.fail_reason) {
+    html += '<div class="fail-reason">Failure: ' + escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) + '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function metric(label, value) {
+  return '<div class="attempt-metric">' +
+    '<span class="metric-label">' + escapeHtml(label) + '</span>' +
+    '<span class="metric-value">' + escapeHtml(value) + '</span>' +
+    '</div>';
+}
+
+/* ── Navigation ── */
+function showOverview() {
+  currentView = 'overview';
+  renderSidebar();
+  renderOverview();
+}
+
+function showPhaseDetail(num) {
+  currentView = 'phase:' + num;
+  renderSidebar();
+  renderPhaseDetail(num);
+}
+
+/* ── Init ── */
+renderSidebar();
+renderOverview();
+</script>
+</body>
+</html>
