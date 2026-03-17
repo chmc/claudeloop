@@ -797,6 +797,248 @@ body {
   background: var(--border);
   border-radius: 3px;
 }
+
+/* Time-travel slider */
+.time-travel-container {
+  margin-bottom: 24px;
+}
+
+.time-travel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tt-play-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: none;
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.tt-play-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tt-speed-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tt-time-display {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--text-secondary);
+  min-width: 120px;
+}
+
+.tt-slider-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.tt-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--timeline-bg);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+}
+
+.tt-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: grab;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.tt-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: grab;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.tt-tick-marks {
+  position: relative;
+  height: 16px;
+  margin-top: 2px;
+}
+
+.tt-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  transform: translateX(-1px);
+}
+
+.tt-tick.tt-tick-phase {
+  background: var(--accent);
+  height: 12px;
+}
+
+.tt-tick.tt-tick-attempt {
+  background: var(--text-muted);
+  height: 8px;
+  opacity: 0.5;
+}
+
+.tt-tick-label {
+  position: absolute;
+  top: 12px;
+  font-size: 9px;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.tt-time-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* State display panel */
+.tt-state-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.tt-state-phases {
+  grid-column: 1;
+}
+
+.tt-state-stats {
+  grid-column: 2;
+}
+
+.tt-state-phases h3,
+.tt-state-stats h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.tt-phase-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tt-phase-row:last-child {
+  border-bottom: none;
+}
+
+.tt-phase-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tt-phase-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tt-phase-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.tt-badge-completed { background: var(--success); color: #fff; }
+.tt-badge-in_progress { background: var(--accent); color: #fff; }
+.tt-badge-failed { background: var(--error); color: #fff; }
+.tt-badge-pending { background: var(--badge-bg); color: var(--text-muted); }
+
+.tt-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--card-shadow);
+}
+
+.tt-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.tt-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.tt-stat-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tt-keyboard-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 12px;
+  text-align: center;
+}
+
+.tt-keyboard-hint kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  font-family: monospace;
+  font-size: 11px;
+}
 </style>
 </head>
 <body>
@@ -891,6 +1133,11 @@ function renderSidebar() {
   // Files item
   html += '<div class="phase-item overview-item' + (currentView === 'files' ? ' active' : '') + '" onclick="showFiles()">';
   html += '<div class="phase-label"><span class="icon">📁</span><span class="title">Files</span><span class="files-count-badge">' + countAllFiles() + '</span></div>';
+  html += '</div>';
+
+  // Time Travel item
+  html += '<div class="phase-item overview-item' + (currentView === 'timetravel' ? ' active' : '') + '" onclick="showTimeTravel()">';
+  html += '<div class="phase-label"><span class="icon">⏪</span><span class="title">Time Travel</span></div>';
   html += '</div>';
 
   DATA.phases.forEach(function(phase) {
@@ -1563,6 +1810,433 @@ function showFiles() {
   renderSidebar();
   renderFilesView();
 }
+
+function showTimeTravel() {
+  currentView = 'timetravel';
+  renderSidebar();
+  renderTimeTravel();
+}
+
+/* ── Time Travel ── */
+var _ttState = {
+  events: [],
+  playing: false,
+  speed: 1,
+  currentIdx: -1,
+  animFrame: null,
+  runStart: 0,
+  runEnd: 0,
+  runDuration: 0,
+  currentTime: 0
+};
+
+function buildEventTimeline() {
+  var events = [];
+  var runStart = DATA.run.started_at ? new Date(DATA.run.started_at.replace(' ', 'T')).getTime() : 0;
+  if (!runStart) return events;
+
+  DATA.phases.forEach(function(phase) {
+    if (phase.started_at) {
+      events.push({
+        time: new Date(phase.started_at.replace(' ', 'T')).getTime(),
+        type: 'phase_start',
+        phase: phase.number,
+        label: 'P' + phase.number + ' start'
+      });
+    }
+    phase.attempts.forEach(function(attempt) {
+      if (attempt.started_at) {
+        events.push({
+          time: new Date(attempt.started_at.replace(' ', 'T')).getTime(),
+          type: 'attempt_start',
+          phase: phase.number,
+          attempt: attempt.number,
+          label: 'P' + phase.number + ' attempt ' + attempt.number
+        });
+      }
+      if (attempt.ended_at) {
+        events.push({
+          time: new Date(attempt.ended_at.replace(' ', 'T')).getTime(),
+          type: 'attempt_end',
+          phase: phase.number,
+          attempt: attempt.number,
+          fail_reason: attempt.fail_reason,
+          label: 'P' + phase.number + ' attempt ' + attempt.number + (attempt.fail_reason ? ' fail' : ' done')
+        });
+      }
+    });
+    if (phase.ended_at) {
+      events.push({
+        time: new Date(phase.ended_at.replace(' ', 'T')).getTime(),
+        type: 'phase_end',
+        phase: phase.number,
+        status: phase.status,
+        label: 'P' + phase.number + ' ' + phase.status
+      });
+    }
+  });
+
+  events.sort(function(a, b) { return a.time - b.time || (a.type === 'phase_start' ? -1 : 1); });
+  return events;
+}
+
+function reconstructState(timestamp) {
+  // Compute state at a given timestamp
+  var state = {
+    phases: {},    // phaseNum -> { status, attempts, cost }
+    totalCost: 0,
+    filesModified: {},
+    retryCount: 0,
+    elapsed: 0
+  };
+
+  if (!_ttState.runStart) return state;
+  state.elapsed = Math.max(0, Math.round((timestamp - _ttState.runStart) / 1000));
+
+  DATA.phases.forEach(function(phase) {
+    var pState = { status: 'pending', attempts: 0, cost: 0 };
+
+    // Check if phase has started
+    if (phase.started_at) {
+      var phaseStart = new Date(phase.started_at.replace(' ', 'T')).getTime();
+      if (timestamp >= phaseStart) {
+        pState.status = 'in_progress';
+      }
+    }
+
+    // Process attempts
+    phase.attempts.forEach(function(attempt) {
+      if (!attempt.started_at) return;
+      var attemptStart = new Date(attempt.started_at.replace(' ', 'T')).getTime();
+      if (timestamp < attemptStart) return;
+
+      pState.attempts++;
+      if (pState.attempts > 1) state.retryCount++;
+
+      // Interpolate cost based on time within attempt
+      if (attempt.session && attempt.session.cost_usd) {
+        if (attempt.ended_at) {
+          var attemptEnd = new Date(attempt.ended_at.replace(' ', 'T')).getTime();
+          if (timestamp >= attemptEnd) {
+            pState.cost += attempt.session.cost_usd;
+          } else {
+            // Proportional cost
+            var progress = (timestamp - attemptStart) / (attemptEnd - attemptStart);
+            pState.cost += attempt.session.cost_usd * progress;
+          }
+        } else {
+          pState.cost += attempt.session.cost_usd;
+        }
+      }
+
+      // Check attempt end
+      if (attempt.ended_at) {
+        var aEnd = new Date(attempt.ended_at.replace(' ', 'T')).getTime();
+        if (timestamp >= aEnd) {
+          if (attempt.fail_reason) {
+            pState.status = 'failed';
+          }
+          // Collect files from completed attempts
+          if (attempt.files) {
+            attempt.files.forEach(function(f) {
+              if (f.ops && (f.ops.indexOf('Edit') >= 0 || f.ops.indexOf('Write') >= 0)) {
+                state.filesModified[f.path] = true;
+              }
+            });
+          }
+        }
+      }
+    });
+
+    // Check if phase completed
+    if (phase.ended_at) {
+      var phaseEnd = new Date(phase.ended_at.replace(' ', 'T')).getTime();
+      if (timestamp >= phaseEnd) {
+        pState.status = phase.status;  // completed or failed
+      }
+    }
+
+    state.totalCost += pState.cost;
+    state.phases[phase.number] = pState;
+  });
+
+  return state;
+}
+
+function renderTimeTravel() {
+  var dur = totalDuration();
+  if (!dur || dur === 0) {
+    document.getElementById('main-panel').innerHTML = '<h2>Time Travel</h2><p style="color:var(--text-muted)">No timing data available for this run.</p>';
+    return;
+  }
+
+  // Initialize state
+  _ttState.events = buildEventTimeline();
+  _ttState.runStart = new Date(DATA.run.started_at.replace(' ', 'T')).getTime();
+  _ttState.runEnd = new Date(DATA.run.ended_at.replace(' ', 'T')).getTime();
+  _ttState.runDuration = _ttState.runEnd - _ttState.runStart;
+
+  // Default to end of run
+  if (_ttState.currentTime < _ttState.runStart || _ttState.currentTime > _ttState.runEnd) {
+    _ttState.currentTime = _ttState.runEnd;
+  }
+
+  var html = '<h2>Time Travel</h2>';
+
+  // Controls bar
+  html += '<div class="time-travel-container">';
+  html += '<div class="time-travel-controls">';
+  html += '<button class="tt-play-btn" id="tt-play-btn" title="Play/Pause (Space)">▶</button>';
+  html += '<select class="tt-speed-select" id="tt-speed-select">';
+  html += '<option value="1">1×</option>';
+  html += '<option value="5">5×</option>';
+  html += '<option value="10">10×</option>';
+  html += '</select>';
+  html += '<span class="tt-time-display" id="tt-time-display"></span>';
+  html += '</div>';
+
+  // Slider
+  html += '<div class="tt-slider-wrapper">';
+  html += '<input type="range" class="tt-slider" id="tt-slider" min="0" max="' + _ttState.runDuration + '" value="' + (_ttState.currentTime - _ttState.runStart) + '" step="1">';
+
+  // Tick marks
+  html += '<div class="tt-tick-marks">';
+  _ttState.events.forEach(function(evt) {
+    var pct = ((evt.time - _ttState.runStart) / _ttState.runDuration * 100).toFixed(2);
+    var cls = (evt.type === 'phase_start' || evt.type === 'phase_end') ? 'tt-tick-phase' : 'tt-tick-attempt';
+    html += '<div class="tt-tick ' + cls + '" style="left:' + pct + '%" title="' + escapeHtml(evt.label) + '"></div>';
+    if (evt.type === 'phase_start') {
+      html += '<span class="tt-tick-label" style="left:' + pct + '%">P' + evt.phase + '</span>';
+    }
+  });
+  html += '</div>';
+
+  // Time range labels
+  html += '<div class="tt-time-range">';
+  html += '<span>' + formatTime(DATA.run.started_at) + '</span>';
+  html += '<span>' + formatTime(DATA.run.ended_at) + '</span>';
+  html += '</div>';
+  html += '</div>'; // tt-slider-wrapper
+
+  // State panel
+  html += '<div class="tt-state-panel">';
+  html += '<div class="tt-state-phases" id="tt-state-phases"></div>';
+  html += '<div class="tt-state-stats" id="tt-state-stats"></div>';
+  html += '</div>';
+
+  // Keyboard hint
+  html += '<div class="tt-keyboard-hint">';
+  html += '<kbd>←</kbd> <kbd>→</kbd> step between events · <kbd>Space</kbd> play/pause';
+  html += '</div>';
+
+  html += '</div>'; // time-travel-container
+
+  document.getElementById('main-panel').innerHTML = html;
+
+  // Bind events
+  bindTimeTravelEvents();
+
+  // Render initial state
+  updateTimeTravelDisplay();
+}
+
+function bindTimeTravelEvents() {
+  var slider = document.getElementById('tt-slider');
+  var playBtn = document.getElementById('tt-play-btn');
+  var speedSelect = document.getElementById('tt-speed-select');
+
+  if (slider) {
+    slider.addEventListener('input', function() {
+      _ttState.currentTime = _ttState.runStart + parseInt(slider.value);
+      updateTimeTravelDisplay();
+    });
+  }
+
+  if (playBtn) {
+    playBtn.addEventListener('click', function() {
+      togglePlayback();
+    });
+  }
+
+  if (speedSelect) {
+    speedSelect.value = '' + _ttState.speed;
+    speedSelect.addEventListener('change', function() {
+      _ttState.speed = parseInt(speedSelect.value);
+    });
+  }
+}
+
+function togglePlayback() {
+  if (_ttState.playing) {
+    stopPlayback();
+  } else {
+    startPlayback();
+  }
+}
+
+function startPlayback() {
+  _ttState.playing = true;
+  var playBtn = document.getElementById('tt-play-btn');
+  if (playBtn) playBtn.textContent = '⏸';
+
+  // If at end, restart from beginning
+  if (_ttState.currentTime >= _ttState.runEnd) {
+    _ttState.currentTime = _ttState.runStart;
+  }
+
+  var lastFrameTime = performance.now();
+
+  function animate(now) {
+    if (!_ttState.playing) return;
+
+    var deltaMs = (now - lastFrameTime) * _ttState.speed;
+    lastFrameTime = now;
+
+    _ttState.currentTime += deltaMs;
+
+    if (_ttState.currentTime >= _ttState.runEnd) {
+      _ttState.currentTime = _ttState.runEnd;
+      stopPlayback();
+      updateTimeTravelDisplay();
+      return;
+    }
+
+    updateTimeTravelDisplay();
+    _ttState.animFrame = requestAnimationFrame(animate);
+  }
+
+  _ttState.animFrame = requestAnimationFrame(animate);
+}
+
+function stopPlayback() {
+  _ttState.playing = false;
+  if (_ttState.animFrame) {
+    cancelAnimationFrame(_ttState.animFrame);
+    _ttState.animFrame = null;
+  }
+  var playBtn = document.getElementById('tt-play-btn');
+  if (playBtn) playBtn.textContent = '▶';
+}
+
+function stepEvent(direction) {
+  // direction: -1 for previous, +1 for next
+  if (_ttState.events.length === 0) return;
+
+  var t = _ttState.currentTime;
+  var i;
+  if (direction > 0) {
+    for (i = 0; i < _ttState.events.length; i++) {
+      if (_ttState.events[i].time > t + 50) { // 50ms threshold to skip current
+        _ttState.currentTime = _ttState.events[i].time;
+        updateTimeTravelDisplay();
+        return;
+      }
+    }
+    // Jump to end
+    _ttState.currentTime = _ttState.runEnd;
+    updateTimeTravelDisplay();
+  } else {
+    for (i = _ttState.events.length - 1; i >= 0; i--) {
+      if (_ttState.events[i].time < t - 50) {
+        _ttState.currentTime = _ttState.events[i].time;
+        updateTimeTravelDisplay();
+        return;
+      }
+    }
+    // Jump to start
+    _ttState.currentTime = _ttState.runStart;
+    updateTimeTravelDisplay();
+  }
+}
+
+function updateTimeTravelDisplay() {
+  var state = reconstructState(_ttState.currentTime);
+
+  // Update slider
+  var slider = document.getElementById('tt-slider');
+  if (slider) slider.value = _ttState.currentTime - _ttState.runStart;
+
+  // Update time display
+  var timeDisp = document.getElementById('tt-time-display');
+  if (timeDisp) {
+    var elapsed = formatDuration(state.elapsed);
+    var total = formatDuration(Math.round(_ttState.runDuration / 1000));
+    timeDisp.textContent = elapsed + ' / ' + total;
+  }
+
+  // Update phases panel
+  var phasesEl = document.getElementById('tt-state-phases');
+  if (phasesEl) {
+    var html = '<h3>Phase Status</h3>';
+    DATA.phases.forEach(function(phase) {
+      var ps = state.phases[phase.number] || { status: 'pending', attempts: 0 };
+      html += '<div class="tt-phase-row">';
+      html += '<span class="tt-phase-icon">' + statusIcon(ps.status) + '</span>';
+      html += '<span class="tt-phase-title">P' + escapeHtml(phase.number) + ': ' + escapeHtml(phase.title) + '</span>';
+      html += '<span class="tt-phase-badge tt-badge-' + ps.status + '">' + ps.status.replace('_', ' ') + '</span>';
+      html += '</div>';
+    });
+    phasesEl.innerHTML = html;
+  }
+
+  // Update stats panel
+  var statsEl = document.getElementById('tt-state-stats');
+  if (statsEl) {
+    var completed = 0, failed = 0, inProgress = 0, pending = 0;
+    DATA.phases.forEach(function(phase) {
+      var ps = state.phases[phase.number] || { status: 'pending' };
+      switch (ps.status) {
+        case 'completed': completed++; break;
+        case 'failed': failed++; break;
+        case 'in_progress': inProgress++; break;
+        default: pending++; break;
+      }
+    });
+    var fileCount = Object.keys(state.filesModified).length;
+
+    var html = '<h3>Stats</h3>';
+    html += '<div class="tt-stat-card">';
+    html += '<div class="tt-stat-label">Cost</div>';
+    html += '<div class="tt-stat-value">' + formatCost(state.totalCost) + '</div>';
+    html += '</div>';
+
+    html += '<div class="tt-stat-card">';
+    html += '<div class="tt-stat-label">Progress</div>';
+    html += '<div class="tt-stat-value">' + completed + '/' + DATA.phases.length + '</div>';
+    html += '<div class="tt-stat-sub">' + inProgress + ' active · ' + failed + ' failed · ' + pending + ' pending</div>';
+    html += '</div>';
+
+    html += '<div class="tt-stat-card">';
+    html += '<div class="tt-stat-label">Files Modified</div>';
+    html += '<div class="tt-stat-value">' + fileCount + '</div>';
+    html += '</div>';
+
+    html += '<div class="tt-stat-card">';
+    html += '<div class="tt-stat-label">Retries</div>';
+    html += '<div class="tt-stat-value">' + state.retryCount + '</div>';
+    html += '</div>';
+
+    statsEl.innerHTML = html;
+  }
+}
+
+/* ── Keyboard handler for time travel ── */
+document.addEventListener('keydown', function(e) {
+  if (currentView !== 'timetravel') return;
+  // Don't intercept if user is typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    stepEvent(1);
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    stepEvent(-1);
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    togglePlayback();
+  }
+});
 
 /* ── Init ── */
 renderSidebar();
