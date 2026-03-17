@@ -87,14 +87,20 @@ archive_current_run() {
     cp "$PLAN_FILE" "${_archive_dir}/plan.md"
   fi
 
-  # 2. Move run-state items (POSIX glob safety)
+  # 2. Copy config file (preserves original for next run)
+  if [ -f ".claudeloop/.claudeloop.conf" ]; then
+    cp ".claudeloop/.claudeloop.conf" "${_archive_dir}/.claudeloop.conf"
+  fi
+
+  # 3. Move run-state items (POSIX glob safety)
   for _item in \
     .claudeloop/PROGRESS.md \
     .claudeloop/PROGRESS.md.bak \
     .claudeloop/state \
     .claudeloop/logs \
     .claudeloop/signals \
-    .claudeloop/live.log; do
+    .claudeloop/live.log \
+    .claudeloop/ai-verify-reason.txt; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true
   done
@@ -105,10 +111,10 @@ archive_current_run() {
     mv "$_f" "$_archive_dir/" 2>/dev/null || true
   done
 
-  # 3. Generate metadata
+  # 4. Generate metadata
   generate_archive_metadata "$_archive_dir"
 
-  # 4. Announce
+  # 5. Announce
   print_success "Run archived to ${_archive_dir}"
 }
 
@@ -190,7 +196,7 @@ restore_archive() {
     local _basename
     _basename=$(basename "$_item")
     case "$_basename" in
-      plan.md|metadata.txt) continue ;;
+      plan.md|metadata.txt|.claudeloop.conf) continue ;;
     esac
     mv "$_item" ".claudeloop/" 2>/dev/null || true
   done

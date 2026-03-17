@@ -114,7 +114,7 @@ EOF
   grep -q "plan_file=" "${archive_dir}metadata.txt"
 }
 
-@test "archive_current_run: preserves .claudeloop.conf and lock" {
+@test "archive_current_run: preserves .claudeloop.conf and lock, copies conf to archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   echo "$$" > .claudeloop/lock
@@ -122,8 +122,15 @@ EOF
   run archive_current_run --internal
   [ "$status" -eq 0 ]
 
+  # Originals preserved
   [ -f .claudeloop/.claudeloop.conf ]
   [ -f .claudeloop/lock ]
+
+  # Config copied to archive
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -f "${archive_dir}.claudeloop.conf" ]
+  grep -q "BASE_DELAY=0" "${archive_dir}.claudeloop.conf"
 }
 
 @test "archive_current_run: nothing to archive when no state exists" {
@@ -390,6 +397,52 @@ EOF
 
   _sc=$(grep -c "^Status: " "$PROGRESS_FILE" 2>/dev/null) || _sc=0
   [ "$_sc" -eq 0 ]
+}
+
+@test "archive_current_run: moves ai-verify-reason.txt to archive" {
+  _create_run_state
+  echo "AI verification failed: missing tests" > .claudeloop/ai-verify-reason.txt
+
+  archive_current_run --internal
+
+  # Moved to archive
+  local _archive_dir
+  _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
+  [ -f "${_archive_dir}ai-verify-reason.txt" ]
+  grep -q "AI verification failed" "${_archive_dir}ai-verify-reason.txt"
+
+  # Original removed
+  [ ! -f .claudeloop/ai-verify-reason.txt ]
+}
+
+@test "archive_current_run: handles missing ai-verify-reason.txt gracefully" {
+  _create_run_state
+  # No ai-verify-reason.txt created
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+}
+
+@test "restore_archive: skips .claudeloop.conf (snapshot only)" {
+  _create_run_state
+  echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
+
+  archive_current_run --internal
+
+  # Remove the original conf (archive has a copy)
+  rm -f .claudeloop/.claudeloop.conf
+
+  local archive_name
+  archive_name=$(ls .claudeloop/archive/ 2>/dev/null | head -1)
+
+  # Verify the archive has the conf snapshot
+  [ -f ".claudeloop/archive/${archive_name}/.claudeloop.conf" ]
+
+  run restore_archive "$archive_name"
+  [ "$status" -eq 0 ]
+
+  # .claudeloop.conf should NOT be restored from archive
+  [ ! -f .claudeloop/.claudeloop.conf ]
 }
 
 @test "archive_current_run: ai-parsed-plan.md is NOT moved (persists for reuse)" {
