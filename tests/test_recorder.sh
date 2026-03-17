@@ -486,3 +486,69 @@ EOF
   result=$(assemble_recorder_json "$run_dir")
   echo "$result" | grep -q '"verification_verdict":"passed"'
 }
+
+# --- inject_and_write_html tests ---
+
+@test "inject_and_write_html: produces valid HTML with JSON embedded" {
+  local json_file="$TEST_DIR/test.json"
+  local output_html="$TEST_DIR/output.html"
+  echo '{"version":1,"phases":[]}' > "$json_file"
+
+  inject_and_write_html "$json_file" "$output_html"
+  [ -f "$output_html" ]
+
+  # Should contain the injected JSON as const DATA
+  grep -q 'const DATA = {"version":1,"phases":\[\]}' "$output_html"
+
+  # Should still contain HTML structure
+  grep -q '<!DOCTYPE html>' "$output_html"
+  grep -q '</html>' "$output_html"
+
+  # Should NOT contain the marker comment
+  ! grep -q '<!--JSON_DATA-->' "$output_html"
+}
+
+@test "inject_and_write_html: fails gracefully with missing template" {
+  local json_file="$TEST_DIR/test.json"
+  echo '{}' > "$json_file"
+  # Override SCRIPT_DIR to point to nonexistent dir
+  local old_script_dir="$SCRIPT_DIR"
+  SCRIPT_DIR="$TEST_DIR/nonexistent"
+  run inject_and_write_html "$json_file" "$TEST_DIR/out.html"
+  SCRIPT_DIR="$old_script_dir"
+  [ "$status" -ne 0 ]
+}
+
+@test "inject_and_write_html: fails gracefully with missing JSON file" {
+  run inject_and_write_html "$TEST_DIR/missing.json" "$TEST_DIR/out.html"
+  [ "$status" -ne 0 ]
+}
+
+# --- generate_flight_recorder tests ---
+
+@test "generate_flight_recorder: end-to-end with fixture data produces valid HTML" {
+  run_dir=$(_create_fixtures)
+
+  generate_flight_recorder "$run_dir"
+  [ -f "$run_dir/replay.html" ]
+
+  # Should contain HTML structure
+  grep -q '<!DOCTYPE html>' "$run_dir/replay.html"
+  grep -q 'ClaudeLoop Flight Recorder' "$run_dir/replay.html"
+
+  # Should contain embedded JSON with phase data
+  grep -q '"phases":\[' "$run_dir/replay.html"
+  grep -q '"Setup project"' "$run_dir/replay.html"
+  grep -q '"version":1' "$run_dir/replay.html"
+}
+
+@test "generate_flight_recorder: cleans up temp JSON file" {
+  run_dir=$(_create_fixtures)
+  generate_flight_recorder "$run_dir"
+  [ ! -f "$run_dir/recorder.json.tmp" ]
+}
+
+@test "generate_flight_recorder: silent on failure with invalid run dir" {
+  run generate_flight_recorder "$TEST_DIR/nonexistent"
+  [ "$status" -eq 0 ]
+}

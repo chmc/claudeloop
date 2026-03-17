@@ -120,6 +120,75 @@ _rec_get() {
   eval "printf '%s' \"\${_REC_PHASE_${1}_${pv}:-}\""
 }
 
+# Read template HTML, replace <!--JSON_DATA--> marker with JSON data, write output.
+# Uses line-split approach (head/tail around marker line) to avoid awk string-length limits.
+# Args: $1 - JSON file path, $2 - output HTML path
+inject_and_write_html() {
+  local json_file="$1"
+  local output_path="$2"
+  local template_dir="${SCRIPT_DIR:+$SCRIPT_DIR/assets}"
+  template_dir="${template_dir:-${CLAUDELOOP_DIR:+$CLAUDELOOP_DIR/assets}}"
+  template_dir="${template_dir:-assets}"
+  local template="${template_dir}/replay-template.html"
+
+  if [ ! -f "$template" ]; then
+    return 1
+  fi
+  if [ ! -f "$json_file" ]; then
+    return 1
+  fi
+
+  # Find the marker line number
+  local marker_line
+  marker_line=$(grep -n '<!--JSON_DATA-->' "$template" | head -1 | cut -d: -f1)
+  if [ -z "$marker_line" ]; then
+    return 1
+  fi
+
+  local temp_html="${output_path}.tmp"
+  local before_line=$((marker_line - 1))
+  local after_line=$((marker_line + 1))
+
+  {
+    # Lines before the marker
+    if [ "$before_line" -ge 1 ]; then
+      head -n "$before_line" "$template"
+    fi
+    # Inject: const DATA = <json>;
+    printf 'const DATA = '
+    cat "$json_file"
+    printf ';\n'
+    # Lines after the marker
+    tail -n +"$after_line" "$template"
+  } > "$temp_html"
+
+  mv "$temp_html" "$output_path"
+}
+
+# Assemble JSON and inject into HTML template to produce replay.html.
+# Silent on failure — must never break the execution loop.
+# Args: $1 - run directory (e.g. ".claudeloop")
+generate_flight_recorder() {
+  local run_dir="$1"
+  local json_tmp="${run_dir}/recorder.json.tmp"
+  local output_html="${run_dir}/replay.html"
+
+  # Assemble JSON to temp file
+  if ! assemble_recorder_json "$run_dir" > "$json_tmp" 2>/dev/null; then
+    rm -f "$json_tmp"
+    return 0
+  fi
+
+  # Inject into HTML template
+  if ! inject_and_write_html "$json_tmp" "$output_html" 2>/dev/null; then
+    rm -f "$json_tmp"
+    return 0
+  fi
+
+  rm -f "$json_tmp"
+  return 0
+}
+
 # Orchestrate all extractors and output complete JSON to stdout.
 # Args: $1 - run directory
 assemble_recorder_json() {

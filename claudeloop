@@ -42,6 +42,7 @@ _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
 . "$SCRIPT_DIR/lib/refactor.sh"
 . "$SCRIPT_DIR/lib/execution.sh"
 . "$SCRIPT_DIR/lib/archive.sh"
+. "$SCRIPT_DIR/lib/recorder.sh"
 
 # Default configuration
 PLAN_FILE="PLAN.md"

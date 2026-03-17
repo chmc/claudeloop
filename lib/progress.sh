@@ -121,6 +121,11 @@ EOF
 
   # Atomic update
   mv "$temp_file" "$progress_file"
+
+  # Generate flight recorder HTML (non-blocking, failure-tolerant)
+  if command -v generate_flight_recorder >/dev/null 2>&1; then
+    generate_flight_recorder "$(dirname "$progress_file")" 2>/dev/null || true
+  fi
 }
 
 # Generate status summary section
