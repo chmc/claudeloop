@@ -11,17 +11,17 @@ The global state model (ADR 0002) requires constructing variable names dynamical
 
 Use `eval` for all dynamic variable access but harden every call site:
 
-1. **`phase_to_var` sanitizes input** — converts dots to underscores and strips any character that isn't alphanumeric or underscore
+1. **`phase_to_var` converts dots to underscores** — relies on parser-level validation (regex in `parse_plan`) to guarantee input contains only digits and dots, making additional character stripping unnecessary
 2. **All eval'd values are quoted** — `eval "PHASE_STATUS_${phase_var}='$value'"` prevents word splitting
 3. **Validation at boundaries** — phase numbers are validated during plan parsing before they ever reach eval
 4. **State serialization hardening** — progress file output escapes single quotes and strips control characters
 
 The `phase_to_var` function is the single gateway for all variable name construction:
 ```sh
-phase_to_var() {
-    echo "$1" | sed 's/\./_/g' | sed 's/[^a-zA-Z0-9_]//g'
-}
+phase_to_var() { echo "$1" | tr '.' '_'; }
 ```
+
+The implementation intentionally uses only `tr` (not `sed` with character stripping) because phase numbers are pre-validated through multiple layers: parser regex accepts only `[0-9.]+`, runtime iteration uses `$PHASE_NUMBERS` (set by parser), CLI args are validated, and progress file extraction uses matching patterns. Per-call sanitization would spawn ~370 extra subprocesses per run for zero practical benefit.
 
 ## Consequences
 

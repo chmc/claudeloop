@@ -80,7 +80,10 @@ archive_current_run() {
   local _timestamp _archive_dir
   _timestamp=$(date '+%Y%m%d-%H%M%S')
   _archive_dir=".claudeloop/archive/${_timestamp}"
-  mkdir -p "$_archive_dir"
+  if ! mkdir -p "$_archive_dir"; then
+    print_error "Failed to create archive directory: $_archive_dir"
+    return 1
+  fi
 
   # 1. Copy plan file first (before moves)
   if [ -n "${PLAN_FILE:-}" ] && [ -f "$PLAN_FILE" ]; then

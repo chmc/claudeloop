@@ -1652,3 +1652,14 @@ EOF
   [ "$PHASE_STATUS_1" = "completed" ]
   [ "$PHASE_STATUS_2" = "pending" ]
 }
+
+# --- read_progress: invalid status validation ---
+
+@test "read_progress: resets invalid status to pending" {
+  PHASE_STATUS_1="pending" PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0 PHASE_ATTEMPTS_2=0
+  printf '### ✅ Phase 1: Phase One\nStatus: banana\nAttempts: 1\n### ⏳ Phase 2: Phase Two\nStatus: completed\nAttempts: 0\n' > "$TEST_DIR/PROGRESS.md"
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$PHASE_STATUS_1" = "pending" ]
+  [ "$PHASE_STATUS_2" = "completed" ]
+}

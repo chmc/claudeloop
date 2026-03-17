@@ -979,6 +979,13 @@ main() {
   trap cleanup EXIT
 
   apply_config_precedence "$@"
+
+  # Validate flag combinations
+  if [ "$DRY_RUN" = "true" ] && [ "$MONITOR_MODE" = "true" ]; then
+    print_error "--dry-run and --monitor cannot be used together"
+    exit 1
+  fi
+
   print_logo
 
   # Monitor mode: follow live output of a running instance (never runs setup/execution)

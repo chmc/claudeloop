@@ -7,6 +7,7 @@ setup() {
   export TEST_DIR="$BATS_TEST_TMPDIR"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/progress.sh"
   . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   . "${BATS_TEST_DIRNAME}/../lib/dependencies.sh"

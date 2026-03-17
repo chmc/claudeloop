@@ -42,6 +42,14 @@ read_progress() {
           status_value=$(printf '%s\n' "$line" | sed 's/^Status:[[:space:]]*//')
           # Normalize stale in_progress (e.g. from SIGKILL) so the phase retries
           [ "$status_value" = "in_progress" ] && status_value="pending"
+          # Validate status enum
+          case "$status_value" in
+            pending|completed|failed) ;;
+            *)
+              log_verbose "Warning: invalid status '$status_value' for Phase $current_phase, resetting to pending"
+              status_value="pending"
+              ;;
+          esac
           phase_set STATUS "$current_phase" "$status_value"
           ;;
         "Started: "*)

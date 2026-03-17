@@ -540,3 +540,22 @@ EOF
   [ -f .claudeloop/.claudeloop.conf ]
   [ -f .claudeloop/ai-parsed-plan.md ]
 }
+
+# --- archive_current_run mkdir failure ---
+
+@test "archive_current_run: returns 1 when archive directory cannot be created" {
+  cd "$BATS_TEST_TMPDIR"
+  mkdir -p .claudeloop
+  echo "dummy" > .claudeloop/PROGRESS.md
+  PROGRESS_FILE=".claudeloop/PROGRESS.md"
+  PLAN_FILE=""
+
+  # Make archive parent read-only so mkdir fails
+  mkdir -p .claudeloop/archive
+  chmod 000 .claudeloop/archive
+
+  run archive_current_run
+  chmod 755 .claudeloop/archive  # restore for cleanup
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to create archive directory"* ]]
+}
