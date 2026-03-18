@@ -231,7 +231,7 @@ body {
 
 .timeline-bar {
   display: flex;
-  height: 32px;
+  height: 40px;
   border-radius: 6px;
   overflow: hidden;
   background: var(--timeline-bg);
@@ -1102,6 +1102,358 @@ body {
   font-family: monospace;
   font-size: 11px;
 }
+
+/* Single-attempt detail sections */
+.single-detail-sections {
+  margin-top: 20px;
+}
+
+.single-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--card-shadow);
+}
+
+.single-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.prompt-block {
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.prompt-collapsed {
+  max-height: 480px;
+  position: relative;
+}
+
+.prompt-collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(transparent, var(--bg-secondary));
+  pointer-events: none;
+}
+
+.prompt-expand-btn {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.prompt-expand-btn:hover {
+  background: var(--badge-bg);
+}
+
+/* Tool detail table (single-attempt) */
+.tool-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tool-detail-table th {
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.tool-detail-table th:nth-child(2),
+.tool-detail-table th:nth-child(3) {
+  text-align: right;
+  width: 60px;
+}
+
+.tool-detail-table th:nth-child(4) {
+  width: 40%;
+}
+
+.tool-detail-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.tool-detail-table td:nth-child(2),
+.tool-detail-table td:nth-child(3) {
+  text-align: right;
+  font-weight: 600;
+}
+
+.tool-category-header td {
+  padding-top: 8px;
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tool-detail-table tr:last-child td {
+  border-bottom: none;
+}
+
+.tool-detail-table .tool-total-row td {
+  border-top: 2px solid var(--border);
+  font-weight: 700;
+  padding-top: 6px;
+}
+
+.tool-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+/* Single files list */
+.single-files-list {
+  font-size: 12px;
+}
+
+.single-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+
+.single-file-row:last-child {
+  border-bottom: none;
+}
+
+.single-file-path {
+  font-family: monospace;
+  font-size: 11px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.single-file-ops {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Categorized tool chips in attempt cards */
+.tool-section-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+
+.tool-category-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.tool-cat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+/* Inline git commits */
+.git-commits-inline {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.git-commits-inline .git-label {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+
+.git-commit-inline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.git-commit-inline .commit-sha {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.git-commit-inline .commit-msg {
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Phase summary table */
+.phase-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 24px;
+}
+
+.phase-summary-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.phase-summary-table th:not(:first-child):not(:nth-child(2)) {
+  text-align: right;
+}
+
+.phase-summary-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.phase-summary-table td:not(:first-child):not(:nth-child(2)) {
+  text-align: right;
+}
+
+.phase-summary-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.phase-summary-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.phase-summary-table tbody tr.phase-row-pending {
+  opacity: 0.5;
+}
+
+.phase-summary-table tfoot td {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
+.mini-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Overview tool usage */
+.overview-tools-section {
+  margin-bottom: 24px;
+}
+
+.overview-tools-section h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.tool-usage-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.tool-usage-segment {
+  min-width: 2px;
+  transition: opacity 0.15s;
+}
+
+.tool-usage-segment:hover {
+  opacity: 0.8;
+}
+
+.tool-usage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.tool-usage-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-usage-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Timeline enhancements */
+.timeline-segment.has-retries {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(255, 255, 255, 0.15) 3px,
+    rgba(255, 255, 255, 0.15) 6px
+  );
+}
 </style>
 </head>
 <body>
@@ -1192,6 +1544,59 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+/* ── Tool categories and colors ── */
+var TOOL_CATEGORIES = [
+  {name: 'File Ops', tools: ['Read', 'Edit', 'Write', 'Glob', 'Grep']},
+  {name: 'Execution', tools: ['Bash', 'Agent']},
+  {name: 'Planning', tools: ['TodoWrite', 'TodoRead', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList', 'TaskOutput', 'ToolSearch']},
+  {name: 'Web', tools: ['WebFetch', 'WebSearch']},
+  {name: 'Other', tools: []}
+];
+
+var TOOL_COLORS = {
+  Read: '#3b82f6', Edit: '#f59e0b', Write: '#8b5cf6', Bash: '#22c55e',
+  Agent: '#f97316', Grep: '#06b6d4', Glob: '#ec4899', TodoWrite: '#a855f7',
+  WebFetch: '#14b8a6', WebSearch: '#14b8a6', ToolSearch: '#6366f1',
+  TaskCreate: '#a855f7', TaskUpdate: '#a855f7', TaskGet: '#a855f7',
+  TaskList: '#a855f7', TaskOutput: '#a855f7', TodoRead: '#a855f7'
+};
+
+var _toolColorCycle = ['#64748b', '#78716c', '#71717a', '#737373', '#6b7280'];
+var _toolColorIdx = 0;
+
+function getToolColor(name) {
+  if (TOOL_COLORS[name]) return TOOL_COLORS[name];
+  TOOL_COLORS[name] = _toolColorCycle[_toolColorIdx % _toolColorCycle.length];
+  _toolColorIdx++;
+  return TOOL_COLORS[name];
+}
+
+function categorizeTools(tools) {
+  if (!tools || tools.length === 0) return [];
+  var toolMap = {};
+  tools.forEach(function(t) { toolMap[t.name] = t.count; });
+  var result = [];
+  var categorized = {};
+  TOOL_CATEGORIES.forEach(function(cat) {
+    if (cat.name === 'Other') return;
+    var items = [];
+    cat.tools.forEach(function(name) {
+      if (toolMap[name]) {
+        items.push({ name: name, count: toolMap[name] });
+        categorized[name] = true;
+      }
+    });
+    if (items.length > 0) result.push({ category: cat.name, tools: items });
+  });
+  // Catch-all for uncategorized
+  var other = [];
+  Object.keys(toolMap).forEach(function(name) {
+    if (!categorized[name]) other.push({ name: name, count: toolMap[name] });
+  });
+  if (other.length > 0) result.push({ category: 'Other', tools: other });
+  return result;
+}
+
 /* ── Render: Sidebar ── */
 function renderSidebar() {
   var el = document.getElementById('sidebar-phases');
@@ -1263,17 +1668,29 @@ function renderOverview() {
 
   var html = '<h2>Run Overview</h2>';
 
-  // Summary cards
+  // Summary cards (conditional — hide zero-value cards)
   html += '<div class="summary-cards">';
   html += renderSummaryCard('Duration', formatDuration(dur), r.started_at ? formatTime(r.started_at) + ' → ' + formatTime(r.ended_at) : '');
-  html += renderSummaryCard('Cost', formatCost(r.total_cost_usd), 'across ' + totalAttempts + ' attempts');
+  if (r.total_cost_usd > 0) {
+    html += renderSummaryCard('Cost', formatCost(r.total_cost_usd), 'across ' + totalAttempts + ' attempts');
+  }
   html += renderSummaryCard('Phases', r.completed + '/' + r.phase_count + ' done', r.failed > 0 ? r.failed + ' failed' : 'none failed');
-  html += renderSummaryCard('Tokens', formatTokens(totalTokens), formatTokens(r.total_input_tokens) + ' in / ' + formatTokens(r.total_output_tokens) + ' out');
-  html += renderSummaryCard('Cache', formatTokens(r.total_cache_read + r.total_cache_write), formatTokens(r.total_cache_read) + ' read / ' + formatTokens(r.total_cache_write) + ' write');
+  if (totalTokens > 0) {
+    html += renderSummaryCard('Tokens', formatTokens(totalTokens), formatTokens(r.total_input_tokens) + ' in / ' + formatTokens(r.total_output_tokens) + ' out');
+  }
+  if ((r.total_cache_read + r.total_cache_write) > 0) {
+    html += renderSummaryCard('Cache', formatTokens(r.total_cache_read + r.total_cache_write), formatTokens(r.total_cache_read) + ' read / ' + formatTokens(r.total_cache_write) + ' write');
+  }
   html += '</div>';
 
   // Timeline
   html += renderTimeline();
+
+  // Phase summary table
+  html += renderPhaseSummaryTable();
+
+  // Aggregated tool usage
+  html += renderOverviewToolSummary();
 
   document.getElementById('main-panel').innerHTML = html;
 }
@@ -1298,9 +1715,15 @@ function renderTimeline() {
     var pd = phaseDuration(phase);
     if (pd == null || pd === 0) return;
     var pct = (pd / dur * 100).toFixed(1);
-    html += '<div class="timeline-segment status-' + phase.status + '" style="width:' + pct + '%" onclick="showPhaseDetail(\'' + phase.number + '\')" title="Phase ' + phase.number + ': ' + escapeHtml(phase.title) + ' (' + formatDuration(pd) + ')">';
+    var hasRetries = phase.attempts.length > 1;
+    var phaseCost = 0;
+    phase.attempts.forEach(function(a) { if (a.session) phaseCost += a.session.cost_usd; });
+    var tooltip = 'Phase ' + phase.number + ': ' + phase.title + '\nDuration: ' + formatDuration(pd) + '\nCost: ' + formatCost(phaseCost) + '\nAttempts: ' + phase.attempts.length + '\nStatus: ' + phase.status;
+    html += '<div class="timeline-segment status-' + phase.status + (hasRetries ? ' has-retries' : '') + '" style="width:' + pct + '%" onclick="showPhaseDetail(\'' + phase.number + '\')" title="' + escapeHtml(tooltip) + '">';
     if (parseFloat(pct) > 5) {
-      html += '<span class="seg-label">P' + phase.number + '</span>';
+      var label = 'P' + phase.number;
+      if (hasRetries && parseFloat(pct) > 10) label += ' (' + phase.attempts.length + ')';
+      html += '<span class="seg-label">' + label + '</span>';
     }
     html += '</div>';
   });
@@ -1358,6 +1781,11 @@ function renderPhaseDetail(num) {
     html += renderAttemptCard(attempt);
   });
   html += '</div>';
+
+  // Single-attempt detail sections (inline prompt, tools, files)
+  if (phase.attempts.length === 1) {
+    html += renderSingleAttemptSections(phase.attempts[0]);
+  }
 
   document.getElementById('main-panel').innerHTML = html;
 
@@ -1688,7 +2116,7 @@ function renderAttemptCard(attempt) {
   html += '<span class="strategy-badge strategy-' + attempt.strategy + '">' + attempt.strategy + '</span>';
   html += '</div>';
 
-  // Metrics
+  // Metrics (model and cost first for prominence)
   html += '<div class="attempt-metrics">';
   if (attempt.session) {
     var s = attempt.session;
@@ -1708,16 +2136,23 @@ function renderAttemptCard(attempt) {
   html += metric('Time', formatTime(attempt.started_at) + ' → ' + formatTime(attempt.ended_at));
   html += '</div>';
 
-  // Tool chips
+  // Categorized tool chips
   if (attempt.tools && attempt.tools.length > 0) {
-    html += '<div class="tool-chips">';
-    attempt.tools.forEach(function(t) {
-      html += '<span class="tool-chip tool-' + escapeHtml(t.name) + '">';
-      html += escapeHtml(t.name);
-      html += '<span class="tool-count">×' + t.count + '</span>';
-      html += '</span>';
+    var totalToolCalls = 0;
+    attempt.tools.forEach(function(t) { totalToolCalls += t.count; });
+    var groups = categorizeTools(attempt.tools);
+    html += '<div class="tool-section-header">' + totalToolCalls + ' tool calls</div>';
+    groups.forEach(function(group) {
+      html += '<div class="tool-category-group">';
+      html += '<span class="tool-cat-label">' + escapeHtml(group.category) + ':</span>';
+      group.tools.forEach(function(t) {
+        html += '<span class="tool-chip tool-' + escapeHtml(t.name) + '">';
+        html += escapeHtml(t.name);
+        html += '<span class="tool-count">×' + t.count + '</span>';
+        html += '</span>';
+      });
+      html += '</div>';
     });
-    html += '</div>';
   }
 
   // Fail reason
@@ -1725,21 +2160,16 @@ function renderAttemptCard(attempt) {
     html += '<div class="fail-reason">Failure: ' + escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) + '</div>';
   }
 
-  // Git commits
+  // Git commits (inline, expanded by default)
   if (attempt.git_commits && attempt.git_commits.length > 0) {
-    var toggleId = 'git-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
-    html += '<div class="git-commits-section">';
-    html += '<button class="git-toggle-btn" onclick="toggleCommits(this, \'' + toggleId + '\')">';
-    html += '<span class="toggle-arrow">▶</span> Git Commits (' + attempt.git_commits.length + ')';
-    html += '</button>';
-    html += '<div class="git-commits-list" id="' + toggleId + '">';
+    html += '<div class="git-commits-inline">';
+    html += '<div class="git-label">Git Commits</div>';
     attempt.git_commits.forEach(function(c) {
-      html += '<div class="git-commit">';
+      html += '<div class="git-commit-inline">';
       html += '<span class="commit-sha">' + escapeHtml(c.sha) + '</span>';
       html += '<span class="commit-msg">' + escapeHtml(c.message) + '</span>';
       html += '</div>';
     });
-    html += '</div>';
     html += '</div>';
   }
 
@@ -1752,6 +2182,218 @@ function metric(label, value) {
     '<span class="metric-label">' + escapeHtml(label) + '</span>' +
     '<span class="metric-value">' + escapeHtml(value) + '</span>' +
     '</div>';
+}
+
+/* ── Single-attempt detail sections ── */
+function renderSingleAttemptSections(attempt) {
+  var html = '<div class="single-detail-sections">';
+  html += renderSinglePrompt(attempt);
+  html += renderSingleToolBreakdown(attempt);
+  html += renderSingleFiles(attempt);
+  html += '</div>';
+  return html;
+}
+
+function renderSinglePrompt(attempt) {
+  var html = '<div class="single-section">';
+  html += '<h3>Prompt</h3>';
+  if (!attempt.prompt_text) {
+    html += '<div class="empty-state"><div class="empty-text">No prompt text recorded</div></div>';
+  } else {
+    var lines = attempt.prompt_text.split('\n');
+    var needsCollapse = lines.length > 30;
+    var promptId = 'prompt-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
+    html += '<pre class="prompt-block' + (needsCollapse ? ' prompt-collapsed' : '') + '" id="' + promptId + '">' + escapeHtml(lines.length > 500 ? lines.slice(0, 500).join('\n') + '\n[truncated — ' + lines.length + ' lines total]' : attempt.prompt_text) + '</pre>';
+    if (needsCollapse) {
+      html += '<button class="prompt-expand-btn" onclick="togglePrompt(this, \'' + promptId + '\')">Show all ' + Math.min(lines.length, 500) + ' lines</button>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function togglePrompt(btn, id) {
+  var el = document.getElementById(id);
+  if (el.classList.contains('prompt-collapsed')) {
+    el.classList.remove('prompt-collapsed');
+    btn.textContent = 'Collapse';
+  } else {
+    el.classList.add('prompt-collapsed');
+    var lines = el.textContent.split('\n').length;
+    btn.textContent = 'Show all ' + lines + ' lines';
+  }
+}
+
+function renderSingleToolBreakdown(attempt) {
+  var html = '<div class="single-section">';
+  html += '<h3>Tool Breakdown</h3>';
+  if (!attempt.tools || attempt.tools.length === 0) {
+    html += '<div class="empty-state"><div class="empty-text">No tool usage recorded</div></div>';
+    html += '</div>';
+    return html;
+  }
+  var groups = categorizeTools(attempt.tools);
+  var maxCount = 0;
+  var totalCount = 0;
+  attempt.tools.forEach(function(t) {
+    if (t.count > maxCount) maxCount = t.count;
+    totalCount += t.count;
+  });
+
+  html += '<table class="tool-detail-table">';
+  html += '<thead><tr><th>Tool</th><th>Count</th><th>%</th><th>Bar</th></tr></thead>';
+  html += '<tbody>';
+  groups.forEach(function(group) {
+    html += '<tr class="tool-category-header"><td colspan="4">' + escapeHtml(group.category) + '</td></tr>';
+    group.tools.forEach(function(t) {
+      var pct = totalCount > 0 ? (t.count / totalCount * 100).toFixed(1) : '0';
+      var barWidth = maxCount > 0 ? (t.count / maxCount * 100).toFixed(1) : '0';
+      html += '<tr>';
+      html += '<td><span class="tool-chip tool-' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</span></td>';
+      html += '<td>' + t.count + '</td>';
+      html += '<td>' + pct + '%</td>';
+      html += '<td><div class="tool-bar" style="width:' + barWidth + '%"></div></td>';
+      html += '</tr>';
+    });
+  });
+  html += '<tr class="tool-total-row"><td>Total</td><td>' + totalCount + '</td><td>100%</td><td></td></tr>';
+  html += '</tbody></table>';
+  html += '</div>';
+  return html;
+}
+
+function renderSingleFiles(attempt) {
+  var html = '<div class="single-section">';
+  html += '<h3>Files Touched</h3>';
+  if (!attempt.files || attempt.files.length === 0) {
+    html += '<div class="empty-state"><div class="empty-text">No file operations recorded</div></div>';
+    html += '</div>';
+    return html;
+  }
+  var sorted = attempt.files.slice().sort(function(a, b) { return a.path.localeCompare(b.path); });
+  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' + sorted.length + ' files modified</div>';
+  html += '<div class="single-files-list">';
+  sorted.forEach(function(f) {
+    html += '<div class="single-file-row">';
+    html += '<span class="single-file-path" title="' + escapeHtml(f.path) + '">' + escapeHtml(f.path) + '</span>';
+    html += '<span class="single-file-ops">';
+    if (f.ops) {
+      f.ops.sort().forEach(function(op) {
+        var letter = opToLetter(op);
+        html += '<span class="op-badge op-' + letter + '">' + letter + '</span>';
+      });
+    }
+    html += '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+/* ── Phase Summary Table (overview) ── */
+function renderPhaseSummaryTable() {
+  if (DATA.phases.length === 0) return '';
+
+  var html = '<div style="margin-bottom:24px;">';
+  html += '<h3 style="font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:10px;">Phase Summary</h3>';
+  html += '<table class="phase-summary-table">';
+  html += '<thead><tr><th>#</th><th>Phase</th><th>Status</th><th>Duration</th><th>Cost</th><th>Attempts</th><th>Tools</th><th>Files</th></tr></thead>';
+  html += '<tbody>';
+
+  var totals = { dur: 0, cost: 0, attempts: 0, tools: 0, files: 0, completed: 0 };
+
+  DATA.phases.forEach(function(phase) {
+    var dur = phaseDuration(phase);
+    var cost = 0;
+    var toolCount = 0;
+    var fileSet = {};
+    phase.attempts.forEach(function(a) {
+      if (a.session) cost += a.session.cost_usd;
+      if (a.tools) a.tools.forEach(function(t) { toolCount += t.count; });
+      if (a.files) a.files.forEach(function(f) { fileSet[f.path] = true; });
+    });
+    var fileCount = Object.keys(fileSet).length;
+    var isPending = phase.status === 'pending';
+
+    totals.dur += (dur || 0);
+    totals.cost += cost;
+    totals.attempts += phase.attempts.length;
+    totals.tools += toolCount;
+    totals.files += fileCount;
+    if (phase.status === 'completed') totals.completed++;
+
+    html += '<tr class="' + (isPending ? 'phase-row-pending' : '') + '" onclick="showPhaseDetail(\'' + phase.number + '\')">';
+    html += '<td>' + escapeHtml(phase.number) + '</td>';
+    html += '<td>' + escapeHtml(phase.title) + '</td>';
+    html += '<td><span class="mini-badge badge-' + phase.status + '">' + phase.status.replace('_', ' ') + '</span></td>';
+    html += '<td>' + (dur != null ? formatDuration(dur) : '—') + '</td>';
+    html += '<td>' + (cost > 0 ? formatCost(cost) : '—') + '</td>';
+    html += '<td>' + phase.attempts.length + '</td>';
+    html += '<td>' + (toolCount > 0 ? toolCount : '—') + '</td>';
+    html += '<td>' + (fileCount > 0 ? fileCount : '—') + '</td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody>';
+  html += '<tfoot><tr>';
+  html += '<td></td>';
+  html += '<td>Totals</td>';
+  html += '<td>' + totals.completed + '/' + DATA.phases.length + ' done</td>';
+  html += '<td>' + formatDuration(totals.dur) + '</td>';
+  html += '<td>' + (totals.cost > 0 ? formatCost(totals.cost) : '—') + '</td>';
+  html += '<td>' + totals.attempts + '</td>';
+  html += '<td>' + totals.tools + '</td>';
+  html += '<td>' + totals.files + '</td>';
+  html += '</tr></tfoot>';
+  html += '</table></div>';
+  return html;
+}
+
+/* ── Aggregated Tool Usage (overview) ── */
+function renderOverviewToolSummary() {
+  var toolTotals = {};
+  DATA.phases.forEach(function(phase) {
+    phase.attempts.forEach(function(a) {
+      if (!a.tools) return;
+      a.tools.forEach(function(t) {
+        toolTotals[t.name] = (toolTotals[t.name] || 0) + t.count;
+      });
+    });
+  });
+
+  var names = Object.keys(toolTotals);
+  if (names.length === 0) return '';
+
+  names.sort(function(a, b) { return toolTotals[b] - toolTotals[a]; });
+  var grandTotal = 0;
+  names.forEach(function(n) { grandTotal += toolTotals[n]; });
+
+  var html = '<div class="overview-tools-section">';
+  html += '<h3>Tool Usage</h3>';
+
+  // Stacked bar
+  html += '<div class="tool-usage-bar">';
+  names.forEach(function(name) {
+    var pct = (toolTotals[name] / grandTotal * 100).toFixed(1);
+    var color = getToolColor(name);
+    html += '<div class="tool-usage-segment" style="width:' + pct + '%;background:' + color + ';" title="' + escapeHtml(name) + ': ' + toolTotals[name] + ' (' + pct + '%)"></div>';
+  });
+  html += '</div>';
+
+  // Legend
+  html += '<div class="tool-usage-legend">';
+  names.forEach(function(name) {
+    var color = getToolColor(name);
+    html += '<span class="tool-usage-legend-item">';
+    html += '<span class="tool-usage-swatch" style="background:' + color + ';"></span>';
+    html += escapeHtml(name) + ' ' + toolTotals[name];
+    html += '</span>';
+  });
+  html += '</div>';
+
+  html += '</div>';
+  return html;
 }
 
 /* ── Helpers: Files view ── */
@@ -1849,18 +2491,6 @@ function renderFilesView() {
 
   html += '</tbody></table></div>';
   document.getElementById('main-panel').innerHTML = html;
-}
-
-/* ── Toggle git commits ── */
-function toggleCommits(btn, id) {
-  var list = document.getElementById(id);
-  if (list.classList.contains('visible')) {
-    list.classList.remove('visible');
-    btn.classList.remove('open');
-  } else {
-    list.classList.add('visible');
-    btn.classList.add('open');
-  }
 }
 
 /* ── Navigation ── */
