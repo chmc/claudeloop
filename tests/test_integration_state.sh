@@ -278,3 +278,62 @@ PROGRESS
   # Must show archive prompt instead
   echo "$_cl_output" | grep -q "Previous run is complete"
 }
+
+# =============================================================================
+# --replay: regenerate replay.html
+# =============================================================================
+
+@test "replay: generates replay.html for active run" {
+  # Create minimal PROGRESS.md
+  cat > "$TEST_DIR/.claudeloop/PROGRESS.md" << 'PROGRESS'
+## Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+PROGRESS
+
+  _cl --replay
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Generated .claudeloop/replay.html"
+  [ -f "$TEST_DIR/.claudeloop/replay.html" ]
+}
+
+@test "replay: errors when no .claudeloop directory" {
+  local empty_dir="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$empty_dir"
+  run sh -c "cd '$empty_dir' && '$CLAUDELOOP' --replay"
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "No .claudeloop directory found"
+}
+
+@test "replay: warns when PROGRESS.md missing but still generates" {
+  # Remove PROGRESS.md but keep .claudeloop dir
+  rm -f "$TEST_DIR/.claudeloop/PROGRESS.md"
+  _cl --replay
+  # Should warn but still succeed (generate_flight_recorder handles empty data)
+  echo "$output" | grep -q "No PROGRESS.md found"
+}
+
+@test "replay: generates for archived run" {
+  local archive_dir="$TEST_DIR/.claudeloop/archive/20260316-143022"
+  mkdir -p "$archive_dir/logs"
+  cat > "$archive_dir/PROGRESS.md" << 'PROGRESS'
+## Phase 1: Setup
+Status: completed
+Started: 2026-01-01 00:00:00
+Completed: 2026-01-01 00:01:00
+Attempts: 1
+PROGRESS
+
+  _cl --replay 20260316-143022
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "Generated .claudeloop/archive/20260316-143022/replay.html"
+  [ -f "$archive_dir/replay.html" ]
+}
+
+@test "replay: errors for nonexistent archive" {
+  _cl --replay nonexistent
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "Archive not found"
+}

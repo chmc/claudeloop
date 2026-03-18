@@ -97,6 +97,8 @@ RECOVER_PROGRESS=false
 ARCHIVE_MODE=false
 LIST_ARCHIVES=false
 RESTORE_ARCHIVE=""
+REPLAY_MODE=false
+REPLAY_ARCHIVE=""
 
 
 # Save current state to state file
@@ -301,6 +303,7 @@ Options:
   --archive              Archive current run state and exit
   --list-archives        List archived runs and exit
   --restore <name>       Restore an archived run and exit
+  --replay [archive]    Regenerate replay.html and exit (optionally for an archived run)
   --monitor              Follow live output of a running claudeloop instance
   --version, -V          Print version and exit
   --help                 Show this help message
@@ -448,6 +451,15 @@ parse_args() {
         if [ $# -lt 2 ]; then echo "Error: --restore requires an argument" >&2; exit 1; fi
         RESTORE_ARCHIVE="$2"
         shift 2
+        ;;
+      --replay)
+        REPLAY_MODE=true
+        # Optional archive name argument (next arg that doesn't start with --)
+        if [ $# -ge 2 ] && case "$2" in --*) false;; *) true;; esac; then
+          REPLAY_ARCHIVE="$2"
+          shift
+        fi
+        shift
         ;;
       --monitor)
         MONITOR_MODE=true
@@ -1011,6 +1023,34 @@ main() {
   # Restore mode
   if [ -n "$RESTORE_ARCHIVE" ]; then
     restore_archive "$RESTORE_ARCHIVE"
+    exit 0
+  fi
+
+  # Replay mode: regenerate flight recorder HTML and exit
+  if [ "$REPLAY_MODE" = "true" ]; then
+    local replay_dir=".claudeloop"
+    if [ -n "$REPLAY_ARCHIVE" ]; then
+      replay_dir=".claudeloop/archive/$REPLAY_ARCHIVE"
+      if [ ! -d "$replay_dir" ]; then
+        print_error "Archive not found: $replay_dir"
+        list_archives
+        exit 1
+      fi
+    fi
+    if [ ! -d "$replay_dir" ]; then
+      print_error "No .claudeloop directory found"
+      exit 1
+    fi
+    if [ ! -f "$replay_dir/PROGRESS.md" ]; then
+      print_warning "No PROGRESS.md found in $replay_dir — report will be empty"
+    fi
+    generate_flight_recorder "$replay_dir"
+    if [ -f "$replay_dir/replay.html" ]; then
+      print_success "Generated $replay_dir/replay.html"
+    else
+      print_error "Failed to generate replay.html"
+      exit 1
+    fi
     exit 0
   fi
 

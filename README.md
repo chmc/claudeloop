@@ -175,6 +175,7 @@ If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it rep
 --archive            Archive current run state and exit
 --list-archives      List archived runs and exit
 --restore <name>     Restore an archived run and exit
+--replay [archive]   Regenerate replay.html (optionally for an archived run)
 --monitor            Watch live output of a running claudeloop instance
 --version, -V        Print version and exit
 --help               Show help
@@ -326,6 +327,13 @@ ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/
 - **Git commits** — commits associated with each phase
 
 The report updates automatically as phases complete — just refresh your browser. It also works on archived runs (`.claudeloop/archive/*/replay.html`).
+
+To regenerate `replay.html` on demand (e.g., after updating the template):
+
+```sh
+claudeloop --replay                    # Active run
+claudeloop --replay 20260316-143022    # Archived run
+```
 
 </details>
 
