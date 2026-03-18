@@ -45,6 +45,16 @@ Every design decision must trace to a constraint from exploration or an explicit
 
 Single fact-checking pass: for each file in the plan, verify function signatures exist, callers are accounted for, and tests are updated. This is fact-checking, not design critique. If it finds issues, the exploration was insufficient — improve exploration, don't add more review rounds.
 
+## Continuous improvement (mandatory)
+
+When you notice a friction point, missing guardrail, or automation opportunity during any phase of work, raise it and suggest a concrete change. Target:
+
+- **CLAUDE.md** — new rules, refined wording, missing examples
+- **Skills/hooks** — repetitive multi-step sequences that could be a slash command or hook
+- **MCP tools/plugins** — external integrations that would reduce manual steps
+
+Keep suggestions brief and actionable (what to change, where, why). Don't derail the current task — note it at a natural pause point (end of a planning phase, after implementation, during wrap-up).
+
 ## Documentation
 
 When implementation is changed, check if the change affects user-facing behavior (CLI options, workflows, defaults, install steps, output format). If so, update stale sections in README.md and QUICKSTART.md, or add new sections for new features.
