@@ -156,7 +156,7 @@ inject_and_write_html() {
     fi
     # Inject: const DATA = <json>;
     printf 'const DATA = '
-    cat "$json_file"
+    sed 's/</\\u003c/g' "$json_file"
     printf ';\n'
     # Lines after the marker
     tail -n +"$after_line" "$template"

@@ -545,6 +545,25 @@ EOF
   [ "$status" -ne 0 ]
 }
 
+@test "inject_and_write_html: escapes < to prevent script injection" {
+  local json_file="$TEST_DIR/script.json"
+  local output_html="$TEST_DIR/output.html"
+  # JSON containing </script> which would break inline <script> blocks
+  printf '{"prompt":"use </script> tag"}' > "$json_file"
+
+  inject_and_write_html "$json_file" "$output_html"
+  [ -f "$output_html" ]
+
+  # The literal </script should NOT appear inside the injected data
+  # Extract just the const DATA = ... line
+  local data_line
+  data_line=$(grep 'const DATA = ' "$output_html")
+  ! echo "$data_line" | grep -q '</script'
+
+  # The escaped form \u003c should be present
+  grep -q '\\u003c' "$output_html"
+}
+
 # --- generate_flight_recorder tests ---
 
 @test "generate_flight_recorder: end-to-end with fixture data produces valid HTML" {
