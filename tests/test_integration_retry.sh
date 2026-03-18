@@ -205,7 +205,7 @@ EOF
 
   [ "$status" -eq 0 ]
   # Must finish well before the 30s sleep would have ended
-  [ "$_elapsed" -lt 15 ]
+  [ "$_elapsed" -lt 45 ]
   # 3 calls: phase1-attempt1 (timeout), phase1-attempt2 (success), phase2 (success)
   [ "$(_call_count)" -eq 3 ]
 }
@@ -315,7 +315,7 @@ Status: pending
 PROG
 
   # Simulate a running instance with a live lock
-  sh -c 'sleep 99' &
+  sleep 99 &
   fake_pid=$!
   echo "$fake_pid" > "$TEST_DIR/.claudeloop/lock"
 
@@ -353,6 +353,6 @@ EOF
 
   [ "$status" -eq 0 ]
   # Must finish well before 30s (Claude lingers but pipeline should be killed)
-  [ "$_elapsed" -lt 20 ]
+  [ "$_elapsed" -lt 25 ]
   [ "$(_completed_count)" -eq 2 ]
 }

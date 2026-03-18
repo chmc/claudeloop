@@ -79,6 +79,11 @@ CONF
   git -C "$TEST_DIR" commit -q -m "initial"
 }
 
+teardown() {
+  jobs -p 2>/dev/null | xargs kill 2>/dev/null || true
+  wait 2>/dev/null || true
+}
+
 # Helper: run claudeloop from TEST_DIR
 _cl() {
   run sh -c "cd '$TEST_DIR' && '$CLAUDELOOP' $*"
@@ -224,7 +229,7 @@ PROGRESS
 # =============================================================================
 
 @test "create_lock: --force kills live lock and succeeds" {
-  sh -c 'sleep 99' &
+  sleep 99 &
   fake_pid=$!
   mkdir -p "$TEST_DIR/.claudeloop"
   echo "$fake_pid" > "$TEST_DIR/.claudeloop/lock"
@@ -238,9 +243,8 @@ PROGRESS
 }
 
 @test "create_lock: --force does not break stale lock cleanup" {
-  sh -c 'sleep 99' &
+  sh -c 'exit 0' &
   dead_pid=$!
-  kill "$dead_pid" 2>/dev/null || true
   wait "$dead_pid" 2>/dev/null || true
   mkdir -p "$TEST_DIR/.claudeloop"
   echo "$dead_pid" > "$TEST_DIR/.claudeloop/lock"
