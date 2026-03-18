@@ -72,6 +72,8 @@ mkdir -p "$INSTALL_DIR/lib"
 cp "$SRC_DIR/claudeloop" "$INSTALL_DIR/claudeloop"
 chmod +x "$INSTALL_DIR/claudeloop"
 cp "$SRC_DIR/lib/"*.sh "$INSTALL_DIR/lib/"
+mkdir -p "$INSTALL_DIR/assets"
+cp "$SRC_DIR/assets/"*.html "$INSTALL_DIR/assets/"
 
 # Determine installed version
 if [ "$MODE" = "local" ]; then

@@ -56,8 +56,10 @@ jobs:
           tag=$(git describe --tags --abbrev=0)
           version="${tag#v}"
           mkdir -p "claudeloop-v${version}/lib"
+          mkdir -p "claudeloop-v${version}/assets"
           cp claudeloop "claudeloop-v${version}/"
           cp lib/*.sh "claudeloop-v${version}/lib/"
+          cp assets/replay-template.html "claudeloop-v${version}/assets/"
           tar -czf "claudeloop-v${version}.tar.gz" "claudeloop-v${version}"
           echo "TARBALL=claudeloop-v${version}.tar.gz" >> "$GITHUB_ENV"
           echo "TAG=$tag" >> "$GITHUB_ENV"

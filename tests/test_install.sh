@@ -50,6 +50,11 @@ run_uninstaller() {
   [ "$lib_count" -gt 0 ]
 }
 
+@test "install: copies assets/replay-template.html to INSTALL_DIR/assets" {
+  run_installer
+  [ -f "$INSTALL_DIR_OVERRIDE/assets/replay-template.html" ]
+}
+
 @test "install: creates BIN_DIR" {
   run_installer
   [ -d "$BIN_DIR_OVERRIDE" ]
