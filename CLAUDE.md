@@ -149,6 +149,18 @@ main → parse_plan → init_progress → main_loop
 
 All `print_*` output (via `lib/ui.sh`) and stream processor output are teed to `.claudeloop/live.log` via `LIVE_LOG` (set in `main()` after `setup_project`; empty during dry-run).
 
+### Packaging
+
+Runtime files ship via three mechanisms that must stay in sync:
+
+| Mechanism | File | What to update |
+|-----------|------|----------------|
+| Release tarball | `.github/workflows/release.yml` | `Build release tarball` step |
+| Installer | `install.sh` | `cp`/`mkdir` commands |
+| Installer tests | `tests/test_install.sh` | assert file exists after install |
+
+Currently packaged: `claudeloop`, `lib/*.sh`, `assets/replay-template.html`.
+
 ## Skills
 
 - `/github` — Git/GitHub conventions (commit, push, PR)
@@ -175,5 +187,7 @@ When found failing suites that are pre-existing, mandatory rule to fix them.
 ### Completion gate (mandatory)
 
 After all implementation and tests pass, run `/verify` before reporting the task as done. The verify skill selects appropriate checks (smoke, stub, GUI) based on which files changed. Skip only for documentation-only or test-only changes with no implementation modifications.
+
+When adding runtime files (libraries, templates, assets), verify they are included in the release tarball (`.github/workflows/release.yml`), installer (`install.sh`), and installer tests (`tests/test_install.sh`).
 
 If the change affects terminal output, also regenerate visual assets (`assets/README.md`) before reporting done.
