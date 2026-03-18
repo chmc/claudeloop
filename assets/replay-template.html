@@ -248,6 +248,11 @@ body {
   transition: opacity 0.15s;
   min-width: 2px;
   position: relative;
+  box-sizing: border-box;
+  border-right: 1px solid rgba(0, 0, 0, 0.15);
+}
+.timeline-segment:last-child {
+  border-right: none;
 }
 
 .timeline-segment:hover {
@@ -1172,6 +1177,15 @@ function phaseDuration(phase) {
   return Math.round((e - s) / 1000);
 }
 
+function sumPhaseDurations() {
+  var sum = 0;
+  DATA.phases.forEach(function(phase) {
+    var pd = phaseDuration(phase);
+    if (pd != null && pd > 0) sum += pd;
+  });
+  return sum;
+}
+
 function escapeHtml(text) {
   var div = document.createElement('div');
   div.textContent = text;
@@ -1273,10 +1287,9 @@ function renderSummaryCard(label, value, sub) {
 }
 
 function renderTimeline() {
-  var dur = totalDuration();
+  var dur = sumPhaseDurations();
   if (!dur || dur === 0) return '';
 
-  var runStart = new Date(DATA.run.started_at.replace(' ', 'T')).getTime();
   var html = '<div class="timeline-section">';
   html += '<h3>Timeline</h3>';
   html += '<div class="timeline-bar">';
@@ -1286,7 +1299,7 @@ function renderTimeline() {
     if (pd == null || pd === 0) return;
     var pct = (pd / dur * 100).toFixed(1);
     html += '<div class="timeline-segment status-' + phase.status + '" style="width:' + pct + '%" onclick="showPhaseDetail(\'' + phase.number + '\')" title="Phase ' + phase.number + ': ' + escapeHtml(phase.title) + ' (' + formatDuration(pd) + ')">';
-    if (parseFloat(pct) > 8) {
+    if (parseFloat(pct) > 5) {
       html += '<span class="seg-label">P' + phase.number + '</span>';
     }
     html += '</div>';

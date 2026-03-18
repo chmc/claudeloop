@@ -103,7 +103,8 @@ archive_current_run() {
     .claudeloop/logs \
     .claudeloop/signals \
     .claudeloop/live.log \
-    .claudeloop/ai-verify-reason.txt; do
+    .claudeloop/ai-verify-reason.txt \
+    .claudeloop/replay.html; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true
   done

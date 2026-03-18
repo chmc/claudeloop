@@ -133,6 +133,19 @@ EOF
   grep -q "BASE_DELAY=0" "${archive_dir}.claudeloop.conf"
 }
 
+@test "archive_current_run: moves replay.html to archive" {
+  _create_run_state
+  echo "<html>recorder</html>" > .claudeloop/replay.html
+
+  run archive_current_run --internal
+  [ "$status" -eq 0 ]
+
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -f "${archive_dir}replay.html" ]
+  [ ! -f .claudeloop/replay.html ]
+}
+
 @test "archive_current_run: nothing to archive when no state exists" {
   mkdir -p .claudeloop
   run archive_current_run --internal
