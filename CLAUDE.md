@@ -192,6 +192,8 @@ Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-cor
 
 When modifying existing behavior, update affected tests before changing implementation code.
 
+**Reproduce before fixing (mandatory):** When fixing a bug, reproduce it first using existing test infrastructure (fake CLI, bats fixtures, `--replay`). If the infrastructure can't reproduce the scenario, extend it. Code tracing alone is insufficient — verify the fix works end-to-end.
+
 When found failing suites that are pre-existing, mandatory rule to fix them.
 
 ### Completion gate (mandatory)

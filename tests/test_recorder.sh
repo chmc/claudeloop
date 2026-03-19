@@ -872,3 +872,36 @@ Attempt 3 Strategy: targeted' "$run_dir/PROGRESS.md"
   echo "$result" | grep -q '"number":"1".*"started_at":"2026-03-01 10:00:00"'
   echo "$result" | grep -q '"number":"2".*"started_at":"2026-03-01 10:06:00"'
 }
+
+# =============================================================================
+# is_success computation
+# =============================================================================
+
+@test "assemble_recorder_json: computes is_success for multi-attempt completed phase" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 2: 3 attempts, completed — only last attempt is success
+  # Extract phase 2 attempts block
+  phase2=$(echo "$result" | sed 's/.*"number":"2"//' )
+  # Attempt 1 and 2 should be is_success:false
+  echo "$result" | grep -q '"number":"2".*"is_success":false.*"is_success":false.*"is_success":true'
+}
+
+@test "assemble_recorder_json: computes is_success for single-attempt completed phase" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 1: 1 attempt, completed — that attempt is success
+  # Phase 1 has "number":"1" (string) in phase, "number":1 (int) in attempt
+  echo "$result" | grep -o '"number":"1"[^}]*"attempts":\[{[^]]*' | grep -q '"is_success":true'
+}
+
+@test "assemble_recorder_json: is_success false for all attempts of failed phase" {
+  run_dir=$(_create_fixtures)
+  # Change phase 2 status from completed to failed
+  awk '/Status: completed/ && ++n==2 { sub(/completed/, "failed") } 1' "$run_dir/PROGRESS.md" > "$run_dir/PROGRESS.md.tmp"
+  mv "$run_dir/PROGRESS.md.tmp" "$run_dir/PROGRESS.md"
+  result=$(assemble_recorder_json "$run_dir")
+  # All attempts of phase 2 should be is_success:false
+  phase2_attempts=$(echo "$result" | grep -o '"number":"2".*' | grep -o '"is_success":[a-z]*' | sort -u)
+  [ "$phase2_attempts" = '"is_success":false' ]
+}

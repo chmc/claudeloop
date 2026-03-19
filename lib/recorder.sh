@@ -341,8 +341,14 @@ assemble_recorder_json() {
         a_fail_json="null"
       fi
 
-      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
-        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
+      # Compute is_success: only last attempt of a completed phase is success
+      local a_is_success="false"
+      if [ "$status" = "completed" ] && [ "$attempt_num" -eq "$total_attempts" ]; then
+        a_is_success="true"
+      fi
+
+      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"is_success":%s,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
+        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$a_is_success" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
 
       attempt_num=$((attempt_num + 1))
     done

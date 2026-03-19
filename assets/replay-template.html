@@ -614,13 +614,12 @@ body {
   border: 2px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   text-align: center;
 }
 
 .filmstrip-card:hover {
   border-color: var(--accent);
-  transform: translateY(-2px);
 }
 
 .filmstrip-card.filmstrip-selected {
@@ -1641,7 +1640,7 @@ function renderSidebar() {
     if (phase.attempts.length > 1) {
       html += '<div class="attempt-list">';
       phase.attempts.forEach(function(a) {
-        var icon = a.fail_reason ? '❌' : '✅';
+        var icon = a.is_success ? '✅' : '❌';
         html += '<div class="attempt-entry"><span class="attempt-icon">' + icon + '</span> Attempt ' + a.number;
         if (a.strategy !== 'standard') html += ' <span style="opacity:0.6">(' + a.strategy + ')</span>';
         html += '</div>';
@@ -1816,8 +1815,8 @@ function renderFilmstrip(phase) {
     html += '<div class="filmstrip-card' + (selected ? ' filmstrip-selected' : '') + '" data-attempt-idx="' + idx + '">';
     html += '<div class="fs-attempt-num">#' + attempt.number + '</div>';
 
-    var outcomeClass = attempt.fail_reason ? 'fs-fail' : 'fs-pass';
-    var outcomeText = attempt.fail_reason ? escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) : '✅ Success';
+    var outcomeClass = attempt.is_success ? 'fs-pass' : 'fs-fail';
+    var outcomeText = attempt.is_success ? '✅ Success' : (attempt.fail_reason ? escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) : 'Failed');
     html += '<div class="fs-outcome ' + outcomeClass + '">' + outcomeText + '</div>';
 
     html += '<span class="strategy-badge strategy-' + attempt.strategy + '">' + attempt.strategy + '</span>';
@@ -2113,7 +2112,7 @@ function renderAttemptCard(attempt) {
   // Header
   html += '<div class="attempt-card-header">';
   html += '<span class="attempt-title">';
-  html += (attempt.fail_reason ? '❌' : '✅') + ' Attempt ' + attempt.number;
+  html += (attempt.is_success ? '✅' : '❌') + ' Attempt ' + attempt.number;
   html += '</span>';
   html += '<span class="strategy-badge strategy-' + attempt.strategy + '">' + attempt.strategy + '</span>';
   html += '</div>';
@@ -2158,8 +2157,8 @@ function renderAttemptCard(attempt) {
   }
 
   // Fail reason
-  if (attempt.fail_reason) {
-    html += '<div class="fail-reason">Failure: ' + escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) + '</div>';
+  if (!attempt.is_success) {
+    html += '<div class="fail-reason">Failure: ' + (attempt.fail_reason ? escapeHtml(attempt.fail_reason.replace(/_/g, ' ')) : 'Failed') + '</div>';
   }
 
   // Git commits (inline, expanded by default)
@@ -2564,7 +2563,7 @@ function buildEventTimeline() {
           phase: phase.number,
           attempt: attempt.number,
           fail_reason: attempt.fail_reason,
-          label: 'P' + phase.number + ' attempt ' + attempt.number + (attempt.fail_reason ? ' fail' : ' done')
+          label: 'P' + phase.number + ' attempt ' + attempt.number + (attempt.is_success ? ' done' : ' fail')
         });
       }
     });
@@ -2637,9 +2636,9 @@ function reconstructState(timestamp) {
       if (attempt.ended_at) {
         var aEnd = new Date(attempt.ended_at.replace(' ', 'T')).getTime();
         if (timestamp >= aEnd) {
-          if (attempt.fail_reason) {
+          if (!attempt.is_success) {
             pState.status = 'failed';
-            pState.failReason = attempt.fail_reason;
+            pState.failReason = attempt.fail_reason || 'Failed';
           }
           // Collect files from completed attempts
           if (attempt.files) {
