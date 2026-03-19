@@ -149,6 +149,29 @@ body {
 .phase-item .attempt-list {
   padding-left: 22px;
   margin-top: 4px;
+  display: none;
+}
+.phase-item.expanded .attempt-list {
+  display: block;
+}
+
+.phase-meta .disclosure {
+  display: inline-block;
+  width: 0; height: 0;
+  border: 4px solid transparent;
+  border-left: 6px solid var(--text-muted);
+  margin-right: 4px;
+  transition: transform 0.15s;
+}
+.phase-item.expanded .phase-meta .disclosure {
+  transform: rotate(90deg);
+}
+
+.phase-meta.clickable {
+  cursor: pointer;
+}
+.phase-meta.clickable:hover {
+  color: var(--text-secondary);
 }
 
 .phase-item .attempt-entry {
@@ -879,7 +902,8 @@ body {
   .phase-item { padding: 8px 12px; white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
   .phase-item.active { border-left-color: transparent; border-bottom-color: var(--accent); }
   .phase-item .phase-meta,
-  .phase-item .attempt-list { display: none; }
+  .phase-item .attempt-list,
+  .phase-item.expanded .attempt-list { display: none; }
   .main { padding: 16px; }
   .summary-cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
   .tt-state-panel { grid-template-columns: 1fr; }
@@ -1502,6 +1526,7 @@ body {
 
 /* ── State ── */
 let currentView = 'overview';
+var _expandedPhases = {};
 
 /* ── Helpers ── */
 function statusIcon(status) {
@@ -1648,7 +1673,13 @@ function renderSidebar() {
 
   DATA.phases.forEach(function(phase) {
     var isActive = currentView === 'phase:' + phase.number;
-    html += '<div class="phase-item' + (isActive ? ' active' : '') + '" onclick="showPhaseDetail(\'' + phase.number + '\')">';
+    var isExpanded = _expandedPhases[phase.number];
+    // Auto-expand: failed phases default expanded (unless user explicitly collapsed)
+    if (isExpanded === undefined && phase.status === 'failed') isExpanded = true;
+    // Auto-expand: active phase with multiple attempts
+    if (isActive && phase.attempts.length > 1) isExpanded = true;
+
+    html += '<div class="phase-item' + (isActive ? ' active' : '') + (isExpanded ? ' expanded' : '') + '" onclick="showPhaseDetail(\'' + phase.number + '\')">';
     html += '<div class="phase-label">';
     html += '<span class="icon">' + statusIcon(phase.status) + '</span>';
     html += '<span class="title">Phase ' + escapeHtml(phase.number) + ': ' + escapeHtml(phase.title) + '</span>';
@@ -1663,7 +1694,14 @@ function renderSidebar() {
     if (cost > 0) parts.push(formatCost(cost));
     if (phase.attempts.length > 1) parts.push(phase.attempts.length + ' attempts');
     if (parts.length) {
-      html += '<div class="phase-meta">' + parts.join(' · ') + '</div>';
+      if (phase.attempts.length > 1) {
+        html += '<div class="phase-meta clickable" onclick="togglePhaseAttempts(event, \'' + phase.number + '\')">';
+        html += '<span class="disclosure"></span>';
+      } else {
+        html += '<div class="phase-meta">';
+      }
+      html += parts.join(' · ');
+      html += '</div>';
     }
 
     // Attempt sub-entries for multi-attempt phases
@@ -2593,8 +2631,17 @@ function showOverview() {
   renderOverview();
 }
 
+function togglePhaseAttempts(e, num) {
+  e.stopPropagation();
+  _expandedPhases[num] = !_expandedPhases[num];
+  renderSidebar();
+}
+
 function showPhaseDetail(num) {
   currentView = 'phase:' + num;
+  // Auto-expand active phase in sidebar if it has multiple attempts
+  var phase = DATA.phases.filter(function(p) { return p.number == num; })[0];
+  if (phase && phase.attempts.length > 1) _expandedPhases[num] = true;
   renderSidebar();
   renderPhaseDetail(num);
 }
