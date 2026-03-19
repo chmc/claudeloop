@@ -63,11 +63,23 @@ read_old_phase_list() {
           printf '%s' "$av" | grep -qE '^[0-9]+$' || av=0
           old_phase_set ATTEMPTS "$current_phase" "$av"
           ;;
-        "Attempt "[0-9]*)
+        "Attempt "*" Started: "*)
           local _anum _atime
           _anum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
           old_phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
+          ;;
+        "Attempt "*" Strategy: "*)
+          local _asnum _asval
+          _asnum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Strategy:.*/\1/')
+          _asval=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Strategy:[[:space:]]*//')
+          old_phase_set ATTEMPT_STRATEGY "$current_phase" "$_asval" "$_asnum"
+          ;;
+        "Attempt "*" Fail Reason: "*)
+          local _afnum _afval
+          _afnum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Fail Reason:.*/\1/')
+          _afval=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Fail Reason:[[:space:]]*//')
+          old_phase_set ATTEMPT_FAIL_REASON "$current_phase" "$_afval" "$_afnum"
           ;;
         "Depends on:"*)
           local dv
@@ -156,6 +168,11 @@ detect_plan_changes() {
         local _old_at
         _old_at=$(old_phase_get ATTEMPT_TIME "$matched_old_num" "$_ti")
         phase_set ATTEMPT_TIME "$new_i" "$_old_at" "$_ti"
+        local _old_as _old_af
+        _old_as=$(old_phase_get ATTEMPT_STRATEGY "$matched_old_num" "$_ti")
+        phase_set ATTEMPT_STRATEGY "$new_i" "$_old_as" "$_ti"
+        _old_af=$(old_phase_get ATTEMPT_FAIL_REASON "$matched_old_num" "$_ti")
+        phase_set ATTEMPT_FAIL_REASON "$new_i" "$_old_af" "$_ti"
         _ti=$((_ti + 1))
       done
 

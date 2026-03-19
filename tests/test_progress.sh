@@ -1726,3 +1726,67 @@ EOF
   [ "$(get_phase_attempt_fail_reason 1 1)" = "verification_failed" ]
   [ "$(get_phase_attempt_fail_reason 1 2)" = "" ]
 }
+
+# =============================================================================
+# read_old_phase_list: Strategy and Fail Reason parsing
+# =============================================================================
+
+@test "read_old_phase_list: parses Strategy and Fail Reason without error" {
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Phase One
+Status: failed
+Started: 2026-03-01 10:00:00
+Attempts: 2
+Attempt 1 Started: 2026-03-01 10:00:00
+Attempt 1 Strategy: standard
+Attempt 1 Fail Reason: no_write_actions
+Attempt 2 Started: 2026-03-01 10:10:00
+Attempt 2 Strategy: stripped
+EOF
+  run read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$status" -eq 0 ]
+  # Must not contain "command not found" from bad eval
+  [[ "$output" != *"command not found"* ]]
+
+  # Re-run outside of `run` so variables are visible
+  read_old_phase_list "$TEST_DIR/PROGRESS.md"
+  [ "$(old_phase_get ATTEMPT_TIME 1 1)" = "2026-03-01 10:00:00" ]
+  [ "$(old_phase_get ATTEMPT_TIME 1 2)" = "2026-03-01 10:10:00" ]
+  [ "$(old_phase_get ATTEMPT_STRATEGY 1 1)" = "standard" ]
+  [ "$(old_phase_get ATTEMPT_STRATEGY 1 2)" = "stripped" ]
+  [ "$(old_phase_get ATTEMPT_FAIL_REASON 1 1)" = "no_write_actions" ]
+}
+
+@test "detect_plan_changes: transfers Strategy and Fail Reason on renumber" {
+  # Old progress: Phase 1 "Alpha" with strategy/fail_reason
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Alpha
+Status: failed
+Started: 2026-03-01 10:00:00
+Attempts: 2
+Attempt 1 Started: 2026-03-01 10:00:00
+Attempt 1 Strategy: standard
+Attempt 1 Fail Reason: no_write_actions
+Attempt 2 Started: 2026-03-01 10:10:00
+Attempt 2 Strategy: stripped
+EOF
+
+  # New plan: "Alpha" is now Phase 2
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="New Phase"
+  PHASE_TITLE_2="Alpha"
+  PHASE_STATUS_1="pending"
+  PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0
+  PHASE_ATTEMPTS_2=0
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2=""
+
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+
+  # Strategy and fail_reason should transfer from old Phase 1 to new Phase 2
+  [ "$(get_phase_attempt_strategy 2 1)" = "standard" ]
+  [ "$(get_phase_attempt_strategy 2 2)" = "stripped" ]
+  [ "$(get_phase_attempt_fail_reason 2 1)" = "no_write_actions" ]
+}
