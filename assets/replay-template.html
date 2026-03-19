@@ -1677,7 +1677,7 @@ function renderSidebar() {
     // Auto-expand: failed phases default expanded (unless user explicitly collapsed)
     if (isExpanded === undefined && phase.status === 'failed') isExpanded = true;
     // Auto-expand: active phase with multiple attempts
-    if (isActive && phase.attempts.length > 1) isExpanded = true;
+    if (isExpanded === undefined && isActive && phase.attempts.length > 1) isExpanded = true;
 
     html += '<div class="phase-item' + (isActive ? ' active' : '') + (isExpanded ? ' expanded' : '') + '" onclick="showPhaseDetail(\'' + phase.number + '\')">';
     html += '<div class="phase-label">';
@@ -2641,7 +2641,7 @@ function showPhaseDetail(num) {
   currentView = 'phase:' + num;
   // Auto-expand active phase in sidebar if it has multiple attempts
   var phase = DATA.phases.filter(function(p) { return p.number == num; })[0];
-  if (phase && phase.attempts.length > 1) _expandedPhases[num] = true;
+  if (phase && phase.attempts.length > 1 && _expandedPhases[num] === undefined) _expandedPhases[num] = true;
   renderSidebar();
   renderPhaseDetail(num);
 }
