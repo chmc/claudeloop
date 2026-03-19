@@ -1,31 +1,18 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Git
 
-Use conventional commits
+Use conventional commits.
 
-### Branching model
+**Branches:** `main` (stable, e.g. `0.16.0`) / `beta` (experimental, e.g. `0.17.0-beta.1`). Rebase-only — no merge commits. After rebasing, `git push --force-with-lease`.
 
-Two long-lived branches:
-
-| Branch | Purpose | VERSION state |
-|--------|---------|---------------|
-| `main` | Stable/production code | Always stable (e.g. `0.16.0`) |
-| `beta` | Experimental/beta development | Always beta (e.g. `0.17.0-beta.1`) |
-
-**Rebase-only policy:** No merge commits. All branch synchronization uses `git rebase` to keep linear history. After rebasing, always `git push --force-with-lease` to update the remote.
-
-### Branch-awareness rule (mandatory)
-
-Before starting any work (planning, coding, committing), check the current branch with `git branch --show-current`. Flag to the developer whether the current branch targets stable (`main`) or beta (`beta`) and ask how to proceed before making changes. If the work doesn't match the current branch, offer to switch.
+**Branch-awareness (mandatory):** Before any work, run `git branch --show-current`. Flag whether current branch targets stable or beta and ask before making changes. Offer to switch if work doesn't match.
 
 ## Planning
 
 ### Exploration must produce constraints, not summaries
 
-Explore agents must output a structured constraints brief, not prose summaries:
+Explore agents must output a structured constraints brief:
 
 1. **Conventions observed** — patterns, error handling, naming. Cite files and lines.
 2. **Touch points** — every function, variable, and file the change interacts with. Include signatures and callers.
@@ -41,37 +28,19 @@ Every design decision must trace to a constraint from exploration or an explicit
 - For each edge case, state the scenario and handling (not "handle errors" — say what error, what happens)
 - State what is NOT changing and why
 
-### One review pass, not three
-
-Single fact-checking pass: for each file in the plan, verify function signatures exist, callers are accounted for, and tests are updated. This is fact-checking, not design critique. If it finds issues, the exploration was insufficient — improve exploration, don't add more review rounds.
+**One review pass:** Single fact-checking pass per file — verify function signatures exist, callers are accounted for, tests are updated. If it finds issues, the exploration was insufficient — improve exploration, don't add more review rounds.
 
 ## Continuous improvement (mandatory)
 
-When you notice a friction point, missing guardrail, or automation opportunity during any phase of work, raise it and suggest a concrete change. Target:
-
-- **CLAUDE.md** — new rules, refined wording, missing examples
-- **Skills/hooks** — repetitive multi-step sequences that could be a slash command or hook
-- **MCP tools/plugins** — external integrations that would reduce manual steps
-
-Keep suggestions brief and actionable (what to change, where, why). Don't derail the current task — note it at a natural pause point (end of a planning phase, after implementation, during wrap-up).
+When you notice a friction point, missing guardrail, or automation opportunity, raise it and suggest a concrete change targeting **CLAUDE.md**, **skills/hooks**, or **MCP tools/plugins**. Keep suggestions brief and actionable. Don't derail the current task — note it at a natural pause point.
 
 ## Documentation
 
-When implementation is changed, check if the change affects user-facing behavior (CLI options, workflows, defaults, install steps, output format). If so, update stale sections in README.md and QUICKSTART.md, or add new sections for new features.
+When implementation changes affect user-facing behavior, update stale sections in README.md and QUICKSTART.md.
 
-### Visual assets (mandatory)
+**Visual assets (mandatory):** When changes affect terminal output, regenerate all demo GIFs/screenshots via VHS tapes. See `assets/README.md`. All tapes can run in parallel.
 
-When changes affect terminal output (logo, colors, spinners, progress display, phase formatting), regenerate all demo GIFs and screenshots via VHS tapes. See `assets/README.md` for commands. All tapes can run in parallel.
-
-### ADR workflow (mandatory)
-
-When making an architectural decision (new pattern, technology choice, significant design change), create an ADR:
-
-1. Assign next sequential number from `docs/adr/`
-2. Create `docs/adr/NNNN-slug.md` using the [ADR template](docs/adr/TEMPLATE.md)
-3. Update `docs/adr/README.md` index
-
-Examples of what warrants an ADR: changing the shell dialect, adding a new dependency, altering the state model, choosing a serialization format, modifying the execution pipeline.
+**ADR workflow (mandatory):** For architectural decisions (new pattern, technology choice, significant design change): assign next number from `docs/adr/`, create `docs/adr/NNNN-slug.md` using the [template](docs/adr/TEMPLATE.md), update `docs/adr/README.md`. Examples: changing shell dialect, adding dependency, altering state model, choosing serialization format, modifying execution pipeline.
 
 ## Commands
 
@@ -88,8 +57,6 @@ bats tests/test_fake_claude.sh        # fake CLI scenario tests
 ```
 
 ## Architecture
-
-All state is global shell variables — no config file, no subprocess state.
 
 ### Data model
 
@@ -121,6 +88,8 @@ value=$(eval "echo \"\$PHASE_STATUS_${phase_var}\"")
 eval "PHASE_STATUS_${phase_var}='completed'"
 ```
 
+Prefer `phase_get`/`phase_set` from `lib/phase_state.sh` for new code. Raw eval shown for reading existing code and parsers.
+
 Iteration pattern (replaces old `i=1; while [ "$i" -le "$PHASE_COUNT" ]` loops):
 ```sh
 for phase_num in $PHASE_NUMBERS; do
@@ -134,8 +103,12 @@ done
 | File | Key functions |
 |------|--------------|
 | `lib/parser.sh` | `parse_plan` → sets all `PHASE_*_N` vars and `PHASE_COUNT` |
+| `lib/ai_parser.sh` | `ai_parse_plan`, `ai_verify_plan`, `ai_reparse_with_feedback`, `ai_parse_and_verify`, `show_ai_plan`, `confirm_ai_plan` |
 | `lib/dependencies.sh` | `find_next_phase`, `is_phase_runnable`, `detect_dependency_cycles` (DFS, space-separated visited/stack strings) |
+| `lib/phase_state.sh` | `phase_get`, `phase_set`, `get_phase_status`, `reset_phase_for_retry`, `reset_phase_full`, `auto_commit_changes` |
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
+| `lib/plan_changes.sh` | `transfer_attempt_fields`, `read_old_phase_list`, `detect_plan_changes`, `detect_orphan_logs`, `recover_progress_from_logs` |
+| `lib/prompt.sh` | `build_phase_prompt`, `capture_git_context`, `build_default_prompt`, `apply_retry_strategy` |
 | `lib/retry.sh` | `calculate_backoff`, `should_retry_phase`, `has_write_actions`, `has_signal_file`, `retry_strategy`, `escalate_strategy`, `verify_mode`, `extract_error_context`, `extract_verify_error`, `build_retry_context` |
 | `lib/stream_processor.sh` | `process_stream_json` (AWK-based stream parser), `inject_heartbeats` |
 | `lib/ui.sh` | `print_header`, `print_phase_status`, `print_all_phases`, `print_phase_exec_header`, `print_success/error/warning`, `log_verbose` |
@@ -144,6 +117,10 @@ done
 | `lib/refactor.sh` | `build_refactor_prompt`, `verify_refactor`, `refactor_phase`, `run_refactor_if_needed` — opt-in auto-refactoring with git rollback |
 | `lib/execution.sh` | `execute_phase`, `run_claude_pipeline`, `evaluate_phase_result`, `run_adaptive_verification`, `update_fail_reason` |
 | `lib/archive.sh` | `archive_current_run`, `list_archives`, `restore_archive`, `generate_archive_metadata`, `is_run_complete`, `prompt_archive_completed_run` |
+| `lib/recorder.sh` | `rec_load_progress`, `inject_and_write_html`, `generate_flight_recorder`, `assemble_recorder_json` |
+| `lib/recorder_overview.sh` | `rec_extract_run_overview`, `_rec_overview_from_metadata`, `_rec_aggregate_sessions` |
+| `lib/recorder_parsers.sh` | `rec_extract_session`, `rec_extract_tools`, `rec_extract_files`, `rec_extract_tool_calls`, `rec_verify_verdict` |
+| `lib/release_notes.sh` | `format_release_notes` |
 | `claudeloop` | Orchestrator: arg parsing, `trap handle_interrupt INT TERM`, lock file, `main_loop` |
 
 ### Execution flow
@@ -195,7 +172,7 @@ test in `test_progress.sh` enforces this. Per-attempt fields must also be added 
 
 ## Testing
 
-Uses [bats-core](https://github.com/bats-core/bats-core) (`brew install bats-core`). Each lib has a corresponding `tests/test_<lib>.sh`.
+Each lib has a corresponding `tests/test_<lib>.sh`.
 
 ### TDD workflow (mandatory)
 
@@ -209,7 +186,7 @@ When modifying existing behavior, update affected tests before changing implemen
 
 **Reproduce before fixing (mandatory):** When fixing a bug, reproduce it first using existing test infrastructure (fake CLI, bats fixtures, `--replay`). If the infrastructure can't reproduce the scenario, extend it. Code tracing alone is insufficient — verify the fix works end-to-end.
 
-When found failing suites that are pre-existing, mandatory rule to fix them.
+Pre-existing failing suites are mandatory to fix when found.
 
 ### Completion gate (mandatory)
 
