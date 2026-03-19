@@ -688,11 +688,11 @@ LOGEOF
   # Phase 2 attempt 2 should have tools from its raw.json (Read:1, Edit:1, Bash:1)
   # Phase 2 attempt 3 should have tools from phase-2.raw.json (Read:1, Edit:2, Bash:1)
   # All attempts should have non-empty tools arrays
-  # Count occurrences of "Bash" tool in the output — should appear in all attempts
+  # Count "Bash" in tools arrays (aggregate counts) — 4 occurrences across attempts
+  # Also appears in tool_calls arrays (individual calls) — 4 more = 8 total
   local bash_count
   bash_count=$(echo "$result" | grep -o '"name":"Bash"' | wc -l | tr -d ' ')
-  # Phase 1 (1 Bash) + Phase 2 attempt 1 (1 Bash) + attempt 2 (1 Bash) + attempt 3 (1 Bash) = 4
-  [ "$bash_count" -eq 4 ]
+  [ "$bash_count" -eq 8 ]
   # Phase 2 attempt 1 should have files (src/main.ts only from Read)
   echo "$result" | grep -q '"path":"src/main.ts"'
   # Phase 2 attempt 3 should have src/util.ts (new file in last attempt)
@@ -931,4 +931,179 @@ EOF
   # All attempts of phase 2 should be is_success:false
   phase2_attempts=$(echo "$result" | grep -o '"number":"2".*' | grep -o '"is_success":[a-z]*' | sort -u)
   [ "$phase2_attempts" = '"is_success":false' ]
+}
+
+# =============================================================================
+# Realistic raw.json fixture helper (stream_event + assistant + user lines)
+# =============================================================================
+
+_create_realistic_raw_fixture() {
+  local file="$1"
+  cat > "$file" << 'EOF'
+{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_01","name":"Read","input":{}}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"file_path":"src/foo.ts"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_01","type":"tool_result","content":"file contents","is_error":false}]}}
+{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_02","name":"Bash","input":{}}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"npm test"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_02","type":"tool_result","content":"ok","is_error":false}]}}
+{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_03","name":"Edit","input":{}}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_03","name":"Edit","input":{"file_path":"src/foo.ts","old_string":"a","new_string":"b"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_03","type":"tool_result","content":"ok","is_error":false}]}}
+{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_04","name":"Grep","input":{}}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_04","name":"Grep","input":{"pattern":"TODO","path":"src/"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_04","type":"tool_result","content":"found","is_error":false}]}}
+{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_05","name":"Write","input":{}}}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_05","name":"Write","input":{"file_path":"src/new.ts","content":"hello"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_05","type":"tool_result","content":"ok","is_error":false}]}}
+EOF
+}
+
+# =============================================================================
+# Double-count fix: rec_extract_tools with realistic fixture
+# =============================================================================
+
+@test "rec_extract_tools: no double-counting with realistic raw.json" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tools "$raw_file")
+  # 5 unique tool calls: Read, Bash, Edit, Grep, Write — each counted once
+  echo "$result" | grep -q '"name":"Bash","count":1'
+  echo "$result" | grep -q '"name":"Edit","count":1'
+  echo "$result" | grep -q '"name":"Grep","count":1'
+  echo "$result" | grep -q '"name":"Read","count":1'
+  echo "$result" | grep -q '"name":"Write","count":1'
+}
+
+@test "rec_extract_tools: simplified fixture still works (backward compat)" {
+  run_dir=$(_create_fixtures)
+  result=$(rec_extract_tools "$run_dir/logs/phase-1.raw.json")
+  echo "$result" | grep -q '"name":"Bash","count":1'
+  echo "$result" | grep -q '"name":"Edit","count":3'
+  echo "$result" | grep -q '"name":"Read","count":2'
+  echo "$result" | grep -q '"name":"Write","count":1'
+}
+
+@test "rec_extract_files: no duplicates with realistic raw.json" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_files "$raw_file")
+  # Should have 2 files: src/foo.ts (Edit, Read) and src/new.ts (Write)
+  echo "$result" | grep -q '"path":"src/foo.ts"'
+  echo "$result" | grep -q '"path":"src/new.ts"'
+  # Each path should appear exactly once
+  local foo_count
+  foo_count=$(echo "$result" | grep -o '"src/foo.ts"' | wc -l | tr -d ' ')
+  [ "$foo_count" -eq 1 ]
+}
+
+# =============================================================================
+# rec_extract_tool_calls tests
+# =============================================================================
+
+@test "rec_extract_tool_calls: extracts tool calls in sequence from realistic fixture" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Should have 5 sequential tool calls
+  echo "$result" | grep -q '"seq":1,"name":"Read"'
+  echo "$result" | grep -q '"seq":2,"name":"Bash"'
+  echo "$result" | grep -q '"seq":3,"name":"Edit"'
+  echo "$result" | grep -q '"seq":4,"name":"Grep"'
+  echo "$result" | grep -q '"seq":5,"name":"Write"'
+}
+
+@test "rec_extract_tool_calls: returns empty array for missing file" {
+  result=$(rec_extract_tool_calls "$TEST_DIR/nonexistent.raw.json")
+  [ "$result" = "[]" ]
+}
+
+@test "rec_extract_tool_calls: returns empty array for empty file" {
+  touch "$TEST_DIR/empty.raw.json"
+  result=$(rec_extract_tool_calls "$TEST_DIR/empty.raw.json")
+  [ "$result" = "[]" ]
+}
+
+@test "rec_extract_tool_calls: handles simplified format (backward compat)" {
+  run_dir=$(_create_fixtures)
+  result=$(rec_extract_tool_calls "$run_dir/logs/phase-1.raw.json")
+  # phase-1.raw.json has: Read, Edit, Edit, Write, Bash, Read, Edit (7 calls)
+  echo "$result" | grep -q '"seq":1,"name":"Read"'
+  echo "$result" | grep -q '"seq":2,"name":"Edit"'
+  echo "$result" | grep -q '"seq":5,"name":"Bash"'
+  # Total 7 entries
+  local count
+  count=$(echo "$result" | grep -o '"seq":' | wc -l | tr -d ' ')
+  [ "$count" -eq 7 ]
+}
+
+@test "rec_extract_tool_calls: correct preview per tool type" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Read → file_path preview
+  echo "$result" | grep -q '"name":"Read","preview":"src/foo.ts"'
+  # Bash → command preview
+  echo "$result" | grep -q '"name":"Bash","preview":"npm test"'
+  # Edit → file_path preview
+  echo "$result" | grep -q '"name":"Edit","preview":"src/foo.ts"'
+  # Grep → pattern preview
+  echo "$result" | grep -q '"name":"Grep","preview":"TODO"'
+  # Write → file_path preview
+  echo "$result" | grep -q '"name":"Write","preview":"src/new.ts"'
+}
+
+@test "rec_extract_tool_calls: deduplicates stream_event + assistant lines" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Should have exactly 5 entries, not 10 (no stream_event duplicates)
+  local count
+  count=$(echo "$result" | grep -o '"seq":' | wc -l | tr -d ' ')
+  [ "$count" -eq 5 ]
+}
+
+@test "rec_extract_tool_calls: caps at 200 tool calls" {
+  local raw_file="$TEST_DIR/big.raw.json"
+  local i=1
+  while [ "$i" -le 210 ]; do
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"echo %d"}}\n' "$i" >> "$raw_file"
+    i=$((i + 1))
+  done
+  result=$(rec_extract_tool_calls "$raw_file")
+  local count
+  count=$(echo "$result" | grep -o '"seq":' | wc -l | tr -d ' ')
+  [ "$count" -eq 200 ]
+}
+
+@test "rec_extract_tool_calls: Bash command with escaped quotes" {
+  local raw_file="$TEST_DIR/escaped.raw.json"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"echo \\"hello world\\""}}\n' > "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Preview should contain the full command including unescaped quotes, then re-escaped for JSON
+  echo "$result" | grep -q '"name":"Bash"'
+  echo "$result" | grep -q 'echo'
+  echo "$result" | grep -q 'hello world'
+}
+
+@test "rec_extract_tool_calls: preview with special chars is valid JSON" {
+  local raw_file="$TEST_DIR/special.raw.json"
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"echo \\"test\\" && cat file"}}\n' > "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Should be parseable — check it starts and ends correctly
+  echo "$result" | grep -q '^\[.*\]$'
+  # Should have properly escaped quotes in preview
+  echo "$result" | grep -q '"preview":'
+}
+
+# =============================================================================
+# Integration: tool_calls in assemble_recorder_json
+# =============================================================================
+
+@test "assemble_recorder_json: includes tool_calls in attempt JSON" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Should contain tool_calls array with sequential entries
+  echo "$result" | grep -q '"tool_calls":\['
+  # Phase 1 should have tool_calls from its raw.json
+  echo "$result" | grep -q '"seq":1,"name":"Read","preview":"src/foo.ts"'
 }

@@ -91,6 +91,8 @@ rec_extract_tools() {
 
   awk '
     /"type":"tool_use"/ {
+      # Skip stream_event lines (contain empty input duplicates)
+      if (index($0, "\"type\":\"stream_event\"") > 0) next
       # Extract tool name using index/substr (POSIX awk)
       idx = index($0, "\"name\":\"")
       if (idx > 0) {
@@ -140,6 +142,8 @@ rec_extract_files() {
 
   awk '
     /"type":"tool_use"/ {
+      # Skip stream_event lines (contain empty input duplicates)
+      if (index($0, "\"type\":\"stream_event\"") > 0) next
       # Extract tool name (POSIX awk)
       idx = index($0, "\"name\":\"")
       tool = ""
@@ -210,6 +214,111 @@ rec_extract_files() {
       }
       printf "]"
     }
+  ' "$raw_file"
+}
+
+# Extract individual tool calls in sequence from a raw JSON log.
+# Args: $1 - raw JSON file path
+# Prints: JSON array of {seq, name, preview} objects
+rec_extract_tool_calls() {
+  local raw_file="$1"
+
+  if [ ! -f "$raw_file" ] || [ ! -s "$raw_file" ]; then
+    echo "[]"
+    return 0
+  fi
+
+  awk '
+  # extract(s, key) - return scalar value for "key":value in s
+  # Handles escaped \", \n, \t within strings. Returns "" for object/array.
+  # Duplicated from stream_processor.sh:59-98 (proven, handles \", \n, \t)
+  function extract(s, key,    tag, i, c, val, esc) {
+    tag = "\"" key "\":"
+    i = index(s, tag)
+    if (i == 0) return ""
+    i += length(tag)
+    c = substr(s, i, 1)
+    if (c == "\"") {
+      val = ""
+      esc = 0
+      i++
+      while (i <= length(s)) {
+        c = substr(s, i, 1)
+        if (esc) {
+          if (c == "n") val = val "\n"
+          else if (c == "t") val = val "\t"
+          else val = val c
+          esc = 0
+        } else if (c == "\\") {
+          esc = 1
+        } else if (c == "\"") {
+          break
+        } else {
+          val = val c
+        }
+        i++
+      }
+      return val
+    } else if (c == "{" || c == "[") {
+      return ""
+    } else {
+      val = ""
+      while (i <= length(s)) {
+        c = substr(s, i, 1)
+        if (c == "," || c == "}" || c == "]" || c == " ") break
+        val = val c
+        i++
+      }
+      return val
+    }
+  }
+
+  # trunc(s, max) - replace newlines with spaces, truncate to max chars + "..."
+  function trunc(s, max) {
+    gsub(/\n/, " ", s)
+    if (length(s) > max) return substr(s, 1, max) "..."
+    return s
+  }
+
+  # json_esc(s) - escape for JSON output: \ -> \\, " -> \"
+  function json_esc(s) {
+    gsub(/\\/, "\\\\", s)
+    gsub(/"/, "\\\"", s)
+    return s
+  }
+
+  /"type":"tool_use"/ {
+    # Skip stream_event lines (contain empty input duplicates)
+    if (index($0, "\"type\":\"stream_event\"") > 0) next
+
+    # Split for multi-tool-per-line (defensive, rare in practice)
+    n = split($0, segs, "\"type\":\"tool_use\"")
+    for (ti = 2; ti <= n; ti++) {
+      if (seq >= 200) next
+      seq++
+      name = extract(segs[ti], "name")
+      # Tool-specific preview
+      if (name == "Bash") preview = trunc(extract(segs[ti], "command"), 120)
+      else if (name == "Read" || name == "Edit" || name == "Write") preview = extract(segs[ti], "file_path")
+      else if (name == "Glob" || name == "Grep") preview = extract(segs[ti], "pattern")
+      else if (name == "WebFetch") preview = trunc(extract(segs[ti], "url"), 120)
+      else if (name == "WebSearch") preview = trunc(extract(segs[ti], "query"), 80)
+      else preview = ""
+      # Truncate file paths too
+      if (length(preview) > 120) preview = substr(preview, 1, 120) "..."
+      # Store for END block output
+      names[seq] = name
+      previews[seq] = json_esc(preview)
+    }
+  }
+  END {
+    printf "["
+    for (i = 1; i <= seq; i++) {
+      if (i > 1) printf ","
+      printf "{\"seq\":%d,\"name\":\"%s\",\"preview\":\"%s\"}", i, names[i], previews[i]
+    }
+    printf "]"
+  }
   ' "$raw_file"
 }
 
