@@ -1790,3 +1790,143 @@ EOF
   [ "$(get_phase_attempt_strategy 2 2)" = "stripped" ]
   [ "$(get_phase_attempt_fail_reason 2 1)" = "no_write_actions" ]
 }
+
+# =============================================================================
+# Round-trip parity: write_progress → all three parsers agree
+# =============================================================================
+
+@test "write_progress round-trip parity across all three parsers" {
+  # Source recorder.sh for rec_load_progress / _rec_get
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
+  . "${BATS_TEST_DIRNAME}/../lib/recorder.sh"
+
+  # Setup: single phase with every field write_progress emits
+  PHASE_COUNT=1
+  PHASE_NUMBERS="1"
+  PHASE_TITLE_1="Test Phase"
+  PHASE_STATUS_1="failed"
+  PHASE_ATTEMPTS_1=2
+  PHASE_START_TIME_1="2026-03-01 10:00:00"
+  PHASE_END_TIME_1="2026-03-01 10:20:00"
+  PHASE_ATTEMPT_TIME_1_1="2026-03-01 10:00:00"
+  PHASE_ATTEMPT_TIME_1_2="2026-03-01 10:10:00"
+  PHASE_ATTEMPT_STRATEGY_1_1="standard"
+  PHASE_ATTEMPT_STRATEGY_1_2="stripped"
+  PHASE_ATTEMPT_FAIL_REASON_1_1="no_write_actions"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DESCRIPTION_1=""
+  PHASE_FAIL_REASON_1="no_write_actions"
+  PHASE_REFACTOR_STATUS_1="in_progress 3/5"
+  PHASE_REFACTOR_SHA_1="abc123"
+  PHASE_REFACTOR_ATTEMPTS_1="3"
+  PHASE_CONSEC_FAIL_1=0
+  PLAN_FILE="PLAN.md"
+
+  # Write PROGRESS.md
+  local progress_file="$TEST_DIR/PROGRESS.md"
+  write_progress "$progress_file" "$PLAN_FILE"
+
+  # --- Assert read_progress ---
+  # Reset all fields, then read back
+  PHASE_STATUS_1="pending"
+  PHASE_ATTEMPTS_1=0
+  PHASE_START_TIME_1=""
+  PHASE_END_TIME_1=""
+  PHASE_ATTEMPT_TIME_1_1=""
+  PHASE_ATTEMPT_TIME_1_2=""
+  PHASE_ATTEMPT_STRATEGY_1_1=""
+  PHASE_ATTEMPT_STRATEGY_1_2=""
+  PHASE_ATTEMPT_FAIL_REASON_1_1=""
+  PHASE_REFACTOR_STATUS_1=""
+  PHASE_REFACTOR_SHA_1=""
+  PHASE_REFACTOR_ATTEMPTS_1=""
+
+  read_progress "$progress_file"
+
+  [ "$(phase_get STATUS 1)" = "failed" ]
+  [ "$(phase_get ATTEMPTS 1)" = "2" ]
+  [ "$(phase_get START_TIME 1)" = "2026-03-01 10:00:00" ]
+  [ "$(phase_get END_TIME 1)" = "2026-03-01 10:20:00" ]
+  [ "$(phase_get ATTEMPT_TIME 1 1)" = "2026-03-01 10:00:00" ]
+  [ "$(phase_get ATTEMPT_TIME 1 2)" = "2026-03-01 10:10:00" ]
+  [ "$(phase_get ATTEMPT_STRATEGY 1 1)" = "standard" ]
+  [ "$(phase_get ATTEMPT_STRATEGY 1 2)" = "stripped" ]
+  [ "$(phase_get ATTEMPT_FAIL_REASON 1 1)" = "no_write_actions" ]
+  [ "$(phase_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  [ "$(phase_get REFACTOR_SHA 1)" = "abc123" ]
+  [ "$(phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
+
+  # --- Assert read_old_phase_list ---
+  read_old_phase_list "$progress_file"
+
+  [ "$(old_phase_get STATUS 1)" = "failed" ]
+  [ "$(old_phase_get ATTEMPTS 1)" = "2" ]
+  [ "$(old_phase_get START_TIME 1)" = "2026-03-01 10:00:00" ]
+  [ "$(old_phase_get END_TIME 1)" = "2026-03-01 10:20:00" ]
+  [ "$(old_phase_get ATTEMPT_TIME 1 1)" = "2026-03-01 10:00:00" ]
+  [ "$(old_phase_get ATTEMPT_TIME 1 2)" = "2026-03-01 10:10:00" ]
+  [ "$(old_phase_get ATTEMPT_STRATEGY 1 1)" = "standard" ]
+  [ "$(old_phase_get ATTEMPT_STRATEGY 1 2)" = "stripped" ]
+  [ "$(old_phase_get ATTEMPT_FAIL_REASON 1 1)" = "no_write_actions" ]
+  [ "$(old_phase_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  [ "$(old_phase_get REFACTOR_SHA 1)" = "abc123" ]
+  [ "$(old_phase_get REFACTOR_ATTEMPTS 1)" = "3" ]
+
+  # --- Assert rec_load_progress ---
+  mkdir -p "$TEST_DIR/run"
+  cp "$progress_file" "$TEST_DIR/run/PROGRESS.md"
+  rec_load_progress "$TEST_DIR/run"
+
+  [ "$(_rec_get STATUS 1)" = "failed" ]
+  [ "$(_rec_get ATTEMPTS 1)" = "2" ]
+  [ "$(_rec_get START_TIME 1)" = "2026-03-01 10:00:00" ]
+  [ "$(_rec_get END_TIME 1)" = "2026-03-01 10:20:00" ]
+  [ "$(_rec_get ATTEMPT_TIME 1 1)" = "2026-03-01 10:00:00" ]
+  [ "$(_rec_get ATTEMPT_TIME 1 2)" = "2026-03-01 10:10:00" ]
+  [ "$(_rec_get ATTEMPT_STRATEGY 1 1)" = "standard" ]
+  [ "$(_rec_get ATTEMPT_STRATEGY 1 2)" = "stripped" ]
+  [ "$(_rec_get ATTEMPT_FAIL_REASON 1 1)" = "no_write_actions" ]
+  [ "$(_rec_get REFACTOR_STATUS 1)" = "in_progress 3/5" ]
+  # rec_load_progress does NOT parse Refactor SHA — intentional (recorder only needs refactor status)
+  # rec_load_progress does NOT parse Refactor Attempts — intentional
+  # rec_load_progress does NOT normalize in_progress — intentional (recorder preserves raw state)
+}
+
+@test "detect_plan_changes: transfers all per-attempt fields on renumber" {
+  # Old progress: Phase 1 "Alpha" with 2 attempts, all per-attempt fields
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Alpha
+Status: failed
+Started: 2026-03-01 10:00:00
+Completed: 2026-03-01 10:20:00
+Attempts: 2
+Attempt 1 Started: 2026-03-01 10:00:00
+Attempt 1 Strategy: standard
+Attempt 1 Fail Reason: no_write_actions
+Attempt 2 Started: 2026-03-01 10:10:00
+Attempt 2 Strategy: stripped
+Attempt 2 Fail Reason: verification_failed
+EOF
+
+  # New plan: "Alpha" is now Phase 2
+  PHASE_COUNT=2
+  PHASE_NUMBERS="1 2"
+  PHASE_TITLE_1="New Phase"
+  PHASE_TITLE_2="Alpha"
+  PHASE_STATUS_1="pending"
+  PHASE_STATUS_2="pending"
+  PHASE_ATTEMPTS_1=0
+  PHASE_ATTEMPTS_2=0
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DEPENDENCIES_2=""
+
+  detect_plan_changes "$TEST_DIR/PROGRESS.md" > /dev/null 2>&1
+
+  # All three per-attempt field types must survive the renumber
+  [ "$(get_phase_attempt_time 2 1)" = "2026-03-01 10:00:00" ]
+  [ "$(get_phase_attempt_time 2 2)" = "2026-03-01 10:10:00" ]
+  [ "$(get_phase_attempt_strategy 2 1)" = "standard" ]
+  [ "$(get_phase_attempt_strategy 2 2)" = "stripped" ]
+  [ "$(get_phase_attempt_fail_reason 2 1)" = "no_write_actions" ]
+  [ "$(get_phase_attempt_fail_reason 2 2)" = "verification_failed" ]
+}

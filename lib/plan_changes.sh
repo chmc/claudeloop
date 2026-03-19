@@ -5,6 +5,18 @@
 # Split from progress.sh — these functions handle reconciliation between
 # saved progress and the current plan state.
 
+# Transfer all per-attempt fields from old phase to new phase.
+# When adding per-attempt fields, update this list.
+# Args: $1 - old phase number, $2 - new phase number, $3 - attempt index
+transfer_attempt_fields() {
+  local _old="$1" _new="$2" _ai="$3"
+  local _field _v
+  for _field in ATTEMPT_TIME ATTEMPT_STRATEGY ATTEMPT_FAIL_REASON; do
+    _v=$(old_phase_get "$_field" "$_old" "$_ai")
+    phase_set "$_field" "$_new" "$_v" "$_ai"
+  done
+}
+
 # Parse PROGRESS.md into _OLD_PHASE_* variables without affecting live PHASE_* globals.
 # Sets _OLD_PHASE_COUNT to 0 if file absent or empty.
 # Also builds _OLD_PHASE_NUMBERS (space-separated ordered list).
@@ -165,14 +177,7 @@ detect_plan_changes() {
 
       local _ti=1
       while [ "$_ti" -le "$old_attempts" ]; do
-        local _old_at
-        _old_at=$(old_phase_get ATTEMPT_TIME "$matched_old_num" "$_ti")
-        phase_set ATTEMPT_TIME "$new_i" "$_old_at" "$_ti"
-        local _old_as _old_af
-        _old_as=$(old_phase_get ATTEMPT_STRATEGY "$matched_old_num" "$_ti")
-        phase_set ATTEMPT_STRATEGY "$new_i" "$_old_as" "$_ti"
-        _old_af=$(old_phase_get ATTEMPT_FAIL_REASON "$matched_old_num" "$_ti")
-        phase_set ATTEMPT_FAIL_REASON "$new_i" "$_old_af" "$_ti"
+        transfer_attempt_fields "$matched_old_num" "$new_i" "$_ti"
         _ti=$((_ti + 1))
       done
 

@@ -171,6 +171,21 @@ Runtime files ship via three mechanisms that must stay in sync:
 
 Currently packaged: `claudeloop`, `lib/*.sh`, `assets/replay-template.html`.
 
+### PROGRESS.md field registry
+
+`write_progress` / `generate_phase_details` in `lib/progress.sh` is the source of truth
+for PROGRESS.md fields. Three parsers read this format:
+
+| Parser | File | Namespace | Notes |
+|--------|------|-----------|-------|
+| `read_progress` | `lib/progress.sh` | `PHASE_*` | Validates status enum, normalizes in_progress |
+| `read_old_phase_list` | `lib/plan_changes.sh` | `_OLD_PHASE_*` | Normalizes in_progress, no validation |
+| `rec_load_progress` | `lib/recorder.sh` | `_REC_PHASE_*` | No normalization (preserves raw state) |
+
+When adding fields to `write_progress`, update all three parsers. A round-trip parity
+test in `test_progress.sh` enforces this. Per-attempt fields must also be added to
+`transfer_attempt_fields()` in `lib/plan_changes.sh`.
+
 ## Skills
 
 - `/github` — Git/GitHub conventions (commit, push, PR)
