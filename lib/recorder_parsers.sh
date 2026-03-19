@@ -16,7 +16,7 @@ rec_extract_session() {
   fi
 
   local session_line
-  session_line=$(grep '^\[Session:' "$log_file" | tail -1)
+  session_line=$(grep '\[Session: model=' "$log_file" | tail -1)
 
   if [ -z "$session_line" ]; then
     echo "null"

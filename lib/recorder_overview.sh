@@ -103,7 +103,8 @@ _rec_aggregate_sessions() {
   fi
 
   # Use awk to aggregate all session lines across all log files
-  find "$logs_dir" -name 'phase-*.log' -o -name 'phase-*.attempt-*.log' 2>/dev/null | sort | while IFS= read -r f; do
+  find "$logs_dir" \( -name 'phase-*.log' -o -name 'phase-*.attempt-*.log' \) \
+    -not -name '*verify*' -not -name '*refactor*' -not -name '*formatted*' 2>/dev/null | sort | while IFS= read -r f; do
     [ -f "$f" ] && cat "$f"
   done | awk '
     function extract_after(s, prefix,    idx, rest, end) {
@@ -119,7 +120,7 @@ _rec_aggregate_sessions() {
       total_cost = 0; total_in = 0; total_out = 0; total_cr = 0; total_cw = 0
       earliest = ""; latest = ""
     }
-    /^\[Session:/ {
+    /\[Session: model=/ {
       v = extract_after($0, "cost=$"); if (v != "") total_cost += v
       v = extract_after($0, "tokens="); if (v != "") { split(v, tk, "in"); total_in += tk[1] }
       v = extract_after($0, "tokens="); if (v != "") { split(v, tk2, "/"); gsub(/[^0-9]/, "", tk2[2]); total_out += tk2[2] }

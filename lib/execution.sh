@@ -13,6 +13,10 @@ update_fail_reason() {
   _prev_reason=$(get_phase_fail_reason "$_ufr_phase")
   _prev_consec=$(get_phase_consec_fail "$_ufr_phase")
   phase_set FAIL_REASON "$_ufr_phase" "$_ufr_reason"
+  # Also persist per-attempt for flight recorder
+  local _ufr_attempt
+  _ufr_attempt=$(get_phase_attempts "$_ufr_phase")
+  [ -n "$_ufr_attempt" ] && phase_set ATTEMPT_FAIL_REASON "$_ufr_phase" "$_ufr_reason" "$_ufr_attempt"
   if [ "$_ufr_reason" = "$_prev_reason" ]; then
     phase_set CONSEC_FAIL "$_ufr_phase" "$((_prev_consec + 1))"
   else
@@ -296,6 +300,16 @@ execute_phase() {
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
   attempt=$(get_phase_attempts "$phase_num")
+  # Compute and persist per-attempt strategy for flight recorder
+  local _ep_strategy="standard"
+  if [ "$attempt" -gt 1 ]; then
+    local _ep_fail_reason _ep_consec
+    _ep_fail_reason=$(get_phase_fail_reason "$phase_num")
+    _ep_consec=$(get_phase_consec_fail "$phase_num")
+    _ep_strategy=$(retry_strategy "$attempt" "$MAX_RETRIES")
+    _ep_strategy=$(escalate_strategy "$_ep_strategy" "$_ep_fail_reason" "$_ep_consec")
+  fi
+  phase_set ATTEMPT_STRATEGY "$phase_num" "$_ep_strategy" "$attempt"
   start_ts=$(date '+%s')
   print_phase_exec_header "$phase_num"
 

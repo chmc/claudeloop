@@ -1803,7 +1803,7 @@ function renderFilmstrip(phase) {
     _filmstripState[phase.number] = state;
   }
 
-  var html = '<div class="filmstrip-section">';
+  var html = '<div class="filmstrip-section" id="filmstrip-' + phase.number + '">';
   html += '<h3>Retry Filmstrip</h3>';
 
   // Thumbnail strip
@@ -1894,8 +1894,9 @@ function bindFilmstripEvents(phase) {
     updateFilmstripHighlight(phase);
   });
 
-  // Filmstrip card clicks — toggle between A and B
-  document.querySelectorAll('.filmstrip-card[data-attempt-idx]').forEach(function(card) {
+  // Filmstrip card clicks — toggle between A and B (scoped to this phase)
+  var filmstripEl = document.getElementById('filmstrip-' + pn);
+  (filmstripEl ? filmstripEl.querySelectorAll('.filmstrip-card[data-attempt-idx]') : []).forEach(function(card) {
     card.addEventListener('click', function() {
       var idx = parseInt(card.getAttribute('data-attempt-idx'));
       var st = _filmstripState[pn];
@@ -1924,7 +1925,8 @@ function bindFilmstripEvents(phase) {
 
 function updateFilmstripHighlight(phase) {
   var st = _filmstripState[phase.number];
-  document.querySelectorAll('.filmstrip-card[data-attempt-idx]').forEach(function(card) {
+  var filmstripEl = document.getElementById('filmstrip-' + phase.number);
+  (filmstripEl ? filmstripEl.querySelectorAll('.filmstrip-card[data-attempt-idx]') : []).forEach(function(card) {
     var idx = parseInt(card.getAttribute('data-attempt-idx'));
     if (idx === st.selectedA || idx === st.selectedB) {
       card.classList.add('filmstrip-selected');
@@ -2612,6 +2614,7 @@ function reconstructState(timestamp) {
       if (timestamp < attemptStart) return;
 
       pState.attempts++;
+      pState.status = 'in_progress';  // Each new attempt resets to in_progress
       if (pState.attempts > 1) state.retryCount++;
 
       // Interpolate cost based on time within attempt
@@ -2636,6 +2639,7 @@ function reconstructState(timestamp) {
         if (timestamp >= aEnd) {
           if (attempt.fail_reason) {
             pState.status = 'failed';
+            pState.failReason = attempt.fail_reason;
           }
           // Collect files from completed attempts
           if (attempt.files) {
@@ -2647,6 +2651,7 @@ function reconstructState(timestamp) {
           }
         }
       }
+
     });
 
     // Check if phase completed
@@ -2692,6 +2697,8 @@ function renderTimeTravel() {
   html += '<option value="1">1×</option>';
   html += '<option value="5">5×</option>';
   html += '<option value="10">10×</option>';
+  html += '<option value="50">50×</option>';
+  html += '<option value="100">100×</option>';
   html += '</select>';
   html += '<span class="tt-time-display" id="tt-time-display"></span>';
   html += '</div>';

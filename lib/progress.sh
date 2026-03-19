@@ -68,11 +68,23 @@ read_progress() {
           printf '%s' "$attempts_value" | grep -qE '^[0-9]+$' || attempts_value=0
           phase_set ATTEMPTS "$current_phase" "$attempts_value"
           ;;
-        "Attempt "[0-9]*)
+        "Attempt "*" Started: "*)
           local _anum _atime
           _anum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
           _atime=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
           phase_set ATTEMPT_TIME "$current_phase" "$_atime" "$_anum"
+          ;;
+        "Attempt "*" Strategy: "*)
+          local _asnum _asval
+          _asnum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Strategy:.*/\1/')
+          _asval=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Strategy:[[:space:]]*//')
+          phase_set ATTEMPT_STRATEGY "$current_phase" "$_asval" "$_asnum"
+          ;;
+        "Attempt "*" Fail Reason: "*)
+          local _afnum _afval
+          _afnum=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Fail Reason:.*/\1/')
+          _afval=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Fail Reason:[[:space:]]*//')
+          phase_set ATTEMPT_FAIL_REASON "$current_phase" "$_afval" "$_afnum"
           ;;
         "Refactor: "*)
           local rv
@@ -189,15 +201,17 @@ generate_phase_details() {
     attempts=$(get_phase_attempts "$_phase")
     if [ "$attempts" -gt 0 ]; then
       echo "Attempts: $attempts"
-      if [ "$attempts" -gt 1 ]; then
-        local _i=1
-        while [ "$_i" -le "$attempts" ]; do
-          local _at
-          _at=$(get_phase_attempt_time "$_phase" "$_i")
-          [ -n "$_at" ] && echo "Attempt $_i Started: $_at"
-          _i=$((_i + 1))
-        done
-      fi
+      local _i=1
+      while [ "$_i" -le "$attempts" ]; do
+        local _at _as _af
+        _at=$(get_phase_attempt_time "$_phase" "$_i")
+        [ -n "$_at" ] && echo "Attempt $_i Started: $_at"
+        _as=$(get_phase_attempt_strategy "$_phase" "$_i")
+        [ -n "$_as" ] && echo "Attempt $_i Strategy: $_as"
+        _af=$(get_phase_attempt_fail_reason "$_phase" "$_i")
+        [ -n "$_af" ] && echo "Attempt $_i Fail Reason: $_af"
+        _i=$((_i + 1))
+      done
     fi
 
     local refactor_status

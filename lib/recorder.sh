@@ -100,6 +100,24 @@ rec_load_progress() {
           dv=$(printf '%s\n' "$line" | grep -oE '[0-9]+(\.[0-9]+)?' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
           eval "_REC_PHASE_DEPS_${pv}='$dv'"
           ;;
+        "Attempt "*" Strategy: "*)
+          local _asn _asv
+          _asn=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Strategy:.*/\1/')
+          _asv=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Strategy:[[:space:]]*//')
+          eval "_REC_PHASE_ATTEMPT_STRATEGY_${pv}_${_asn}='$_asv'"
+          ;;
+        "Attempt "*" Fail Reason: "*)
+          local _afn _afv
+          _afn=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Fail Reason:.*/\1/')
+          _afv=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Fail Reason:[[:space:]]*//')
+          eval "_REC_PHASE_ATTEMPT_FAIL_REASON_${pv}_${_afn}='$_afv'"
+          ;;
+        "Attempt "*" Started: "*)
+          local _atn _atv
+          _atn=$(printf '%s\n' "$line" | sed 's/^Attempt \([0-9]*\) Started:.*/\1/')
+          _atv=$(printf '%s\n' "$line" | sed 's/^Attempt [0-9]* Started:[[:space:]]*//')
+          eval "_REC_PHASE_ATTEMPT_TIME_${pv}_${_atn}='$_atv'"
+          ;;
         "Refactor: "*)
           local rv
           rv=$(printf '%s\n' "$line" | sed 's/^Refactor:[[:space:]]*//')
@@ -113,11 +131,15 @@ rec_load_progress() {
 }
 
 # Helper: get _REC_PHASE_* variable value
-# Args: $1 - field, $2 - phase number
+# Args: $1 - field, $2 - phase number, $3 - (optional) attempt number
 _rec_get() {
   local pv
   pv=$(phase_to_var "$2")
-  eval "printf '%s' \"\${_REC_PHASE_${1}_${pv}:-}\""
+  if [ $# -ge 3 ]; then
+    eval "printf '%s' \"\${_REC_PHASE_${1}_${pv}_${3}:-}\""
+  else
+    eval "printf '%s' \"\${_REC_PHASE_${1}_${pv}:-}\""
+  fi
 }
 
 # Read template HTML, replace <!--JSON_DATA--> marker with JSON data, write output.
@@ -222,6 +244,15 @@ assemble_recorder_json() {
     refactor_status=$(_rec_get REFACTOR_STATUS "$pn")
     [ -z "$attempts" ] && attempts=0
 
+    # Bug 5: Use earliest attempt start time for phase started_at
+    local first_attempt_start
+    first_attempt_start=$(_rec_get ATTEMPT_TIME "$pn" 1)
+    if [ -n "$first_attempt_start" ]; then
+      if [ -z "$started" ] || [ "$first_attempt_start" \< "$started" ]; then
+        started="$first_attempt_start"
+      fi
+    fi
+
     # Signal no-changes
     local signal_no_changes="false"
     if [ -f "$run_dir/signals/phase-${pn}.md" ]; then
@@ -299,8 +330,19 @@ assemble_recorder_json() {
         prompt_json="\"$prompt_text\""
       fi
 
-      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"standard","fail_reason":null,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
-        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
+      # Per-attempt strategy and fail_reason from PROGRESS.md (with defaults)
+      local a_strategy a_fail_reason a_fail_json
+      a_strategy=$(_rec_get ATTEMPT_STRATEGY "$pn" "$attempt_num")
+      [ -z "$a_strategy" ] && a_strategy="standard"
+      a_fail_reason=$(_rec_get ATTEMPT_FAIL_REASON "$pn" "$attempt_num")
+      if [ -n "$a_fail_reason" ]; then
+        a_fail_json="\"$a_fail_reason\""
+      else
+        a_fail_json="null"
+      fi
+
+      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
+        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
 
       attempt_num=$((attempt_num + 1))
     done

@@ -47,6 +47,8 @@ get_phase_start_time()   { phase_get START_TIME "$1"; }
 get_phase_end_time()     { phase_get END_TIME "$1"; }
 get_phase_fail_reason()  { phase_get FAIL_REASON "$1"; }
 get_phase_attempt_time() { phase_get ATTEMPT_TIME "$1" "$2"; }
+get_phase_attempt_strategy() { phase_get ATTEMPT_STRATEGY "$1" "$2"; }
+get_phase_attempt_fail_reason() { phase_get ATTEMPT_FAIL_REASON "$1" "$2"; }
 get_phase_refactor_status() { phase_get REFACTOR_STATUS "$1"; }
 get_phase_refactor_sha()    { phase_get REFACTOR_SHA "$1"; }
 get_phase_refactor_attempts() { phase_get REFACTOR_ATTEMPTS "$1"; }

@@ -1664,3 +1664,65 @@ EOF
   [ "$PHASE_STATUS_1" = "pending" ]
   [ "$PHASE_STATUS_2" = "completed" ]
 }
+
+# =============================================================================
+# Strategy and fail_reason round-trip tests
+# =============================================================================
+
+@test "write_progress persists attempt strategy and fail_reason" {
+  PHASE_COUNT=1
+  PHASE_NUMBERS="1"
+  PHASE_TITLE_1="Test phase"
+  PHASE_STATUS_1="failed"
+  PHASE_ATTEMPTS_1=2
+  PHASE_START_TIME_1="2026-03-01 10:00:00"
+  PHASE_END_TIME_1="2026-03-01 10:20:00"
+  PHASE_ATTEMPT_TIME_1_1="2026-03-01 10:00:00"
+  PHASE_ATTEMPT_TIME_1_2="2026-03-01 10:10:00"
+  PHASE_ATTEMPT_STRATEGY_1_1="standard"
+  PHASE_ATTEMPT_STRATEGY_1_2="stripped"
+  PHASE_ATTEMPT_FAIL_REASON_1_1="no_write_actions"
+  PHASE_DEPENDENCIES_1=""
+  PHASE_DESCRIPTION_1=""
+  PHASE_FAIL_REASON_1="no_write_actions"
+  PHASE_REFACTOR_STATUS_1=""
+  PHASE_CONSEC_FAIL_1=0
+  PLAN_FILE="PLAN.md"
+  local progress_file="$TEST_DIR/PROGRESS.md"
+  write_progress "$progress_file" "$PLAN_FILE"
+
+  # Verify the file contains strategy and fail_reason
+  grep -q "Attempt 1 Strategy: standard" "$progress_file"
+  grep -q "Attempt 2 Strategy: stripped" "$progress_file"
+  grep -q "Attempt 1 Fail Reason: no_write_actions" "$progress_file"
+  # Attempt 2 has no fail_reason set — should NOT have Fail Reason line
+  ! grep -q "Attempt 2 Fail Reason:" "$progress_file"
+}
+
+@test "read_progress restores attempt strategy and fail_reason" {
+  PHASE_COUNT=1
+  PHASE_NUMBERS="1"
+  PHASE_TITLE_1="Test"
+  PHASE_STATUS_1="pending"
+  PHASE_ATTEMPTS_1=0
+  PHASE_ATTEMPT_STRATEGY_1_1=""
+  PHASE_ATTEMPT_FAIL_REASON_1_1=""
+
+  cat > "$TEST_DIR/PROGRESS.md" << 'EOF'
+### ❌ Phase 1: Test
+Status: failed
+Started: 2026-03-01 10:00:00
+Attempts: 2
+Attempt 1 Started: 2026-03-01 10:00:00
+Attempt 1 Strategy: standard
+Attempt 1 Fail Reason: verification_failed
+Attempt 2 Started: 2026-03-01 10:10:00
+Attempt 2 Strategy: targeted
+
+EOF
+  read_progress "$TEST_DIR/PROGRESS.md"
+  [ "$(get_phase_attempt_strategy 1 1)" = "standard" ]
+  [ "$(get_phase_attempt_strategy 1 2)" = "targeted" ]
+  [ "$(get_phase_attempt_fail_reason 1 1)" = "verification_failed" ]
+  [ "$(get_phase_attempt_fail_reason 1 2)" = "" ]
+}

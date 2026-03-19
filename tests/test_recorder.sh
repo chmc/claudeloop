@@ -698,3 +698,177 @@ LOGEOF
   # Phase 2 attempt 3 should have src/util.ts (new file in last attempt)
   echo "$result" | grep -q '"path":"src/util.ts"'
 }
+
+# =============================================================================
+# Bug 1: Session extraction with [Session:] not at BOL
+# =============================================================================
+
+@test "rec_extract_session: extracts session line not at beginning of line" {
+  local logfile="$TEST_DIR/midline.log"
+  cat > "$logfile" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+=== PROMPT ===
+Do stuff
+=== RESPONSE ===
+Done with regressions[Session: model=claude-sonnet-4-20250514 cost=$0.0400 duration=30.0s turns=8 tokens=4000in/1500out cache=200r/100w]
+=== EXECUTION END exit_code=0 duration=60s time=2026-03-01T10:01:00 ===
+EOF
+  result=$(rec_extract_session "$logfile")
+  echo "$result" | grep -q '"model":"claude-sonnet-4-20250514"'
+  echo "$result" | grep -q '"cost_usd":0.0400'
+  echo "$result" | grep -q '"input_tokens":4000'
+}
+
+# =============================================================================
+# Bug 6: Session extraction ignores [Session:] in prompt text
+# =============================================================================
+
+@test "rec_extract_session: ignores [Session:] mentions in prompt text" {
+  local logfile="$TEST_DIR/promptmention.log"
+  cat > "$logfile" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+=== PROMPT ===
+The session line format is [Session: model=X cost=$Y duration=Zs turns=N tokens=Ain/Bout]
+=== RESPONSE ===
+Done
+[Session: model=claude-sonnet-4-20250514 cost=$0.0300 duration=20.0s turns=5 tokens=3000in/1000out]
+=== EXECUTION END exit_code=0 duration=30s time=2026-03-01T10:00:30 ===
+EOF
+  result=$(rec_extract_session "$logfile")
+  # Should pick the real session line, not the prompt mention
+  echo "$result" | grep -q '"cost_usd":0.0300'
+  echo "$result" | grep -q '"model":"claude-sonnet-4-20250514"'
+}
+
+# =============================================================================
+# Bug 2: Aggregation excludes verify/refactor/formatted logs
+# =============================================================================
+
+@test "_rec_aggregate_sessions: excludes verify/refactor/formatted logs" {
+  local run_dir="$TEST_DIR/agg_run"
+  mkdir -p "$run_dir/logs"
+
+  # Main execution log
+  cat > "$run_dir/logs/phase-1.log" << 'EOF'
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+[Session: model=claude-sonnet-4-20250514 cost=$0.0500 duration=30.0s turns=8 tokens=5000in/2000out]
+=== EXECUTION END exit_code=0 duration=60s time=2026-03-01T10:01:00 ===
+EOF
+
+  # Verify log (should be excluded)
+  cat > "$run_dir/logs/phase-1.verify.log" << 'EOF'
+[Session: model=claude-sonnet-4-20250514 cost=$0.0100 duration=10.0s turns=2 tokens=1000in/500out]
+EOF
+
+  # Refactor log (should be excluded)
+  cat > "$run_dir/logs/phase-1.refactor.log" << 'EOF'
+[Session: model=claude-sonnet-4-20250514 cost=$0.0200 duration=15.0s turns=3 tokens=2000in/800out]
+EOF
+
+  # Formatted log (should be excluded)
+  cat > "$run_dir/logs/phase-1.formatted.log" << 'EOF'
+[Session: model=claude-sonnet-4-20250514 cost=$0.0300 duration=20.0s turns=4 tokens=3000in/1000out]
+EOF
+
+  result=$(_rec_aggregate_sessions "$run_dir")
+  local total_cost
+  total_cost=$(printf '%s' "$result" | cut -d'|' -f1)
+  # Should only count main log: 0.0500. NOT 0.0500 + 0.0100 + 0.0200 + 0.0300 = 0.1100
+  [ "$(echo "$total_cost > 0.04 && $total_cost < 0.06" | bc)" = "1" ]
+}
+
+# =============================================================================
+# Bug 3 & 4: Strategy and fail_reason in recorder JSON
+# =============================================================================
+
+@test "rec_load_progress: parses attempt strategy and fail_reason" {
+  local run_dir="$TEST_DIR/strat_run"
+  mkdir -p "$run_dir/logs"
+
+  cat > "$run_dir/PROGRESS.md" << 'EOF'
+# Progress for PLAN.md
+Last updated: 2026-03-01 10:30:00
+
+## Phase Details
+
+### ✅ Phase 1: Do stuff
+Status: completed
+Started: 2026-03-01 10:00:00
+Completed: 2026-03-01 10:30:00
+Attempts: 3
+Attempt 1 Started: 2026-03-01 10:00:00
+Attempt 1 Strategy: standard
+Attempt 1 Fail Reason: no_write_actions
+Attempt 2 Started: 2026-03-01 10:10:00
+Attempt 2 Strategy: stripped
+Attempt 2 Fail Reason: verification_failed
+Attempt 3 Started: 2026-03-01 10:20:00
+Attempt 3 Strategy: targeted
+
+EOF
+
+  rec_load_progress "$run_dir"
+
+  # Check strategy per attempt
+  local s1 s2 s3
+  s1=$(_rec_get ATTEMPT_STRATEGY "1" 1)
+  s2=$(_rec_get ATTEMPT_STRATEGY "1" 2)
+  s3=$(_rec_get ATTEMPT_STRATEGY "1" 3)
+  [ "$s1" = "standard" ]
+  [ "$s2" = "stripped" ]
+  [ "$s3" = "targeted" ]
+
+  # Check fail_reason per attempt
+  local f1 f2 f3
+  f1=$(_rec_get ATTEMPT_FAIL_REASON "1" 1)
+  f2=$(_rec_get ATTEMPT_FAIL_REASON "1" 2)
+  f3=$(_rec_get ATTEMPT_FAIL_REASON "1" 3)
+  [ "$f1" = "no_write_actions" ]
+  [ "$f2" = "verification_failed" ]
+  [ "$f3" = "" ]
+}
+
+@test "assemble_recorder_json: includes strategy and fail_reason per attempt" {
+  run_dir=$(_create_fixtures)
+  # Add strategy/fail_reason lines to PROGRESS.md for phase 2
+  # Phase 2 has 3 attempts — patch the existing PROGRESS.md
+  sed -i '' '/^Attempt 1 Started:.*10:06/a\
+Attempt 1 Strategy: standard\
+Attempt 1 Fail Reason: no_write_actions' "$run_dir/PROGRESS.md"
+  sed -i '' '/^Attempt 2 Started:.*10:15/a\
+Attempt 2 Strategy: stripped\
+Attempt 2 Fail Reason: verification_failed' "$run_dir/PROGRESS.md"
+  sed -i '' '/^Attempt 3 Started:.*10:22/a\
+Attempt 3 Strategy: targeted' "$run_dir/PROGRESS.md"
+
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 2 attempt 1 should have strategy "standard" and fail_reason "no_write_actions"
+  echo "$result" | grep -q '"strategy":"standard","fail_reason":"no_write_actions"'
+  # Phase 2 attempt 2 should have strategy "stripped" and fail_reason "verification_failed"
+  echo "$result" | grep -q '"strategy":"stripped","fail_reason":"verification_failed"'
+  # Phase 2 attempt 3 should have strategy "targeted" and null fail_reason
+  echo "$result" | grep -q '"strategy":"targeted","fail_reason":null'
+}
+
+@test "assemble_recorder_json: defaults strategy to standard when missing" {
+  run_dir=$(_create_fixtures)
+  # No strategy/fail_reason lines in PROGRESS.md — should default
+  result=$(assemble_recorder_json "$run_dir")
+  echo "$result" | grep -q '"strategy":"standard"'
+  echo "$result" | grep -q '"fail_reason":null'
+}
+
+# =============================================================================
+# Bug 5: Phase started_at uses earliest attempt time
+# =============================================================================
+
+@test "assemble_recorder_json: phase started_at uses earliest attempt time" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  # Phase 2 PROGRESS.md says Started: 2026-03-01 10:06:00 (overwritten by last attempt)
+  # But Attempt 1 Started: 2026-03-01 10:06:00 is the earliest
+  # The phase started_at should be 2026-03-01 10:06:00
+  # For phase 1 with 1 attempt, started_at should be from PROGRESS.md
+  echo "$result" | grep -q '"number":"1".*"started_at":"2026-03-01 10:00:00"'
+  echo "$result" | grep -q '"number":"2".*"started_at":"2026-03-01 10:06:00"'
+}
