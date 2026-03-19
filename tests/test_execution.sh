@@ -138,6 +138,19 @@ teardown() { :; }
   [ "$truncate_line" -lt "$pipeline_line" ]
 }
 
+@test "execute_phase: archives per-attempt raw.json after pipeline" {
+  # Verify that execute_phase copies raw_log to attempt-specific file after pipeline
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  local pipeline_line rotate_line archive_line
+  pipeline_line=$(grep -n 'run_claude_pipeline "$prompt"' "$src" | head -1 | cut -d: -f1)
+  rotate_line=$(grep -n 'rotate_phase_log "$log_file"' "$src" | head -1 | cut -d: -f1)
+  archive_line=$(grep -n 'cp "$raw_log" ".claudeloop/logs/phase-${phase_num}.attempt-${attempt}.raw.json"' "$src" | head -1 | cut -d: -f1)
+  [ -n "$archive_line" ]
+  # Archive must be after pipeline and before rotation
+  [ "$archive_line" -gt "$pipeline_line" ]
+  [ "$archive_line" -lt "$rotate_line" ]
+}
+
 @test "capture_git_context: returns empty when in dir with no git repo" {
   cd "$_tmpdir"
   run capture_git_context

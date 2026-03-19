@@ -305,10 +305,12 @@ assemble_recorder_json() {
 
       # Tools and files from per-attempt raw.json
       local raw_file
-      if [ "$attempt_num" -lt "$total_attempts" ]; then
-        raw_file="$run_dir/logs/phase-${pn}.attempt-${attempt_num}.raw.json"
-      else
-        raw_file="$run_dir/logs/phase-${pn}.raw.json"
+      raw_file="$run_dir/logs/phase-${pn}.attempt-${attempt_num}.raw.json"
+      if [ ! -f "$raw_file" ] || [ ! -s "$raw_file" ]; then
+        # Fallback for old archives or single-attempt phases
+        if [ "$attempt_num" -eq "$total_attempts" ]; then
+          raw_file="$run_dir/logs/phase-${pn}.raw.json"
+        fi
       fi
       tools=$(rec_extract_tools "$raw_file")
       files=$(rec_extract_files "$raw_file")

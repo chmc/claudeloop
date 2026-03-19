@@ -895,6 +895,33 @@ Attempt 3 Strategy: targeted' "$run_dir/PROGRESS.md"
   echo "$result" | grep -o '"number":"1"[^}]*"attempts":\[{[^]]*' | grep -q '"is_success":true'
 }
 
+# =============================================================================
+# Attempt-specific raw.json lookup: prefer attempt-N, fall back to phase-level
+# =============================================================================
+
+@test "assemble_recorder_json: uses attempt-specific raw.json for last attempt when available" {
+  run_dir=$(_create_fixtures)
+  # Create attempt-3 raw.json with DIFFERENT tools than phase-2.raw.json
+  cat > "$run_dir/logs/phase-2.attempt-3.raw.json" << 'EOF'
+{"type":"tool_use","name":"Write","input":{"file_path":"src/new.ts","content":"x"}}
+{"type":"tool_use","name":"Bash","input":{"command":"npm build"}}
+EOF
+  result=$(assemble_recorder_json "$run_dir")
+  # Last attempt (3) should use attempt-3.raw.json, which has Write+Bash (not Edit)
+  # The phase-2.raw.json has Edit but attempt-3 does not
+  # Extract phase 2 data and check that Write appears in last attempt
+  echo "$result" | grep -q '"path":"src/new.ts"'
+}
+
+@test "assemble_recorder_json: falls back to phase-level raw.json for last attempt when no attempt file" {
+  run_dir=$(_create_fixtures)
+  # Ensure no attempt-3 raw.json exists (default fixtures don't have it)
+  rm -f "$run_dir/logs/phase-2.attempt-3.raw.json"
+  result=$(assemble_recorder_json "$run_dir")
+  # Should fall back to phase-2.raw.json which has Edit on src/main.ts and src/util.ts
+  echo "$result" | grep -q '"path":"src/util.ts"'
+}
+
 @test "assemble_recorder_json: is_success false for all attempts of failed phase" {
   run_dir=$(_create_fixtures)
   # Change phase 2 status from completed to failed

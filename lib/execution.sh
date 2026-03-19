@@ -354,6 +354,9 @@ ${_git_context}"
   printf '=== EXECUTION END exit_code=%s duration=%ss time=%s ===\n' \
     "$claude_exit" "$duration" "$(date '+%Y-%m-%dT%H:%M:%S')" >> "$log_file"
 
+  # Archive per-attempt raw.json for flight recorder (before rotation/overwrite)
+  cp "$raw_log" ".claudeloop/logs/phase-${phase_num}.attempt-${attempt}.raw.json"
+
   # Rotate log and evaluate result
   rotate_phase_log "$log_file" "$phase_num"
   evaluate_phase_result "$phase_num" "$claude_exit" "$attempt" "$log_file" "$raw_log"
