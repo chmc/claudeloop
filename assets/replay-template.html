@@ -1103,10 +1103,6 @@ body {
 }
 
 /* Single-attempt detail sections */
-.single-detail-sections {
-  margin-top: 20px;
-}
-
 .single-section {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1171,6 +1167,13 @@ body {
 .prompt-expand-btn:hover {
   background: var(--badge-bg);
 }
+
+/* Collapsible details inside attempt cards */
+.attempt-details { display: none; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.attempt-details.expanded { display: block; }
+.attempt-details-toggle { display: inline-block; margin-top: 8px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+.attempt-details-toggle:hover { background: var(--badge-bg); }
+.attempt-details .single-section { background: var(--bg-secondary); }
 
 /* Tool detail table (single-attempt) */
 .tool-detail-table {
@@ -1773,18 +1776,20 @@ function renderPhaseDetail(num) {
     html += renderFilmstrip(phase);
   }
 
+  // Determine which attempt to auto-expand (successful, or last)
+  var autoExpandIdx = phase.attempts.length - 1;
+  phase.attempts.forEach(function(a, idx) {
+    if (a.is_success) autoExpandIdx = idx;
+  });
+
   // Attempts
   html += '<div class="attempts-section">';
   html += '<h3>Attempts</h3>';
-  phase.attempts.forEach(function(attempt) {
-    html += renderAttemptCard(attempt);
+  phase.attempts.forEach(function(attempt, idx) {
+    var autoExpand = (phase.attempts.length === 1) || (idx === autoExpandIdx);
+    html += renderAttemptCard(attempt, autoExpand, phase.attempts.length === 1);
   });
   html += '</div>';
-
-  // Single-attempt detail sections (inline prompt, tools, files)
-  if (phase.attempts.length === 1) {
-    html += renderSingleAttemptSections(phase.attempts[0]);
-  }
 
   document.getElementById('main-panel').innerHTML = html;
 
@@ -2106,7 +2111,7 @@ function renderFileDiff(a, b) {
   return html;
 }
 
-function renderAttemptCard(attempt) {
+function renderAttemptCard(attempt, autoExpand, hideToggle) {
   var html = '<div class="attempt-card">';
 
   // Header
@@ -2174,6 +2179,20 @@ function renderAttemptCard(attempt) {
     html += '</div>';
   }
 
+  // Collapsible detail sections (prompt, tool breakdown, files)
+  var hasDetails = attempt.prompt_text || (attempt.tools && attempt.tools.length > 0) || (attempt.files && attempt.files.length > 0);
+  if (hasDetails) {
+    var detailId = 'attempt-details-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
+    if (!hideToggle) {
+      html += '<button class="attempt-details-toggle" onclick="toggleAttemptDetails(this, \'' + detailId + '\')">' + (autoExpand ? 'Hide details' : 'Show details') + '</button>';
+    }
+    html += '<div class="attempt-details' + (autoExpand ? ' expanded' : '') + '" id="' + detailId + '">';
+    html += renderSinglePrompt(attempt);
+    html += renderSingleToolBreakdown(attempt);
+    html += renderSingleFiles(attempt);
+    html += '</div>';
+  }
+
   html += '</div>';
   return html;
 }
@@ -2186,15 +2205,6 @@ function metric(label, value) {
 }
 
 /* ── Single-attempt detail sections ── */
-function renderSingleAttemptSections(attempt) {
-  var html = '<div class="single-detail-sections">';
-  html += renderSinglePrompt(attempt);
-  html += renderSingleToolBreakdown(attempt);
-  html += renderSingleFiles(attempt);
-  html += '</div>';
-  return html;
-}
-
 function renderSinglePrompt(attempt) {
   var html = '<div class="single-section">';
   html += '<h3>Prompt</h3>';
@@ -2222,6 +2232,17 @@ function togglePrompt(btn, id) {
     el.classList.add('prompt-collapsed');
     var lines = el.textContent.split('\n').length;
     btn.textContent = 'Show all ' + lines + ' lines';
+  }
+}
+
+function toggleAttemptDetails(btn, id) {
+  var el = document.getElementById(id);
+  if (el.classList.contains('expanded')) {
+    el.classList.remove('expanded');
+    btn.textContent = 'Show details';
+  } else {
+    el.classList.add('expanded');
+    btn.textContent = 'Hide details';
   }
 }
 
