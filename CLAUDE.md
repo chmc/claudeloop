@@ -195,3 +195,7 @@ After all implementation and tests pass, run `/verify` before reporting the task
 When adding runtime files (libraries, templates, assets), verify they are included in the release tarball (`.github/workflows/release.yml`), installer (`install.sh`), and installer tests (`tests/test_install.sh`).
 
 If the change affects terminal output, also regenerate visual assets (`assets/README.md`) before reporting done.
+
+### Autonomous verification (mandatory)
+
+Never suggest the user test something manually when you can do it yourself. If you can generate test data, open a browser, inject test scripts, and screenshot results — do it without asking. Verification is your job, not the user's. This applies to all verification, not just `/verify`.

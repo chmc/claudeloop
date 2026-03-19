@@ -1,0 +1,7 @@
+=== EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+=== PROMPT ===
+Do phase 1
+=== RESPONSE ===
+Done with phase 1
+[Session: model=claude-sonnet-4-20250514 cost=$0.0523 duration=45.2s turns=12 tokens=5000in/2000out cache=1200r/800w]
+=== EXECUTION END exit_code=0 duration=300s time=2026-03-01T10:05:00 ===

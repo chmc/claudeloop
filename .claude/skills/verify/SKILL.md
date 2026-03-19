@@ -59,7 +59,12 @@ Map changed files to functional categories. Pick the row(s) that match, then fol
 | **Retry / error handling** | Backoff, retry logic, quota handling, failure detection | Stub with configured failures | Retry messages, backoff timing, error display |
 | **Verification logic** | Post-phase verification, verdict parsing | Stub with `--verify` | Verification verdict output, pass/fail display |
 | **State / progress** | Progress tracking, resume, state persistence | Stub execution | PROGRESS.md content + progress display during run |
+| **Monitor / live log** | Live log output, `--monitor` mode | Stub + `--monitor` in 2nd terminal | live.log updates, real-time streaming |
+| **Plan changes / resume** | Plan change detection, orphan recovery | Stub with pre-existing PROGRESS.md | Orphan detection, progress recovery |
 | **Orchestration / main loop** | Arg parsing, execution flow, lock files, config | Depends on area — pick from above | At minimum: `--dry-run` output + stub run observation |
+| **Flight recorder / HTML template** | replay-template.html, recorder.sh, recorder_parsers.sh, recorder_overview.sh | Browser JS test (generate replay.html → inject assertions → open Safari → screenshot) | Sidebar state, phase rendering, expand/collapse, time travel, tool display |
+
+**Priority rule:** Multiple matches → use most demanding mode: GUI > stub+failures > stub > dry-run.
 
 Key principles:
 - Map changed files to categories (no hardcoded file paths in the matrix)
@@ -76,23 +81,33 @@ GUI screenshot verification is **required** when any of these files are changed 
 
 Reason: Bash tool cannot render TTY output (spinners, cursor movement, ANSI, sticky panels).
 
-### fake_claude scenario reference
+### Mandatory browser test rule
 
-Map verification goals to `tests/fake_claude` scenarios and env vars:
+Browser JS test verification is **required** when `assets/replay-template.html` is changed (JS logic, CSS, or HTML structure). Reason: unit tests in `test_recorder.sh` validate data assembly and HTML generation, but cannot exercise interactive JS behavior (DOM state, event handlers, CSS class toggling).
 
-| Goal | Scenario | Env vars | Notes |
-|------|----------|----------|-------|
-| Full UI (spinners, todos, tasks, cache) | `success_verbose` | `FAKE_CLAUDE_THINK=2` for GUI | 14 tool calls, 35+ JSON lines |
-| Basic tool flow | `success_multi` | — | Read/Edit/Bash, fast |
-| Retry behavior | `failure` → `success_multi` | — | Use per-call `scenarios` file |
-| Verification flow | `verify_pass` / `verify_fail` | — | Tests verdict parsing |
-| Rate limiting | `rate_limit` | — | Shows `[Rate limit: N%]` |
-| Quota exhaustion | `quota_error` → `success_multi` | — | Tests quota recovery |
-| Long-running (timeout) | `slow` | `FAKE_CLAUDE_SLEEP=N` | |
+### fake_claude scenarios
+
+See scenario list and env vars in `tests/fake_claude` header (lines 1–16).
 
 Log which category/path was chosen in the README.
 
 ## Step 3: Execute verification
+
+### Common stub setup
+
+All execution modes below share this preamble. Write it once, then add mode-specific lines after.
+
+```sh
+orig_dir="$PWD"
+tmpdir=$(mktemp -d)
+git -C "$tmpdir" init -q && git -C "$tmpdir" config user.email "test@test.com" && git -C "$tmpdir" config user.name "Test"
+mkdir -p "$tmpdir/bin" "$tmpdir/.claudeloop"
+cp tests/fake_claude "$tmpdir/bin/claude" && chmod +x "$tmpdir/bin/claude"
+export FAKE_CLAUDE_DIR="$tmpdir"
+printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
+cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
+git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
+```
 
 ### `--dry-run` observation
 
@@ -112,162 +127,92 @@ For UI changes (spinners, colors, formatting), use Terminal.app screenshots to s
 
 Use **absolute paths** — Terminal.app's `do script` opens in `~`.
 
-#### GUI + stub (primary — for UI and stream processor changes)
-
-This is the most valuable verification mode. It exercises the full stream processor pipeline with realistic Claude output in a real TTY, catching bugs that the Bash tool cannot see (TTY prompts, ANSI rendering, spinner timing).
-
-##### Execution
-
-<!-- Timing: sleeps below are tuned for success_verbose + FAKE_CLAUDE_THINK=2 (~30s total) -->
+After common stub setup, add:
 
 ```sh
-# 1. Prepare stub environment
-tmpdir=$(mktemp -d)
-git -C "$tmpdir" init -q
-git -C "$tmpdir" config user.email "test@test.com"
-git -C "$tmpdir" config user.name "Test"
-mkdir -p "$tmpdir/bin"
-cp tests/fake_claude "$tmpdir/bin/claude"
-chmod +x "$tmpdir/bin/claude"
-export FAKE_CLAUDE_DIR="$tmpdir"
+# GUI-specific setup
 printf 'success_verbose\n' > "$tmpdir/scenario"
-mkdir -p "$tmpdir/.claudeloop"
-printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
-cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
-git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
 
-# 2. Open Terminal.app with stub, get window ID
-#    FAKE_CLAUDE_THINK=2 adds delay so spinners are visible in screenshots
+# Sleeps tuned for success_verbose + FAKE_CLAUDE_THINK=2 (~30s total)
+
+# Open Terminal.app with stub, get window ID
 WINDOW_ID=$(osascript -e 'tell application "Terminal"
     activate
-    do script "export FAKE_CLAUDE_THINK=2 && export FAKE_CLAUDE_DIR='"$tmpdir"' && cd '"$tmpdir"' && PATH='"$tmpdir"'/bin:$PATH '"$PWD"'/claudeloop --plan PLAN.md -y"
+    do script "export FAKE_CLAUDE_THINK=2 && export FAKE_CLAUDE_DIR='"$tmpdir"' && cd '"$tmpdir"' && PATH='"$tmpdir"'/bin:$PATH '"$orig_dir"'/claudeloop --plan PLAN.md -y"
     delay 1
     return id of front window
 end tell')
 
-# 3. Take phase-aware screenshots at key moments
-# Logo/header — capture immediately (delay 1 above gives startup time)
+# Phase-aware screenshots at key moments
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-1-header.png"
-
-# Phase 1 mid-execution — spinner + tool calls streaming
 sleep 8
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-2-phase1-mid.png"
-
-# Phase transition — Phase 1 completing, Phase 2 starting
 sleep 8
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-3-transition.png"
-
-# Phase 2 mid-execution — verify spinner resets, new todo counts
 sleep 6
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-4-phase2-mid.png"
-
-# Wait for completion, then capture final banner
 sleep 12
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-5-final.png"
 
-# 4. Scroll to top to capture logo if it scrolled off
-osascript -e 'tell application "System Events" to key code 115' 2>/dev/null  # Home key
+# Scroll to top to capture logo if it scrolled off
+osascript -e 'tell application "System Events" to key code 115' 2>/dev/null
 sleep 0.5
 screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
 
-# 5. Read ALL screenshots with Read tool and verify against checklist below
+# Read ALL screenshots with Read tool and verify against checklist below
 
-# 6. Close Terminal window
+# Close Terminal window and clean up
 osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
 rm -rf "$tmpdir"
 ```
 
-##### Screenshot verification checklist
+#### Screenshot verification checklist
 
-This is a regression checklist for UI changes. Your must-verify assertions (from Step 0) are the primary success criteria.
+Regression checklist for UI changes. Your must-verify assertions (from Step 0) are the primary success criteria.
 
-After reading screenshots, confirm ALL of the following. Mark each as observed or not:
-
-- [ ] **Logo/header**: Logo art renders, version string correct, plan name shown
-- [ ] **Phase listing**: All phases shown with pending icons before execution starts
-- [ ] **Spinner line**: Format `<spinner> <elapsed>s Todo <done>/<total>` visible during execution
-- [ ] **Tool formatting**: Cyan tool names, green todo/task summaries, blue phase headers
-- [ ] **Phase transition**: Phase N completion message followed by Phase N+1 header
-- [ ] **Spinner reset**: Timer and counts reset when new phase starts
-- [ ] **Scrollback integrity**: No duplicated or overwritten lines across captures
-- [ ] **Final banner**: "All phases completed" with checkmark icons, progress N/N
-- [ ] **Session summary**: model, cost, duration, turns, tokens, cache all present
+- [ ] Logo + version + plan name
+- [ ] Phase listing with pending icons
+- [ ] Spinner: `<spinner> <elapsed>s Todo <done>/<total>`
+- [ ] Cyan tools, green todos, blue headers
+- [ ] Phase N→N+1 transition, spinner/timer reset
+- [ ] No duplicated/overwritten lines across captures
+- [ ] Final banner: "All phases completed" + session summary (model, cost, duration, tokens, cache)
 
 If any capture point was missed (e.g., timing was off), note the gap and either re-run with adjusted timing or explain why it's acceptable.
 
 ### Stub execution for logic verification
 
-For non-UI changes, run claudeloop with fake_claude directly from the Bash tool. Use `success_verbose` for full stream processor exercise, `success_multi` for fast basic flow:
+For non-UI changes, run claudeloop with fake_claude directly from the Bash tool. After common stub setup, add:
 
 ```sh
-tmpdir=$(mktemp -d)
-git -C "$tmpdir" init -q
-git -C "$tmpdir" config user.email "test@test.com"
-git -C "$tmpdir" config user.name "Test"
-
-# Copy fake_claude as stub (realistic stream-json output)
-cp tests/fake_claude "$tmpdir/bin/claude"
-chmod +x "$tmpdir/bin/claude"
-export FAKE_CLAUDE_DIR="$tmpdir"
-# success_verbose: full UI with todos, tasks, cache (14 tool calls)
-# success_multi: basic Read/Edit/Bash flow (fast)
 printf 'success_verbose\n' > "$tmpdir/scenario"
 
-# Zero-delay config
-mkdir -p "$tmpdir/.claudeloop"
-printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
-
-# Copy plan and commit
-cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
-git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
-
 # Run and capture output
-(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$PWD/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-run.log"
+(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$orig_dir/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-run.log"
 
 # Copy PROGRESS.md from stub run
 cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
 
-# Cleanup tmpdir (session artifacts already saved)
 rm -rf "$tmpdir"
 ```
 
 ### Stub execution with configured failures
 
-For retry/error-handling changes, use per-call scenarios to simulate failure→retry→success:
+For retry/error-handling changes. After common stub setup, add:
 
 ```sh
-tmpdir=$(mktemp -d)
-git -C "$tmpdir" init -q
-git -C "$tmpdir" config user.email "test@test.com"
-git -C "$tmpdir" config user.name "Test"
-
-# Copy fake_claude as stub
-mkdir -p "$tmpdir/bin"
-cp tests/fake_claude "$tmpdir/bin/claude"
-chmod +x "$tmpdir/bin/claude"
-export FAKE_CLAUDE_DIR="$tmpdir"
-
 # Per-call scenarios: first call fails, second succeeds (per phase)
 printf 'failure\nsuccess_multi\nfailure\nsuccess_multi\n' > "$tmpdir/scenarios"
-
-# Non-zero delay so retry timing is observable
-mkdir -p "$tmpdir/.claudeloop"
-printf 'BASE_DELAY=2\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
-
-# Copy plan and commit
-cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
-git -C "$tmpdir" add PLAN.md && git -C "$tmpdir" commit -q -m "init"
+printf 'BASE_DELAY=2\n' > "$tmpdir/.claudeloop/.claudeloop.conf"  # override for observable timing
 
 # Run and capture output
-(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$OLDPWD/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-failure-run.log"
+(cd "$tmpdir" && PATH="$tmpdir/bin:$PATH" "$orig_dir/claudeloop" --plan PLAN.md -y) 2>&1 | tee "$SESSION/stub-failure-run.log"
 
 # Inspect retry prompts for correct context
 ls "$tmpdir/prompts/" 2>/dev/null | tee "$SESSION/prompt-files.log"
 for f in "$tmpdir/prompts/"*; do cat "$f"; echo "---"; done > "$SESSION/prompt-contents.log" 2>/dev/null
 
-# Copy progress
 cp "$tmpdir/.claudeloop/PROGRESS.md" "$SESSION/PROGRESS.md" 2>/dev/null
-
 rm -rf "$tmpdir"
 ```
 
@@ -276,6 +221,95 @@ After running, verify:
 - [ ] Retry delay matches `BASE_DELAY` (not exponential)
 - [ ] Retry prompts contain error context from the failure
 - [ ] Final result: all phases completed
+
+### Browser JS test protocol
+
+For flight recorder / HTML template changes. Generate a replay file, inject test assertions, and screenshot the result.
+
+```sh
+# 1. Load browser test fixtures (baseline — extend or replace to match the specific change)
+tmpdir=$(mktemp -d)
+run_dir="$tmpdir/.claudeloop"
+mkdir -p "$run_dir/logs" "$run_dir/signals"
+cp -r tests/fixtures/verify-browser/* "$run_dir/"
+
+# 2. Generate replay HTML via recorder libs (POSIX sh, not zsh)
+orig_dir="$PWD"
+CLAUDELOOP_DIR="$orig_dir" sh -c '
+  . "$CLAUDELOOP_DIR/lib/recorder.sh"
+  generate_flight_recorder "'"$run_dir"'" "'"$tmpdir/replay.html"'"
+'
+
+# 3. Verify embedded JSON with python3
+python3 -c "
+import re, json, sys
+html = open('$tmpdir/replay.html').read()
+m = re.search(r'const DATA = ({.*?});', html, re.DOTALL)
+if not m:
+    print('FAIL: no DATA found'); sys.exit(1)
+data = json.loads(m.group(1))
+phases = data.get('phases', [])
+print(f'Phases: {len(phases)}')
+for p in phases:
+    print(f'  {p[\"title\"]}: status={p[\"status\"]}, attempts={len(p.get(\"attempts\", []))}')
+assert len(phases) == 4, f'Expected 4 phases, got {len(phases)}'
+print('JSON verification: PASS')
+"
+
+# 4. Inject assertion script before </body>
+#    IMPORTANT: Tailor assertions to the specific change being verified.
+#    Generic "elements exist" checks are insufficient — assert the behavior that changed.
+python3 -c "
+html = open('$tmpdir/replay.html').read()
+# Example assertions — REPLACE with assertions specific to the change under test
+test_script = '''
+<script>
+window.addEventListener('load', function() {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:10px;right:10px;background:#000;color:#fff;padding:20px;z-index:99999;font-family:monospace;border-radius:8px;max-width:400px;font-size:14px;';
+  var results = [];
+  function assert(name, condition) {
+    results.push((condition ? 'PASS' : 'FAIL') + ': ' + name);
+  }
+
+  // --- Replace these with change-specific assertions ---
+  var sidebar = document.querySelector('.sidebar, [class*=sidebar]');
+  assert('Sidebar exists', !!sidebar);
+
+  var phases = document.querySelectorAll('[class*=phase]');
+  assert('Phase elements rendered', phases.length >= 1);
+  // --- End assertions ---
+
+  var allPass = results.every(function(r) { return r.startsWith('PASS'); });
+  overlay.innerHTML = '<strong style=\"font-size:18px;\">' + (allPass ? '✅ ALL PASS' : '❌ FAILURES') + '</strong><br><br>' + results.join('<br>');
+  overlay.style.borderColor = allPass ? '#0f0' : '#f00';
+  overlay.style.borderWidth = '2px';
+  overlay.style.borderStyle = 'solid';
+  document.body.appendChild(overlay);
+});
+</script>
+'''
+html = html.replace('</body>', test_script + '</body>')
+open('$tmpdir/replay.html', 'w').write(html)
+print('Assertions injected')
+"
+
+# 5. Open in Safari, screenshot, read with Read tool
+open -a Safari "$tmpdir/replay.html"
+sleep 3
+screencapture -x "$SESSION/screenshot-browser-test.png"
+
+# 6. Close Safari tab and clean up
+osascript -e 'tell application "Safari" to close current tab of front window' 2>/dev/null
+rm -rf "$tmpdir"
+```
+
+**Key traps:**
+- Safari `do JavaScript` requires developer settings — always use the HTML injection approach instead
+- PROGRESS.md emoji prefixes (`✅`/`❌`) in phase headers are parsed by `is_progress_phase_header`, not decorative — include them in fixtures
+- Must use `sh -c` not `zsh` for recorder sourcing (POSIX project)
+- Assertions must be tailored to the specific change — generic "elements exist" checks are insufficient
+- `.raw.json` files must exist for each phase or the recorder will skip session extraction
 
 ## Step 4: Record observation and investigate
 
