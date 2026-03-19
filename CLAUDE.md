@@ -34,6 +34,10 @@ Every design decision must trace to a constraint from exploration or an explicit
 
 When you notice a friction point, missing guardrail, or automation opportunity, raise it and suggest a concrete change targeting **CLAUDE.md**, **skills/hooks**, or **MCP tools/plugins**. Keep suggestions brief and actionable. Don't derail the current task — note it at a natural pause point.
 
+When a behavioral correction applies to this project, update CLAUDE.md or the relevant skill file — don't write a memory as a substitute. Rules scoped to a single workflow (e.g., releases, rebasing) belong in that workflow's skill file. CLAUDE.md is for cross-cutting project rules only. Memory is for ephemeral context and cross-project user preferences.
+
+**Plan execution (mandatory):** When the user provides an explicit multi-step plan (e.g., "promote → release → sync"), execute all steps without asking for confirmation between them. The stated plan is the authorization. Only stop on failure, unexpected results, or conditional warnings.
+
 ## Documentation
 
 When implementation changes affect user-facing behavior, update stale sections in README.md and QUICKSTART.md.
@@ -57,6 +61,8 @@ bats tests/test_fake_claude.sh        # fake CLI scenario tests
 ```
 
 ## Architecture
+
+**Shell dialect:** POSIX `#!/bin/sh`. No bashisms (arrays, `[[ ]]`, `local` in functions is acceptable per SC3043). All libraries must be sourceable by dash/ash.
 
 ### Data model
 

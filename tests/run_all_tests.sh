@@ -50,6 +50,9 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Ensure claudeloop has execute permission (frequently lost by git operations)
+chmod +x "$SCRIPT_DIR/../claudeloop" 2>/dev/null || true
+
 export PATH="/opt/homebrew/bin:$PATH"
 
 # Skip the original monolithic file if split files exist
