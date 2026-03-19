@@ -3,7 +3,7 @@
 # ClaudeLoop - Phase-by-Phase Execution Tool
 # Executes multi-phase plans by spawning fresh Claude instances per phase
 
-VERSION="0.22.0-beta.9"
+VERSION="0.22.0-beta.10"
 
 set -eu
 
