@@ -144,6 +144,11 @@ The complete JSON blob embedded in `replay.html`:
             {"path": "src/foo.ts", "ops": ["Read", "Edit"]},
             {"path": "src/bar.ts", "ops": ["Write"]}
           ],
+          "tool_calls": [
+            {"seq": 1, "name": "Read", "preview": "src/foo.ts"},
+            {"seq": 2, "name": "Edit", "preview": "src/foo.ts"},
+            {"seq": 3, "name": "Bash", "preview": "npm test"}
+          ],
           "git_commits": [
             {"sha": "abc1234", "message": "Phase 1: setup project structure"}
           ]
@@ -161,6 +166,7 @@ The complete JSON blob embedded in `replay.html`:
 - `phases[].attempts[].strategy` — one of: `standard`, `stripped`, `targeted`, `escalated`
 - `phases[].attempts[].fail_reason` — null on success, string on failure (e.g. `"exit_code_1"`, `"no_session_line"`, `"verification_failed"`)
 - `phases[].attempts[].session` — null if no `[Session:]` line found (e.g. crash before completion)
+- `phases[].attempts[].tool_calls[]` — individual tool calls in execution order; `seq` is 1-based, `name` is the tool name, `preview` is a truncated input preview (file_path for Read/Edit/Write, command for Bash, pattern for Grep/Glob, etc.); capped at 200 entries; no error status in v1
 - `phases[].verification_verdict` — `"passed"`, `"failed"`, or `null` (not verified)
 - `phases[].signal_no_changes` — true if `signals/phase-N.md` exists
 - Token fields default to 0 when absent

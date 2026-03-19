@@ -444,6 +444,33 @@ body {
   font-size: 10px;
 }
 
+/* Tool call timeline */
+.tool-calls-list { font-size: 12px; }
+.tool-call-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+}
+.tool-call-row:last-child { border-bottom: none; }
+.tool-call-seq {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.tool-call-preview {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Git commits section */
 .git-commits-section {
   margin-top: 12px;
@@ -2180,7 +2207,7 @@ function renderAttemptCard(attempt, autoExpand, hideToggle) {
   }
 
   // Collapsible detail sections (prompt, tool breakdown, files)
-  var hasDetails = attempt.prompt_text || (attempt.tools && attempt.tools.length > 0) || (attempt.files && attempt.files.length > 0);
+  var hasDetails = attempt.prompt_text || (attempt.tools && attempt.tools.length > 0) || (attempt.files && attempt.files.length > 0) || (attempt.tool_calls && attempt.tool_calls.length > 0);
   if (hasDetails) {
     var detailId = 'attempt-details-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
     if (!hideToggle) {
@@ -2190,6 +2217,7 @@ function renderAttemptCard(attempt, autoExpand, hideToggle) {
     html += renderSinglePrompt(attempt);
     html += renderSingleToolBreakdown(attempt);
     html += renderSingleFiles(attempt);
+    html += renderToolCallTimeline(attempt);
     html += '</div>';
   }
 
@@ -2311,6 +2339,49 @@ function renderSingleFiles(attempt) {
   html += '</div>';
   html += '</div>';
   return html;
+}
+
+function renderToolCallTimeline(attempt) {
+  var html = '<div class="single-section">';
+  html += '<h3>Tool Calls</h3>';
+  if (!attempt.tool_calls || attempt.tool_calls.length === 0) {
+    html += '<div class="empty-state"><div class="empty-text">No tool call data recorded</div></div>';
+    html += '</div>';
+    return html;
+  }
+  var calls = attempt.tool_calls;
+  var showInitial = 20;
+  var needsCollapse = calls.length > 30;
+  var timelineId = 'tool-calls-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
+
+  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' + calls.length + ' tool calls in sequence</div>';
+  html += '<div class="tool-calls-list" id="' + timelineId + '">';
+  calls.forEach(function(tc, idx) {
+    var hidden = needsCollapse && idx >= showInitial ? ' style="display:none"' : '';
+    html += '<div class="tool-call-row"' + hidden + ' data-tc-row>';
+    html += '<span class="tool-call-seq">' + tc.seq + '</span>';
+    html += '<span class="tool-chip tool-' + escapeHtml(tc.name) + '">' + escapeHtml(tc.name) + '</span>';
+    if (tc.preview) {
+      html += '<span class="tool-call-preview" title="' + escapeHtml(tc.preview) + '">' + escapeHtml(tc.preview) + '</span>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  if (needsCollapse) {
+    html += '<button class="prompt-expand-btn" onclick="toggleToolCalls(this, \'' + timelineId + '\', ' + calls.length + ')">Show all ' + calls.length + ' tool calls</button>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function toggleToolCalls(btn, id, total) {
+  var el = document.getElementById(id);
+  var rows = el.querySelectorAll('[data-tc-row]');
+  var isCollapsed = rows[rows.length - 1].style.display === 'none';
+  for (var i = 20; i < rows.length; i++) {
+    rows[i].style.display = isCollapsed ? '' : 'none';
+  }
+  btn.textContent = isCollapsed ? 'Collapse' : 'Show all ' + total + ' tool calls';
 }
 
 /* ── Phase Summary Table (overview) ── */

@@ -314,6 +314,8 @@ assemble_recorder_json() {
       fi
       tools=$(rec_extract_tools "$raw_file")
       files=$(rec_extract_files "$raw_file")
+      local tool_calls
+      tool_calls=$(rec_extract_tool_calls "$raw_file")
 
       git_commits=$(rec_extract_git_commits "$pn")
 
@@ -349,8 +351,8 @@ assemble_recorder_json() {
         a_is_success="true"
       fi
 
-      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"is_success":%s,"session":%s,"tools":%s,"files":%s,"git_commits":%s,"prompt_text":%s}' \
-        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$a_is_success" "$session" "$tools" "$files" "$git_commits" "$prompt_json"
+      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"is_success":%s,"session":%s,"tools":%s,"files":%s,"tool_calls":%s,"git_commits":%s,"prompt_text":%s}' \
+        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$a_is_success" "$session" "$tools" "$files" "$tool_calls" "$git_commits" "$prompt_json"
 
       attempt_num=$((attempt_num + 1))
     done
