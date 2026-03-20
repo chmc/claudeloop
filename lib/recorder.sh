@@ -194,20 +194,39 @@ generate_flight_recorder() {
   local run_dir="$1"
   local json_tmp="${run_dir}/recorder.json.tmp"
   local output_html="${run_dir}/replay.html"
+  local _verbose="${_RECORDER_VERBOSE:-false}"
+  local _ts
 
-  # Assemble JSON to temp file
-  if ! assemble_recorder_json "$run_dir" > "$json_tmp" 2>/dev/null; then
-    rm -f "$json_tmp"
+  if [ "$_verbose" = "true" ]; then
+    _ts=$(date '+%H:%M:%S')
+    printf '[%s] Generating flight recorder...\n' "$_ts" >&2
+
+    # Load progress to count phases for status message
+    rec_load_progress "$run_dir" 2>/dev/null
+    local _phase_count=0
+    for _ in $_REC_PHASE_NUMBERS; do _phase_count=$(( _phase_count + 1 )); done
+    _ts=$(date '+%H:%M:%S')
+    printf '[%s]   Assembling data for %d phases...\n' "$_ts" "$_phase_count" >&2
+  fi
+
+  # Assemble JSON to temp file (redirect stderr for both shell and command errors)
+  if ! ( assemble_recorder_json "$run_dir" > "$json_tmp" ) 2>/dev/null; then
+    rm -f "$json_tmp" 2>/dev/null
     return 0
+  fi
+
+  if [ "$_verbose" = "true" ]; then
+    _ts=$(date '+%H:%M:%S')
+    printf '[%s]   Writing HTML...\n' "$_ts" >&2
   fi
 
   # Inject into HTML template
   if ! inject_and_write_html "$json_tmp" "$output_html" 2>/dev/null; then
-    rm -f "$json_tmp"
+    rm -f "$json_tmp" 2>/dev/null
     return 0
   fi
 
-  rm -f "$json_tmp"
+  rm -f "$json_tmp" 2>/dev/null
   return 0
 }
 

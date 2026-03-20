@@ -591,6 +591,25 @@ EOF
 @test "generate_flight_recorder: silent on failure with invalid run dir" {
   run generate_flight_recorder "$TEST_DIR/nonexistent"
   [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "generate_flight_recorder: shows progress when _RECORDER_VERBOSE is set" {
+  run_dir=$(_create_fixtures)
+  _RECORDER_VERBOSE=true run generate_flight_recorder "$run_dir"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Generating flight recorder"* ]]
+  [[ "$output" == *"2 phases"* ]]
+  [[ "$output" == *"Writing HTML"* ]]
+}
+
+@test "generate_flight_recorder: no progress output when _RECORDER_VERBOSE is unset" {
+  run_dir=$(_create_fixtures)
+  unset _RECORDER_VERBOSE
+  run generate_flight_recorder "$run_dir"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ -f "$run_dir/replay.html" ]
 }
 
 # =============================================================================

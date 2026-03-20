@@ -1044,7 +1044,7 @@ main() {
     if [ ! -f "$replay_dir/PROGRESS.md" ]; then
       print_warning "No PROGRESS.md found in $replay_dir — report will be empty"
     fi
-    generate_flight_recorder "$replay_dir"
+    _RECORDER_VERBOSE=true generate_flight_recorder "$replay_dir"
     if [ -f "$replay_dir/replay.html" ]; then
       print_success "Generated $replay_dir/replay.html"
     else
