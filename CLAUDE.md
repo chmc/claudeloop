@@ -175,6 +175,17 @@ test in `test_progress.sh` enforces this. Per-attempt fields must also be added 
 - `/rebase sync|promote` — Safe branch rebasing (sync beta from main, promote beta to main)
 - `/release beta|stable` — Trigger GitHub release workflow
 - `/verify` — Verify claudeloop after code changes (smoke + GUI screenshots)
+- `/wt create|rm|list` — Manage git worktrees for parallel Claude Code sessions
+
+## Worktree workflow
+
+When inside a worktree (`git rev-parse --show-toplevel` points to a `*-wt-*` directory or branch matches `wt/*`):
+
+- **Scope awareness**: Worktree is an isolated copy. Changes don't affect the main repo until merged.
+- **Branch convention**: Worktree branches are `wt/<name>`. Do not rename.
+- **Commit normally**: Conventional commits, push with `git push -u origin wt/<name>`.
+- **PR target**: PRs target the base branch the worktree was created from.
+- **Cleanup**: Use `/wt rm <name>` from the main repo, not from inside the worktree.
 
 ## Testing
 
