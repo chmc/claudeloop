@@ -599,8 +599,16 @@ EOF
   _RECORDER_VERBOSE=true run generate_flight_recorder "$run_dir"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Generating flight recorder"* ]]
-  [[ "$output" == *"2 phases"* ]]
+  [[ "$output" == *"Assembled data for 2 phases"* ]]
   [[ "$output" == *"Writing HTML"* ]]
+}
+
+@test "generate_flight_recorder: verbose shows elapsed time" {
+  run_dir=$(_create_fixtures)
+  _RECORDER_VERBOSE=true run generate_flight_recorder "$run_dir"
+  [ "$status" -eq 0 ]
+  # Elapsed time pattern: (Ns) where N is a number
+  [[ "$output" =~ \([0-9]+s\) ]]
 }
 
 @test "generate_flight_recorder: no progress output when _RECORDER_VERBOSE is unset" {

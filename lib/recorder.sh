@@ -197,6 +197,9 @@ generate_flight_recorder() {
   local _verbose="${_RECORDER_VERBOSE:-false}"
   local _ts
 
+  local _spin_pid=""
+  local _start_s=""
+
   if [ "$_verbose" = "true" ]; then
     _ts=$(date '+%H:%M:%S')
     printf '[%s] Generating flight recorder...\n' "$_ts" >&2
@@ -205,17 +208,50 @@ generate_flight_recorder() {
     rec_load_progress "$run_dir" 2>/dev/null
     local _phase_count=0
     for _ in $_REC_PHASE_NUMBERS; do _phase_count=$(( _phase_count + 1 )); done
-    _ts=$(date '+%H:%M:%S')
-    printf '[%s]   Assembling data for %d phases...\n' "$_ts" "$_phase_count" >&2
+
+    _start_s=$(date +%s)
+
+    # Launch background elapsed-time updater if stderr is a terminal
+    if [ -t 2 ]; then
+      _parent_pid=$$
+      (
+        while kill -0 "$_parent_pid" 2>/dev/null; do
+          _elapsed=$(( $(date +%s) - _start_s ))
+          printf '\033[2K\r[%s]   Assembling data for %d phases... (%ds)' \
+            "$(date '+%H:%M:%S')" "$_phase_count" "$_elapsed" >&2
+          sleep 1
+        done
+      ) &
+      _spin_pid=$!
+    else
+      _ts=$(date '+%H:%M:%S')
+      printf '[%s]   Assembling data for %d phases...\n' "$_ts" "$_phase_count" >&2
+    fi
   fi
 
   # Assemble JSON to temp file (redirect stderr for both shell and command errors)
   if ! ( assemble_recorder_json "$run_dir" > "$json_tmp" ) 2>/dev/null; then
+    if [ -n "$_spin_pid" ]; then
+      kill "$_spin_pid" 2>/dev/null; wait "$_spin_pid" 2>/dev/null || true
+      _spin_pid=""
+      printf '\033[2K\r' >&2
+    fi
     rm -f "$json_tmp" 2>/dev/null
     return 0
   fi
 
+  # Stop spinner and print final elapsed time
+  if [ -n "$_spin_pid" ]; then
+    kill "$_spin_pid" 2>/dev/null; wait "$_spin_pid" 2>/dev/null || true
+    _spin_pid=""
+  fi
   if [ "$_verbose" = "true" ]; then
+    local _elapsed=0
+    if [ -n "$_start_s" ]; then
+      _elapsed=$(( $(date +%s) - _start_s ))
+    fi
+    printf '\033[2K\r[%s]   Assembled data for %d phases (%ds)\n' \
+      "$(date '+%H:%M:%S')" "$_phase_count" "$_elapsed" >&2
     _ts=$(date '+%H:%M:%S')
     printf '[%s]   Writing HTML...\n' "$_ts" >&2
   fi
