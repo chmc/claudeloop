@@ -241,7 +241,12 @@ handle_interrupt() {
 
   # Save progress (only after progress has been fully loaded from disk)
   if [ "${_PROGRESS_LOADED:-}" = "true" ]; then
-    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+    write_progress "$PROGRESS_FILE" "$PLAN_FILE" "skip_recorder"
+    # Fork recorder as detached background process (reads from disk)
+    # trap '' HUP: prevent SIGHUP on macOS where /bin/sh is zsh
+    if command -v generate_flight_recorder >/dev/null 2>&1; then
+      ( trap '' HUP; generate_flight_recorder "$(dirname "$PROGRESS_FILE")" ) </dev/null >/dev/null 2>&1 &
+    fi
   fi
 
   # Save state for resume

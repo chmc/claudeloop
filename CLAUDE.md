@@ -136,7 +136,7 @@ main → parse_plan → init_progress → main_loop
   find_next_phase → execute_phase → verify_phase → refactor_phase → update_phase_status → write_progress
   no-changes:  signal file (.claudeloop/signals/phase-N.md) + successful session → skip verification → complete
   on failure:  should_retry_phase → retry_strategy → calculate_backoff → sleep → retry (standard/stripped/targeted)
-  on Ctrl+C:   handle_interrupt → rollback refactor (if active) → write_progress → save_state → exit 130
+  on Ctrl+C:   handle_interrupt → rollback refactor (if active) → write_progress (skip recorder) → fork recorder bg → save_state → exit 130
   --monitor:   run_monitor → tail -f .claudeloop/live.log
 ```
 

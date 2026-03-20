@@ -109,10 +109,11 @@ read_progress() {
 }
 
 # Write/update PROGRESS.md
-# Args: $1 - progress file path, $2 - plan file path
+# Args: $1 - progress file path, $2 - plan file path, $3 - optional "skip_recorder"
 write_progress() {
   local progress_file="$1"
   local plan_file="$2"
+  local skip_recorder="${3:-}"
   local timestamp
   timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
 
@@ -135,7 +136,7 @@ EOF
   mv "$temp_file" "$progress_file"
 
   # Generate flight recorder HTML (non-blocking, failure-tolerant)
-  if command -v generate_flight_recorder >/dev/null 2>&1; then
+  if [ "$skip_recorder" != "skip_recorder" ] && command -v generate_flight_recorder >/dev/null 2>&1; then
     generate_flight_recorder "$(dirname "$progress_file")" 2>/dev/null || true
   fi
 }

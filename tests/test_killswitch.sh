@@ -173,3 +173,41 @@ PEOF
   new_checksum=$(md5 -q "$PROGRESS_FILE")
   [ "$orig_checksum" = "$new_checksum" ]
 }
+
+@test "killswitch: write_progress skips flight recorder with skip_recorder arg" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  parse_plan "$TEST_DIR/PLAN.md"
+  init_progress "$TEST_DIR/.claudeloop/PROGRESS.md"
+
+  # Mock generate_flight_recorder to detect if it's called
+  generate_flight_recorder() { touch "$TEST_DIR/recorder_called"; }
+  export -f generate_flight_recorder
+
+  write_progress "$TEST_DIR/.claudeloop/PROGRESS.md" "$TEST_DIR/PLAN.md" "skip_recorder"
+
+  # Recorder must NOT have been called
+  [ ! -f "$TEST_DIR/recorder_called" ]
+}
+
+@test "killswitch: write_progress calls flight recorder without skip_recorder arg" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  parse_plan "$TEST_DIR/PLAN.md"
+  init_progress "$TEST_DIR/.claudeloop/PROGRESS.md"
+
+  # Mock generate_flight_recorder to detect if it's called
+  generate_flight_recorder() { touch "$TEST_DIR/recorder_called"; }
+  export -f generate_flight_recorder
+
+  write_progress "$TEST_DIR/.claudeloop/PROGRESS.md" "$TEST_DIR/PLAN.md"
+
+  # Recorder MUST have been called
+  [ -f "$TEST_DIR/recorder_called" ]
+}
