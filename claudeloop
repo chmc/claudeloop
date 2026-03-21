@@ -1153,14 +1153,28 @@ main() {
   [ $exit_code -eq 0 ] && clear_state
 
   # Auto-archive on successful completion
+  _LAST_ARCHIVE_DIR=""
   if [ $exit_code -eq 0 ] && [ "${_CLAUDELOOP_NO_AUTO_ARCHIVE:-0}" != "1" ] \
      && [ "${_ARCHIVE_DECLINED:-}" != "true" ]; then
-    archive_current_run --internal
+    archive_current_run --internal || print_warning "Auto-archive failed (non-fatal)"
   fi
 
+  # Clear LIVE_LOG after archive (file was moved to archive dir)
+  [ -n "${_LAST_ARCHIVE_DIR:-}" ] && LIVE_LOG=""
+
   echo ""
-  print_header "$PLAN_FILE"
-  print_all_phases
+  if [ $exit_code -eq 0 ]; then
+    _replay_path=""
+    if [ -n "${_LAST_ARCHIVE_DIR:-}" ] && [ -f "$_LAST_ARCHIVE_DIR/replay.html" ]; then
+      _replay_path="$_LAST_ARCHIVE_DIR/replay.html"
+    elif [ -f ".claudeloop/replay.html" ]; then
+      _replay_path=".claudeloop/replay.html"
+    fi
+    print_completion_summary "$PLAN_FILE" "$_replay_path"
+  else
+    print_header "$PLAN_FILE"
+    print_all_phases
+  fi
 
   exit $exit_code
 }

@@ -118,7 +118,10 @@ archive_current_run() {
   # 4. Generate metadata
   generate_archive_metadata "$_archive_dir"
 
-  # 5. Announce
+  # 5. Export archive dir for caller
+  _LAST_ARCHIVE_DIR="$_archive_dir"
+
+  # 6. Announce
   print_success "Run archived to ${_archive_dir}"
 }
 

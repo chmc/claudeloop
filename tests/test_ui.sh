@@ -280,6 +280,97 @@ setup() {
   rm -f "$tmplog"
 }
 
+# --- print_completion_summary() ---
+
+@test "print_completion_summary: shows Run Summary header" {
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_3="completed"
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Run Summary"* ]]
+  [[ "$output" == *"3/3 phases completed"* ]]
+}
+
+@test "print_completion_summary: shows plan file" {
+  run print_completion_summary "my-plan.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Plan:   my-plan.md"* ]]
+}
+
+@test "print_completion_summary: shows report path when provided" {
+  run print_completion_summary "PLAN.md" ".claudeloop/archive/20260320-143022/replay.html"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Report: .claudeloop/archive/20260320-143022/replay.html"* ]]
+}
+
+@test "print_completion_summary: omits report line when path is empty" {
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Report:"* ]]
+}
+
+@test "print_completion_summary: counts completed phases correctly" {
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="failed"
+  PHASE_STATUS_3="pending"
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1/3 phases completed"* ]]
+}
+
+@test "print_completion_summary: shows all phase statuses with icons" {
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_3="completed"
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"✅"*"Setup"* ]]
+  [[ "$output" == *"✅"*"Implementation"* ]]
+  [[ "$output" == *"✅"*"Testing"* ]]
+}
+
+@test "print_completion_summary: indents phase lines with 2 spaces" {
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_3="completed"
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  # Check that phase lines start with 2-space indent
+  echo "$output" | grep -q "^  .*Phase 1"
+}
+
+@test "print_completion_summary: shows separator lines" {
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  # Should have 3 separator lines (top, after header, bottom)
+  local count
+  count=$(echo "$output" | grep -c "═══════════════════════════════════════════════════════════")
+  [ "$count" -eq 3 ]
+}
+
+@test "print_completion_summary: handles zero phases" {
+  PHASE_COUNT=0
+  PHASE_NUMBERS=""
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0/0 phases completed"* ]]
+}
+
+@test "print_completion_summary: handles decimal phase numbers" {
+  PHASE_COUNT=4
+  PHASE_NUMBERS="1 2 2.5 3"
+  PHASE_TITLE_2_5="Bugfix"
+  PHASE_STATUS_2_5="completed"
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="completed"
+  PHASE_STATUS_3="completed"
+  run print_completion_summary "PLAN.md" ""
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"4/4 phases completed"* ]]
+  [[ "$output" == *"Bugfix"* ]]
+}
+
 @test "log_live writes blank line for empty string" {
   local tmplog
   tmplog=$(mktemp)

@@ -139,6 +139,35 @@ print_all_phases() {
   echo ""
 }
 
+# Print rich completion summary after successful run
+# Args: $1 = plan_file, $2 = replay_path (empty if unavailable)
+print_completion_summary() {
+  local plan_file="$1"
+  local replay_path="$2"
+  local completed=0
+  local status
+
+  for _phase in $PHASE_NUMBERS; do
+    status=$(get_phase_status "$_phase")
+    [ "${status:-pending}" = "completed" ] && completed=$((completed + 1))
+  done
+
+  echo "═══════════════════════════════════════════════════════════"
+  echo "Run Summary — $completed/$PHASE_COUNT phases completed"
+  echo "═══════════════════════════════════════════════════════════"
+  printf 'Plan:   %s\n' "$plan_file"
+  if [ -n "$replay_path" ]; then
+    printf 'Report: %s\n' "$replay_path"
+  fi
+  echo ""
+  for _phase in $PHASE_NUMBERS; do
+    printf '  '
+    print_phase_status "$_phase"
+  done
+  echo ""
+  echo "═══════════════════════════════════════════════════════════"
+}
+
 # Print phase execution header
 print_phase_exec_header() {
   local phase_num="$1"

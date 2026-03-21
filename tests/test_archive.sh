@@ -556,6 +556,27 @@ EOF
 
 # --- archive_current_run mkdir failure ---
 
+@test "archive_current_run: sets _LAST_ARCHIVE_DIR on success" {
+  _create_run_state
+  _LAST_ARCHIVE_DIR=""
+
+  archive_current_run --internal
+
+  [ -n "$_LAST_ARCHIVE_DIR" ]
+  [ -d "$_LAST_ARCHIVE_DIR" ]
+  # Should point to the archive directory
+  echo "$_LAST_ARCHIVE_DIR" | grep -q ".claudeloop/archive/"
+}
+
+@test "archive_current_run: _LAST_ARCHIVE_DIR stays empty on nothing to archive" {
+  mkdir -p .claudeloop
+  _LAST_ARCHIVE_DIR=""
+
+  archive_current_run --internal
+
+  [ -z "$_LAST_ARCHIVE_DIR" ]
+}
+
 @test "archive_current_run: returns 1 when archive directory cannot be created" {
   cd "$BATS_TEST_TMPDIR"
   mkdir -p .claudeloop
