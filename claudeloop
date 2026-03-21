@@ -616,6 +616,7 @@ _add_platform_gitignore() {
 # Main execution loop
 main_loop() {
   local continue_execution=true
+  local _net_retries=0
 
   while $continue_execution; do
     # Check for interruption
@@ -661,6 +662,7 @@ main_loop() {
     # Execute the next phase
     if execute_phase "$next_phase"; then
       log_verbose "main_loop: phase $next_phase succeeded, continuing"
+      _net_retries=0
       # Success - continue to next phase
       continue
     else
@@ -673,6 +675,29 @@ main_loop() {
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         print_quota_wait "$next_phase" "$QUOTA_RETRY_INTERVAL"
         sleep "$QUOTA_RETRY_INTERVAL"
+        continue
+      fi
+      if is_network_error "$_log_file"; then
+        _net_retries=$((_net_retries + 1))
+        reset_phase_for_retry "$next_phase"
+        # Exponential backoff: 5, 10, 20, 40, 80, 160, 300, 300... (0 when BASE_DELAY=0)
+        local _net_delay=0
+        if [ "${BASE_DELAY:-5}" -gt 0 ]; then
+          _net_delay=$((5 * (1 << (_net_retries - 1))))
+          [ "$_net_delay" -gt 300 ] && _net_delay=300
+        fi
+        log_verbose "main_loop: network error on phase $next_phase (retry $_net_retries), waiting ${_net_delay}s"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        print_network_wait "$next_phase" "$_net_retries" "$_net_delay"
+        sleep "$_net_delay"
+        # Cap: after 20 retries, prompt user (or fail in non-interactive mode)
+        if [ "$_net_retries" -ge 20 ]; then
+          if [ -t 0 ] && [ "$YES_MODE" != "true" ]; then
+            printf 'Network unavailable for an extended period. Press Enter to keep retrying or Ctrl+C to exit: '
+            read -r _dummy 2>/dev/null || return 1
+            _net_retries=0
+          fi
+        fi
         continue
       fi
       if is_empty_log "$_log_file"; then

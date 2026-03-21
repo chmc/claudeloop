@@ -170,6 +170,121 @@ teardown() { :; }
   [ "$status" -eq 0 ]
 }
 
+# --- is_network_error() ---
+
+@test "is_network_error: nonexistent file returns 1" {
+  run is_network_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_network_error: clean output returns 1" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_network_error: detects 'connection refused'" {
+  printf 'Error: connection refused\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'connection reset'" {
+  printf 'connection reset by peer\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'connection error'" {
+  printf 'connection error: network socket disconnected\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'could not connect'" {
+  printf 'could not connect to api.anthropic.com\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects ETIMEDOUT" {
+  printf 'Error: ETIMEDOUT\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects ECONNREFUSED" {
+  printf 'Error: ECONNREFUSED\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects ECONNRESET" {
+  printf 'Error: ECONNRESET\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'socket hang up'" {
+  printf 'Error: socket hang up\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'fetch failed'" {
+  printf 'fetch failed: unable to reach server\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'dns resolution failed'" {
+  printf 'dns resolution failed for api.anthropic.com\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'ssl handshake error'" {
+  printf 'ssl handshake error occurred\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: detects 'network unreachable'" {
+  printf 'network unreachable\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_network_error: false positive — 'connected to server' does not trigger" {
+  printf 'Successfully connected to server\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_network_error: false positive — 'network configuration' does not trigger" {
+  printf 'The network configuration looks good\n' > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_network_error: empty file returns 1" {
+  : > "$_log"
+  run is_network_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_network_error: checks raw JSON log as fallback" {
+  # Formatted log has no network error
+  printf 'All good\n' > "$_log"
+  # But raw JSON has the error
+  local _raw_dir
+  _raw_dir=$(dirname "$_log")
+  printf '{"error":"ECONNRESET"}\n' > "${_raw_dir}/raw-phase-log.json"
+  run is_network_error "$_log"
+  [ "$status" -eq 0 ]
+  rm -f "${_raw_dir}/raw-phase-log.json"
+}
+
 # --- is_empty_log() ---
 
 @test "is_empty_log: missing file returns 0 (empty)" {

@@ -94,8 +94,17 @@ run_claude_pipeline() {
   # Wait for stream processor to finish (sentinel-based).
   # Note: bash 3.2's `wait PID` with set -m blocks for the entire pipeline job,
   # not just the specified process. The sentinel avoids this deadlock.
+  _sentinel_polls=0
+  _sentinel_max=${_SENTINEL_MAX_WAIT:-1800}
+  _sentinel_interval=${_SENTINEL_POLL:-1}
   while [ ! -f "$_sentinel" ]; do
-    sleep "${_SENTINEL_POLL:-1}"
+    sleep "$_sentinel_interval"
+    _sentinel_polls=$((_sentinel_polls + 1))
+    # Use awk for float-safe comparison (_sentinel_interval may be 0.1 in tests)
+    if awk "BEGIN{exit !(${_sentinel_polls} * ${_sentinel_interval} >= ${_sentinel_max})}" 2>/dev/null; then
+      log_verbose "run_claude_pipeline: sentinel poll timeout after ${_sentinel_max}s"
+      break
+    fi
   done
 
   # Wait for Claude CLI to write exit code (avoids race with stream processor exit)
@@ -345,6 +354,10 @@ ${_git_context}"
   # Reset raw log so has_write_actions() only sees events from this attempt
   : > "$raw_log"
 
+  # Capture pre-execution SHA for rollback on network failure
+  local _pre_exec_sha=""
+  _pre_exec_sha=$(git rev-parse HEAD 2>/dev/null || echo "")
+
   # Run Claude pipeline
   run_claude_pipeline "$prompt" "$phase_num" "$log_file" "$raw_log"
   local claude_exit="$_LAST_CLAUDE_EXIT"
@@ -359,5 +372,18 @@ ${_git_context}"
 
   # Rotate log and evaluate result
   rotate_phase_log "$log_file" "$phase_num"
-  evaluate_phase_result "$phase_num" "$claude_exit" "$attempt" "$log_file" "$raw_log"
+  if ! evaluate_phase_result "$phase_num" "$claude_exit" "$attempt" "$log_file" "$raw_log"; then
+    # Rollback partial edits on failure if Claude made write actions
+    # Only reset tracked files outside .claudeloop/ (infrastructure files are not Claude's edits)
+    # Don't use git clean (would remove untracked files like test state)
+    if [ -n "$_pre_exec_sha" ] && has_write_actions "$raw_log"; then
+      local _dirty_files
+      _dirty_files=$(git diff --name-only 2>/dev/null | grep -v '^\.claudeloop/' || true)
+      if [ -n "$_dirty_files" ]; then
+        log_verbose "execute_phase: rolling back partial edits to $_pre_exec_sha"
+        echo "$_dirty_files" | xargs git checkout "$_pre_exec_sha" -- 2>/dev/null || true
+      fi
+    fi
+    return 1
+  fi
 }

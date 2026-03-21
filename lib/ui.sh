@@ -235,6 +235,18 @@ print_quota_wait() {
   log_live "  Press Ctrl+C to stop and save state."
 }
 
+# Print a network error retry notice with exponential backoff info
+# Args: $1 - phase_num, $2 - retry_count, $3 - delay_seconds
+print_network_wait() {
+  local phase_num="$1"
+  local retry_count="$2"
+  local delay_secs="$3"
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}⚡ Phase $phase_num: Network error (retry $retry_count). Waiting ${delay_secs}s...${COLOR_RESET}"
+  log_live "⚡ Phase $phase_num: Network error (retry $retry_count). Waiting ${delay_secs}s..."
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
+  log_live "  Press Ctrl+C to stop and save state."
+}
+
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
   [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true
