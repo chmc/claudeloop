@@ -52,7 +52,8 @@ process_stream_json() {
       -v live_log="$live_log" \
       -v simple_mode="$simple_mode" \
       -v idle_timeout_s="$idle_timeout" \
-      -v override_term_height="${STREAM_TERM_HEIGHT:-0}" '
+      -v override_term_height="${STREAM_TERM_HEIGHT:-0}" \
+      -v tool_timeout_override="${_TOOL_TIMEOUT_OVERRIDE:-}" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -409,6 +410,19 @@ process_stream_json() {
     last_meaningful_epoch = get_epoch()
     meaningful_seen = 0
     tool_active = 0
+    tool_start_epoch = 0
+    tool_warn_2m = 0
+    tool_warn_5m = 0
+    tool_idle_hb = 0
+    # Tool-active timeout: fires even when tool_active > 0
+    if (tool_timeout_override != "") {
+      tool_timeout_s = tool_timeout_override + 0
+    } else if (idle_timeout_s + 0 > 0) {
+      tool_timeout_s = (idle_timeout_s < 600) ? 300 : int(idle_timeout_s / 2)
+    } else {
+      tool_timeout_s = 0
+    }
+    max_tool_hb = (tool_timeout_s > 0) ? int(tool_timeout_s / 2) : 0
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
@@ -461,6 +475,7 @@ process_stream_json() {
           tool_id = extract(seg, "id")
           if (tool_id != "" && (tool_id in shown_tools)) continue
           if (tool_id != "") shown_tools[tool_id] = 1
+          if (tool_active == 0) { tool_start_epoch = get_epoch(); tool_warn_2m = 0; tool_warn_5m = 0 }
           tool_active++
           clear_line()
           spinner_start = 0
@@ -522,6 +537,14 @@ process_stream_json() {
           if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
           exit
         }
+        # Tool-active timeout check (also in thinking-only path)
+        if (tool_timeout_s > 0 && tool_active > 0 && (now - last_meaningful_epoch) >= tool_timeout_s) {
+          clear_bottom_block()
+          printf "\n  [WARNING: tool timeout — %d seconds with no activity during tool execution]\n", tool_timeout_s > "/dev/stderr"
+          printf "[tool timeout after %ds]\n", tool_timeout_s >> log_file
+          if (live_log != "") printf "[%s] [tool timeout after %ds]\n", get_time(), tool_timeout_s >> live_log
+          exit
+        }
         if (spinner_start == 0) {
           clear_bottom_block()
           spinner_start = now
@@ -546,6 +569,7 @@ process_stream_json() {
       _su_id = extract(line, "id")
       if (_su_id == "" || !(_su_id in shown_tools)) {
         if (_su_id != "") shown_tools[_su_id] = 1
+        if (tool_active == 0) { tool_start_epoch = get_epoch(); tool_warn_2m = 0; tool_warn_5m = 0 }
         tool_active++
       }
       clear_line()
@@ -594,7 +618,7 @@ process_stream_json() {
       render_sticky()
 
     } else if (etype == "tool_result") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; tool_idle_hb = 0
       if (tool_active > 0) tool_active--
       clear_line()
       spinner_start = 0
@@ -738,6 +762,17 @@ process_stream_json() {
             exit
           }
         }
+        # Heartbeat-based tool-active timeout (matches heartbeat-based idle timeout pattern)
+        if (max_tool_hb > 0 && tool_active > 0) {
+          tool_idle_hb++
+          if (tool_idle_hb >= max_tool_hb) {
+            clear_bottom_block()
+            printf "\n  [WARNING: tool timeout — %d seconds with no activity during tool execution]\n", tool_timeout_s > "/dev/stderr"
+            printf "[tool timeout after %ds]\n", tool_timeout_s >> log_file
+            if (live_log != "") printf "[%s] [tool timeout after %ds]\n", get_time(), tool_timeout_s >> live_log
+            exit
+          }
+        }
       }
       # Wall-clock idle check (catches stuck sessions even without heartbeats)
       if (idle_timeout_s > 0 && tool_active == 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
@@ -746,6 +781,29 @@ process_stream_json() {
         printf "[idle timeout after %ds]\n", idle_timeout_s >> log_file
         if (live_log != "") printf "[%s] [idle timeout after %ds]\n", get_time(), idle_timeout_s >> live_log
         exit
+      }
+      # Tool-active timeout: fires even when tool_active > 0 (catches network death mid-tool)
+      if (tool_timeout_s > 0 && tool_active > 0 && (now - last_meaningful_epoch) >= tool_timeout_s) {
+        clear_bottom_block()
+        printf "\n  [WARNING: tool timeout — %d seconds with no activity during tool execution]\n", tool_timeout_s > "/dev/stderr"
+        printf "[tool timeout after %ds]\n", tool_timeout_s >> log_file
+        if (live_log != "") printf "[%s] [tool timeout after %ds]\n", get_time(), tool_timeout_s >> live_log
+        exit
+      }
+      # Periodic stuck-tool warnings (2min, 5min thresholds)
+      if (tool_active > 0 && tool_start_epoch > 0) {
+        _tool_elapsed = now - tool_start_epoch
+        if (_tool_elapsed >= 300 && !tool_warn_5m) {
+          tool_warn_5m = 1
+          clear_bottom_block()
+          printf "\n  [tool running %dm — may be stuck, Ctrl+C to interrupt]\n", int(_tool_elapsed / 60) > "/dev/stderr"
+          if (live_log != "") printf "[%s] [tool running %dm — may be stuck]\n", get_time(), int(_tool_elapsed / 60) >> live_log
+        } else if (_tool_elapsed >= 120 && !tool_warn_2m) {
+          tool_warn_2m = 1
+          clear_bottom_block()
+          printf "\n  [tool running %dm — still waiting]\n", int(_tool_elapsed / 60) > "/dev/stderr"
+          if (live_log != "") printf "[%s] [tool running %dm — still waiting]\n", get_time(), int(_tool_elapsed / 60) >> live_log
+        }
       }
       if (!got_result) {
         if (spinner_start == 0) {

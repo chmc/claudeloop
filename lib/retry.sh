@@ -35,6 +35,22 @@ is_permission_error() {
   grep -qiE "write permissions haven't been granted|approve the file write|approve.*write operation|permission to write|hasn't been granted" "$log_file"
 }
 
+# Check if a phase log contains network/connectivity error output
+# Checks both the formatted log and the raw JSON log (errors may only appear in one).
+# Args: $1 - path to log file
+# Returns: 0 if network error detected, 1 otherwise
+is_network_error() {
+  local log_file="$1"
+  local raw_file _net_pat
+  _net_pat="connection (refused|reset|error|closed)|could not connect|network.*(unreachable|error|timeout)|dns.*(fail|error|resolv)|ssl.*(error|handshake)|socket (timeout|hang up)|ETIMEDOUT|ECONNREFUSED|ECONNRESET|ENETUNREACH|EPIPE|fetch failed"
+  # Check formatted log
+  [ -f "$log_file" ] && grep -qiE "$_net_pat" "$log_file" && return 0
+  # Check raw JSON log (errors may only appear there)
+  raw_file="$(dirname "$log_file")/raw-phase-$(basename "$log_file" .log | sed 's/^phase-//').json"
+  [ -f "$raw_file" ] && grep -qiE "$_net_pat" "$raw_file" && return 0
+  return 1
+}
+
 # Check if a phase log is missing or empty (Claude produced no output)
 # Args: $1 - path to log file
 # Returns: 0 if empty/missing, 1 if non-empty

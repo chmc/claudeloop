@@ -292,3 +292,36 @@ _setup_epr_stubs() {
   [ "$wait_loop_line" -gt "$sentinel_done_line" ]
   [ "$wait_loop_line" -lt "$kill_line" ]
 }
+
+# --- run_claude_pipeline: sentinel poll timeout ---
+
+@test "run_claude_pipeline: sentinel poll has timeout guard" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # Verify the sentinel loop has a break condition based on elapsed time
+  grep -q '_sentinel_polls' "$src"
+  grep -q '_SENTINEL_MAX_WAIT' "$src"
+  # The timeout break must be inside the sentinel while loop
+  local sentinel_line break_line
+  sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
+  break_line=$(grep -n '_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
+  [ -n "$break_line" ]
+  [ "$break_line" -gt "$sentinel_line" ]
+}
+
+# --- execute_phase: pre-exec SHA rollback ---
+
+@test "execute_phase: captures pre-exec SHA and rolls back on failure with write actions" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # Verify pre-exec SHA capture exists before run_claude_pipeline
+  grep -q '_pre_exec_sha' "$src"
+  # Verify rollback logic exists (git checkout to pre-exec SHA)
+  grep -q 'git checkout "$_pre_exec_sha"' "$src"
+  # Verify rollback is gated on has_write_actions
+  grep -q 'has_write_actions.*raw_log' "$src"
+  # Verify rollback is inside the failure path (after evaluate_phase_result)
+  local eval_line rollback_line
+  eval_line=$(grep -n 'evaluate_phase_result' "$src" | tail -1 | cut -d: -f1)
+  rollback_line=$(grep -n 'rolling back partial edits' "$src" | head -1 | cut -d: -f1)
+  [ -n "$rollback_line" ]
+  [ "$rollback_line" -gt "$eval_line" ]
+}
