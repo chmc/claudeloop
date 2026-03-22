@@ -7,63 +7,19 @@
 [![GitHub release](https://img.shields.io/github/v/release/chmc/claudeloop)](https://github.com/chmc/claudeloop/releases)
 [![Sponsor](https://img.shields.io/github/sponsors/chmc?style=social)](https://github.com/sponsors/chmc)
 
-> **Fresh context for every phase.** ClaudeLoop splits complex projects into phases and gives each one a brand-new Claude CLI instance — so phase 10 is as sharp as phase 1.
+> **Ship complex AI coding projects that actually finish.** ClaudeLoop splits your plan into phases and gives each one a fresh Claude instance — so phase 10 is as sharp as phase 1.
 
 <p align="center">
-  <img src="assets/demo-dryrun.gif" alt="ClaudeLoop dry-run demo" width="700">
+  <img src="assets/demo-dryrun.gif" alt="ClaudeLoop plan validation" width="700">
 </p>
 
-## The Problem
+## Why ClaudeLoop?
 
-Long-running AI coding sessions hit a wall: context fills up, the model forgets earlier work, and quality drops. Other tools run everything in one session and hope for the best.
-
-ClaudeLoop takes a different approach: your plan is split into phases, each phase gets a **fresh Claude instance**, and progress is saved between phases. If something fails, smart retries with escalating strategies handle it automatically.
-
-<p align="center">
-  <img src="assets/demo-execution.gif" alt="ClaudeLoop execution demo" width="700">
-</p>
-
-## Features
-
-🔄 **Fresh context every phase** — Each phase spawns a new Claude CLI instance. No context window degradation.
-
-🔁 **Smart retries** — Exponential backoff with automatic strategy rotation: full → stripped → targeted error-focused prompts.
-
-📋 **Dependency graph** — Phases declare dependencies. ClaudeLoop resolves execution order automatically.
-
-📺 **Live monitoring** — `claudeloop --monitor` from a second terminal. Spinner shows todo/task progress.
-
-✅ **Verification** — `--verify` spawns a read-only Claude to check each phase's output.
-
-🔧 **Auto-refactor** — `--refactor` runs automatic code quality passes after each phase.
-
-🤖 **AI plan decomposition** — `--ai-parse` turns free-form notes into structured phases.
-
-🛡️ **Safe interrupts** — Ctrl+C saves progress. `--continue` resumes exactly where you left off.
-
-📊 **Replay report** — Auto-generated HTML report at `.claudeloop/replay.html`. Timeline, retry filmstrip with prompt diffs, time-travel slider. Updates live during execution.
-
-## See It In Action
-
-**Todo tracking** — Claude's task lists render as an interactive panel:
-
-<p align="center">
-  <img src="assets/demo-todos.gif" alt="Todo tracking demo" width="700">
-</p>
-
-**Verification** — a read-only Claude checks each phase's work:
-
-<p align="center">
-  <img src="assets/demo-verify.gif" alt="Verification demo" width="700">
-</p>
-
-**Auto-refactor** — automatic code quality improvements after each phase:
-
-<p align="center">
-  <img src="assets/demo-refactor.gif" alt="Auto-refactor demo" width="700">
-</p>
+Long AI coding sessions hit a wall: context fills up, the model forgets earlier work, and quality drops. ClaudeLoop takes a different approach — each phase gets a **brand-new Claude CLI instance** with fresh context, and progress is saved between phases. If something fails, it retries automatically with escalating strategies.
 
 ## Install
+
+Requires [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) and [git](https://git-scm.com/). Pure POSIX shell — zero runtime dependencies.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
@@ -92,44 +48,81 @@ Implement the main business logic.
 Write tests for all core functionality.
 ```
 
-**2. Validate** your plan:
-
-```sh
-claudeloop --dry-run
-```
-
-**3. Execute:**
+**2. Run it:**
 
 ```sh
 claudeloop
 ```
 
+> **Tip:** Run `claudeloop --dry-run` first to validate your plan without executing.
+
+<p align="center">
+  <img src="assets/demo-execution.gif" alt="ClaudeLoop execution" width="700">
+</p>
+
+## Features
+
+### Execution
+
+**Fresh context every phase** — Each phase spawns a new Claude CLI instance. No context window degradation, no matter how many phases you have.
+
+**Dependency graph** — Phases declare dependencies (`**Depends on:** Phase 1, Phase 3`). ClaudeLoop resolves execution order automatically.
+
+**Smart retries** — Automatic strategy rotation when a phase fails: early retries use the full prompt, later retries strip boilerplate and focus on the specific error. Quota-aware delays (15 min) for rate limits.
+
+**Network resilience** — Detects network failures, rolls back partial file changes, and resumes automatically.
+
+**AI plan decomposition** — `--ai-parse` turns free-form notes into structured phases. Write bullet points, get an executable plan.
+
+### Quality
+
+**Verification** — `--verify` spawns a fresh read-only Claude to check each phase's output with verdict-based pass/fail.
+
+**Auto-refactor** — `--refactor` runs automatic code quality passes after each phase. Rolls back on failure to preserve your work.
+
+**Safe interrupts** — Press Ctrl+C at any time. Progress is saved and `--continue` resumes exactly where you left off. Edit `PLAN.md` between runs — ClaudeLoop detects changes and carries forward progress.
+
+### Observability
+
+**Live monitoring** — `claudeloop --monitor` from a second terminal. Spinner shows real-time todo and task progress.
+
+<p align="center">
+  <img src="assets/demo-todos.gif" alt="Live todo tracking" width="700">
+</p>
+
+**Replay report** — Auto-generated self-contained HTML at `.claudeloop/replay.html`. Updates live during execution — just refresh your browser.
+
+- **Execution timeline** — phase overview with status, duration, cost, and token usage
+- **Retry filmstrip** — side-by-side attempt comparison with prompt diffs
+- **Time-travel slider** — scrub through execution history
+- **Tool usage** — which tools Claude called and how often
+- **File impact** — which files were touched per phase
+- **Git commits** — commits associated with each phase
+
+Works on archived runs too. Regenerate with `claudeloop --replay`.
+
 ## How It Works
 
 ```mermaid
 flowchart LR
-    A["📄 Parse PLAN.md"] --> B["🔍 Find next phase"]
-    B --> C["🚀 Spawn fresh Claude"]
-    C --> D{"✅ Success?"}
-    D -- Yes --> E["💾 Save progress"]
-    D -- No --> F["🔁 Retry with backoff"]
-    F --> C
-    E --> B
-    E -- "All done" --> G["🎉 Complete"]
+    A["Parse PLAN.md"] --> B["Find next phase"]
+    B --> C["Spawn fresh Claude"]
+    C --> D{"Success?"}
+    D -- Yes --> E["Verify & refactor"]
+    E --> F["Save progress"]
+    D -- No --> G["Retry with\nstrategy rotation"]
+    G --> C
+    F --> B
+    F -- "All done" --> H["Complete"]
 ```
 
-1. Parse `PLAN.md` — extract phases and dependencies
+1. Parse `PLAN.md` into phases with dependencies
 2. Find the next runnable phase (dependencies met, not yet completed)
-3. Spawn a fresh `claude` CLI instance with the phase description
-4. Optionally verify with a fresh read-only Claude instance (`--verify`)
-5. Optionally auto-refactor code structure (`--refactor`)
-6. Save result to `PROGRESS.md`
-7. On failure: retry with exponential backoff and automatic strategy rotation — early retries use the full prompt, later retries use simpler, more focused prompts targeting the specific error
-8. Repeat until all phases complete
-
-Press **Ctrl+C** at any time — progress is saved and you can resume with `--continue`.
-
-If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it reports added/removed/renumbered phases and carries forward progress by matching phase titles.
+3. Spawn a fresh `claude` CLI instance with the phase prompt
+4. On success: optionally verify (`--verify`) then refactor (`--refactor`)
+5. Save result to `PROGRESS.md`
+6. On failure: retry with strategy rotation (full → stripped → targeted error-focused)
+7. Repeat until all phases complete or Ctrl+C
 
 ---
 
@@ -146,13 +139,13 @@ If you edit `PLAN.md` between runs, ClaudeLoop detects changes on resume: it rep
 --recover-progress   Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
 --force              Kill any running instance and take over (preserves progress)
 --dry-run            Validate plan without executing
---max-retries <n>    Max retry attempts per phase (default: 10)
+--max-retries <n>    Max retry attempts per phase (default: 15)
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
---max-phase-time <s> Kill claude after N seconds per phase, then retry (0=disabled, default 1800)
+--max-phase-time <s> Kill claude after N seconds per phase, then retry (default: 0, disabled)
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
---verify             Verify each phase with a fresh read-only Claude instance using verdict-based checking (VERIFICATION_PASSED/FAILED keywords, doubles API calls)
---refactor           Auto-refactor code after each phase (default 20 attempts, configurable)
+--verify             Verify each phase with a fresh read-only Claude instance
+--refactor           Auto-refactor code after each phase
 --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
@@ -185,7 +178,7 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 |---|---|---|
 | `PLAN_FILE` | `--plan` | `PLAN.md` |
 | `PROGRESS_FILE` | `--progress` | `.claudeloop/PROGRESS.md` |
-| `MAX_RETRIES` | `--max-retries` | `10` |
+| `MAX_RETRIES` | `--max-retries` | `15` |
 | `SIMPLE_MODE` | `--simple` | `false` |
 | `SKIP_PERMISSIONS` | `--dangerously-skip-permissions` | `false` |
 | `BASE_DELAY` | — | `3` |
@@ -203,7 +196,7 @@ Example `.claudeloop/.claudeloop.conf`:
 
 ```
 PLAN_FILE=my-plan.md
-MAX_RETRIES=10
+MAX_RETRIES=15
 SKIP_PERMISSIONS=true
 ```
 
@@ -304,15 +297,6 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 
 ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/replay.html` during execution. Open it in any browser to inspect your run — no server or external dependencies required.
 
-**What it shows:**
-
-- **Execution timeline** — phase-by-phase overview with status, duration, cost, and token usage
-- **Retry filmstrip** — when a phase retries, see each attempt side-by-side with prompt diffs highlighting what changed between retries
-- **Time-travel slider** — scrub through execution history to see the state of the run at any point in time
-- **Tool usage** — which tools Claude called (Edit, Write, Read, etc.) and how often
-- **File impact** — which files were touched during each phase
-- **Git commits** — commits associated with each phase
-
 The report updates automatically as phases complete — just refresh your browser. It also works on archived runs (`.claudeloop/archive/*/replay.html`).
 
 To regenerate `replay.html` on demand (e.g., after updating the template):
@@ -357,6 +341,23 @@ Disable auto-archive with `_CLAUDELOOP_NO_AUTO_ARCHIVE=1`.
 
 - If `.claudeloop/ai-parsed-plan.md` exists: `[r]ecover` (recommended) switches to the AI-parsed plan and reconstructs progress from logs automatically, `[c]ontinue`, or `[a]bort`
 - If no AI-parsed plan exists: `[c]ontinue` or `[a]bort` (with `--reset` hint)
+
+</details>
+
+<details>
+<summary><strong>See It In Action</strong></summary>
+
+**Verification** — a read-only Claude checks each phase's work:
+
+<p align="center">
+  <img src="assets/demo-verify.gif" alt="Verification demo" width="700">
+</p>
+
+**Auto-refactor** — automatic code quality improvements after each phase:
+
+<p align="center">
+  <img src="assets/demo-refactor.gif" alt="Auto-refactor demo" width="700">
+</p>
 
 </details>
 
