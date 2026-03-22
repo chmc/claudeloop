@@ -101,6 +101,10 @@ claudeloop
 
 Works on archived runs too. Regenerate with `claudeloop --replay`.
 
+<p align="center">
+  <img src="assets/screenshot-replay.png" alt="Replay report overview" width="700">
+</p>
+
 ## How It Works
 
 ```mermaid
@@ -110,7 +114,7 @@ flowchart LR
     C --> D{"Success?"}
     D -- Yes --> E["Verify & refactor"]
     E --> F["Save progress"]
-    D -- No --> G["Retry with\nstrategy rotation"]
+    D -- No --> G["Retry with strategy rotation"]
     G --> C
     F --> B
     F -- "All done" --> H["Complete"]
@@ -296,6 +300,10 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 <summary><strong>Replay Report</strong></summary>
 
 ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/replay.html` during execution. Open it in any browser to inspect your run — no server or external dependencies required.
+
+<p align="center">
+  <img src="assets/screenshot-replay.png" alt="Replay report overview" width="700">
+</p>
 
 The report updates automatically as phases complete — just refresh your browser. It also works on archived runs (`.claudeloop/archive/*/replay.html`).
 
