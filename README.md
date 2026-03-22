@@ -10,7 +10,7 @@
 > **Ship complex AI coding projects that actually finish.** ClaudeLoop splits your plan into phases and gives each one a fresh Claude instance — so phase 10 is as sharp as phase 1.
 
 <p align="center">
-  <img src="assets/demo-dryrun.gif" alt="ClaudeLoop plan validation" width="700">
+  <img src="assets/demo-execution.gif" alt="ClaudeLoop executing a 3-phase plan with live progress" width="700">
 </p>
 
 ## Why ClaudeLoop?
@@ -55,10 +55,6 @@ claudeloop
 ```
 
 > **Tip:** Run `claudeloop --dry-run` first to validate your plan without executing.
-
-<p align="center">
-  <img src="assets/demo-execution.gif" alt="ClaudeLoop execution" width="700">
-</p>
 
 ## Features
 
@@ -107,17 +103,15 @@ Works on archived runs too. Regenerate with `claudeloop --replay`.
 
 ## How It Works
 
-```mermaid
-flowchart LR
-    A["Parse PLAN.md"] --> B["Find next phase"]
-    B --> C["Spawn fresh Claude"]
-    C --> D{"Success?"}
-    D -- Yes --> E["Verify & refactor"]
-    E --> F["Save progress"]
-    D -- No --> G["Retry with strategy rotation"]
-    G --> C
-    F --> B
-    F -- "All done" --> H["Complete"]
+```
+Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
+                     ▲                                │
+                     │                          Yes   │   No
+                     │                           ▼    │    ▼
+                Save progress ◄─ Verify & refactor    Retry
+                     │                                  │
+                     ▼                                  │
+                  Complete                         ─────┘
 ```
 
 1. Parse `PLAN.md` into phases with dependencies
@@ -303,6 +297,24 @@ ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/
 
 <p align="center">
   <img src="assets/screenshot-replay.png" alt="Replay report overview" width="700">
+</p>
+
+**File impact** — see which files were touched across all phases:
+
+<p align="center">
+  <img src="assets/screenshot-replay-files.png" alt="Replay file impact view" width="700">
+</p>
+
+**Tool usage** — drill into each phase to see tool calls and costs:
+
+<p align="center">
+  <img src="assets/screenshot-replay-tools.png" alt="Replay tool usage detail" width="700">
+</p>
+
+**Time travel** — scrub through execution history with playback controls:
+
+<p align="center">
+  <img src="assets/screenshot-replay-timetravel.png" alt="Replay time travel view" width="700">
 </p>
 
 The report updates automatically as phases complete — just refresh your browser. It also works on archived runs (`.claudeloop/archive/*/replay.html`).

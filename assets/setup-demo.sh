@@ -47,20 +47,13 @@ REFACTOR_PHASES=false
 SKIP_PERMISSIONS=true
 CONF
 
-# Copy fake-claude custom outputs
-cp "$SCRIPT_DIR/demo-execution-output/custom_output_1" "$FAKE_DIR/custom_output_1"
-cp "$SCRIPT_DIR/demo-execution-output/custom_output_2" "$FAKE_DIR/custom_output_2"
-cp "$SCRIPT_DIR/demo-execution-output/custom_output_3" "$FAKE_DIR/custom_output_3"
-printf 'custom\n' > "$FAKE_DIR/scenario"
-
-# Put fake-claude on PATH
+# Put our custom fake-claude on PATH
 FAKE_CLAUDE_BIN=$(mktemp -d)
-cp "$SCRIPT_DIR/../tests/fake_claude" "$FAKE_CLAUDE_BIN/claude"
+cp "$SCRIPT_DIR/fake-claude-execution" "$FAKE_CLAUDE_BIN/claude"
 chmod +x "$FAKE_CLAUDE_BIN/claude"
 
 # Output eval-able commands
 echo "cd $DEMO_DIR"
 echo "export FAKE_CLAUDE_DIR=$FAKE_DIR"
 echo "export PATH=$FAKE_CLAUDE_BIN:\$PATH"
-echo "export FAKE_CLAUDE_THINK=0.5"
 echo "export PATH=$CLAUDELOOP_DIR:\$PATH"

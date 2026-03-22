@@ -2,15 +2,22 @@ Output assets/demo-execution.gif
 Set Shell "bash"
 Set FontSize 20
 Set Width 1200
-Set Height 600
+Set Height 700
 Set Theme "Catppuccin Mocha"
 Set Padding 20
+Set TypingSpeed 35ms
 
 Hide
-Type "bash assets/run-demo.sh"
+Type "source assets/setup-demo-env.sh"
 Enter
 Sleep 1s
+Type "clear"
+Enter
+Sleep 0.3s
 Show
 
-Sleep 10s
+Type "claudeloop"
+Enter
+Sleep 14s
+Sleep 4s
 Screenshot assets/screenshot-completion.png
