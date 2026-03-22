@@ -28,6 +28,10 @@ Every design decision must trace to a constraint from exploration or an explicit
 - For each edge case, state the scenario and handling (not "handle errors" — say what error, what happens)
 - State what is NOT changing and why
 
+### Multi-angle review (mandatory)
+
+Always launch 2-3 Plan agents with different critique perspectives during planning, even for seemingly simple fixes. Never skip this step. Thoroughness over speed in planning.
+
 **One review pass:** Single fact-checking pass per file — verify function signatures exist, callers are accounted for, tests are updated. If it finds issues, the exploration was insufficient — improve exploration, don't add more review rounds.
 
 ## Continuous improvement (mandatory)
@@ -176,6 +180,8 @@ test in `test_progress.sh` enforces this. Per-attempt fields must also be added 
 - `/release beta|stable` — Trigger GitHub release workflow
 - `/verify` — Verify claudeloop after code changes (smoke + GUI screenshots)
 - `/wt create|rm|list` — Manage git worktrees for parallel Claude Code sessions
+
+**Skill-first routing (mandatory):** When the user requests an operation that matches a defined skill (release, rebase, verify, etc.), always invoke the skill — never perform the equivalent operation manually. Compound requests like "promote and release" must decompose into skill invocations (`/rebase promote` then `/release stable`), not ad-hoc commands.
 
 ## Worktree workflow
 
