@@ -5,11 +5,11 @@
 
 ## Context
 
-When the user presses Ctrl+C during claudeloop execution, `handle_interrupt()` calls `write_progress()` which synchronously runs `generate_flight_recorder()`. The flight recorder parses all session logs and assembles HTML, taking 40+ seconds on large runs. This makes the interrupt feel unresponsive.
+When the user presses Ctrl+C during claudeloop execution, `handle_interrupt()` calls `write_progress()` which synchronously runs `generate_replay()`. The replay report parses all session logs and assembles HTML, taking 40+ seconds on large runs. This makes the interrupt feel unresponsive.
 
 ## Decision
 
-Skip the synchronous flight recorder inside `write_progress()` during interrupt by passing `skip_recorder` as a third argument (backward-compatible — all existing callers pass 2 args). Then fork `generate_flight_recorder` as a detached background process with SIGHUP protection (`trap '' HUP` in subshell) and full fd isolation (`</dev/null >/dev/null 2>&1 &`).
+Skip the synchronous replay generation inside `write_progress()` during interrupt by passing `skip_recorder` as a third argument (backward-compatible — all existing callers pass 2 args). Then fork `generate_replay` as a detached background process with SIGHUP protection (`trap '' HUP` in subshell) and full fd isolation (`</dev/null >/dev/null 2>&1 &`).
 
 The background process reads everything from disk (PROGRESS.md, session logs, HTML template), so it sees correct state after `write_progress` persists it. No spinner is needed — without the recorder, the save path is sub-millisecond.
 
@@ -17,7 +17,7 @@ The background process reads everything from disk (PROGRESS.md, session logs, HT
 
 **Positive:**
 - Interrupt shutdown drops from 40+ seconds to < 200ms
-- Flight recorder is still generated (in background), so replay.html stays up-to-date
+- Replay report is still generated (in background), so replay.html stays up-to-date
 - No changes to normal (non-interrupt) code path
 
 **Negative:**

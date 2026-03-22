@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Flight Recorder — Extraction Parsers
+# Recorder — extraction parsers for Replay reports
 # Individual extraction functions for log files and raw JSON artifacts.
 # Sourced by lib/recorder.sh.
 

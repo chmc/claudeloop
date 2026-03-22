@@ -13,7 +13,7 @@ update_fail_reason() {
   _prev_reason=$(get_phase_fail_reason "$_ufr_phase")
   _prev_consec=$(get_phase_consec_fail "$_ufr_phase")
   phase_set FAIL_REASON "$_ufr_phase" "$_ufr_reason"
-  # Also persist per-attempt for flight recorder
+  # Also persist per-attempt for replay
   local _ufr_attempt
   _ufr_attempt=$(get_phase_attempts "$_ufr_phase")
   [ -n "$_ufr_attempt" ] && phase_set ATTEMPT_FAIL_REASON "$_ufr_phase" "$_ufr_reason" "$_ufr_attempt"
@@ -309,7 +309,7 @@ execute_phase() {
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
   attempt=$(get_phase_attempts "$phase_num")
-  # Compute and persist per-attempt strategy for flight recorder
+  # Compute and persist per-attempt strategy for replay
   local _ep_strategy="standard"
   if [ "$attempt" -gt 1 ]; then
     local _ep_fail_reason _ep_consec
@@ -367,7 +367,7 @@ ${_git_context}"
   printf '=== EXECUTION END exit_code=%s duration=%ss time=%s ===\n' \
     "$claude_exit" "$duration" "$(date '+%Y-%m-%dT%H:%M:%S')" >> "$log_file"
 
-  # Archive per-attempt raw.json for flight recorder (before rotation/overwrite)
+  # Archive per-attempt raw.json for replay (before rotation/overwrite)
   cp "$raw_log" ".claudeloop/logs/phase-${phase_num}.attempt-${attempt}.raw.json"
 
   # Rotate log and evaluate result

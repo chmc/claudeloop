@@ -311,7 +311,7 @@ PROGRESS
   # Remove PROGRESS.md but keep .claudeloop dir
   rm -f "$TEST_DIR/.claudeloop/PROGRESS.md"
   _cl --replay
-  # Should warn but still succeed (generate_flight_recorder handles empty data)
+  # Should warn but still succeed (generate_replay handles empty data)
   echo "$output" | grep -q "No PROGRESS.md found"
 }
 

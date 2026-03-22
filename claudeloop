@@ -244,8 +244,8 @@ handle_interrupt() {
     write_progress "$PROGRESS_FILE" "$PLAN_FILE" "skip_recorder"
     # Fork recorder as detached background process (reads from disk)
     # trap '' HUP: prevent SIGHUP on macOS where /bin/sh is zsh
-    if command -v generate_flight_recorder >/dev/null 2>&1; then
-      ( trap '' HUP; generate_flight_recorder "$(dirname "$PROGRESS_FILE")" ) </dev/null >/dev/null 2>&1 &
+    if command -v generate_replay >/dev/null 2>&1; then
+      ( trap '' HUP; generate_replay "$(dirname "$PROGRESS_FILE")" ) </dev/null >/dev/null 2>&1 &
     fi
   fi
 
@@ -1056,7 +1056,7 @@ main() {
     exit 0
   fi
 
-  # Replay mode: regenerate flight recorder HTML and exit
+  # Replay mode: regenerate replay HTML and exit
   if [ "$REPLAY_MODE" = "true" ]; then
     local replay_dir=".claudeloop"
     if [ -n "$REPLAY_ARCHIVE" ]; then
@@ -1074,7 +1074,7 @@ main() {
     if [ ! -f "$replay_dir/PROGRESS.md" ]; then
       print_warning "No PROGRESS.md found in $replay_dir — report will be empty"
     fi
-    _RECORDER_VERBOSE=true generate_flight_recorder "$replay_dir"
+    _RECORDER_VERBOSE=true generate_replay "$replay_dir"
     if [ -f "$replay_dir/replay.html" ]; then
       print_success "Generated $replay_dir/replay.html"
     else

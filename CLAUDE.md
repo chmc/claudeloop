@@ -123,7 +123,7 @@ done
 | `lib/refactor.sh` | `build_refactor_prompt`, `verify_refactor`, `refactor_phase`, `run_refactor_if_needed` — opt-in auto-refactoring with git rollback |
 | `lib/execution.sh` | `execute_phase`, `run_claude_pipeline`, `evaluate_phase_result`, `run_adaptive_verification`, `update_fail_reason` |
 | `lib/archive.sh` | `archive_current_run`, `list_archives`, `restore_archive`, `generate_archive_metadata`, `is_run_complete`, `prompt_archive_completed_run` |
-| `lib/recorder.sh` | `rec_load_progress`, `inject_and_write_html`, `generate_flight_recorder`, `assemble_recorder_json` |
+| `lib/recorder.sh` | `rec_load_progress`, `inject_and_write_html`, `generate_replay`, `assemble_recorder_json` |
 | `lib/recorder_overview.sh` | `rec_extract_run_overview`, `_rec_overview_from_metadata`, `_rec_aggregate_sessions` |
 | `lib/recorder_parsers.sh` | `rec_extract_session`, `rec_extract_tools`, `rec_extract_files`, `rec_extract_tool_calls`, `rec_verify_verdict` |
 | `lib/release_notes.sh` | `format_release_notes` |

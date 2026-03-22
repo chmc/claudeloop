@@ -62,7 +62,7 @@ Map changed files to functional categories. Pick the row(s) that match, then fol
 | **Monitor / live log** | Live log output, `--monitor` mode | Stub + `--monitor` in 2nd terminal | live.log updates, real-time streaming |
 | **Plan changes / resume** | Plan change detection, orphan recovery | Stub with pre-existing PROGRESS.md | Orphan detection, progress recovery |
 | **Orchestration / main loop** | Arg parsing, execution flow, lock files, config | Depends on area — pick from above | At minimum: `--dry-run` output + stub run observation |
-| **Flight recorder / HTML template** | replay-template.html, recorder.sh, recorder_parsers.sh, recorder_overview.sh | Browser JS test (generate replay.html → inject assertions → open Safari → screenshot) | Sidebar state, phase rendering, expand/collapse, time travel, tool display |
+| **Replay / HTML template** | replay-template.html, recorder.sh, recorder_parsers.sh, recorder_overview.sh | Browser JS test (generate replay.html → inject assertions → open Safari → screenshot) | Sidebar state, phase rendering, expand/collapse, time travel, tool display |
 
 **Priority rule:** Multiple matches → use most demanding mode: GUI > stub+failures > stub > dry-run.
 
@@ -224,7 +224,7 @@ After running, verify:
 
 ### Browser JS test protocol
 
-For flight recorder / HTML template changes. Generate a replay file, inject test assertions, and screenshot the result.
+For Replay / HTML template changes. Generate a replay file, inject test assertions, and screenshot the result.
 
 ```sh
 # 1. Load browser test fixtures (baseline — extend or replace to match the specific change)
@@ -236,14 +236,15 @@ cp -r tests/fixtures/verify-browser/* "$run_dir/"
 # 2. Generate replay HTML via recorder libs (POSIX sh, not zsh)
 orig_dir="$PWD"
 CLAUDELOOP_DIR="$orig_dir" sh -c '
+  . "$CLAUDELOOP_DIR/lib/parser.sh"
   . "$CLAUDELOOP_DIR/lib/recorder.sh"
-  generate_flight_recorder "'"$run_dir"'" "'"$tmpdir/replay.html"'"
+  generate_replay "'"$run_dir"'"
 '
 
 # 3. Verify embedded JSON with python3
 python3 -c "
 import re, json, sys
-html = open('$tmpdir/replay.html').read()
+html = open('$run_dir/replay.html').read()
 m = re.search(r'const DATA = ({.*?});', html, re.DOTALL)
 if not m:
     print('FAIL: no DATA found'); sys.exit(1)
@@ -260,7 +261,7 @@ print('JSON verification: PASS')
 #    IMPORTANT: Tailor assertions to the specific change being verified.
 #    Generic "elements exist" checks are insufficient — assert the behavior that changed.
 python3 -c "
-html = open('$tmpdir/replay.html').read()
+html = open('$run_dir/replay.html').read()
 # Example assertions — REPLACE with assertions specific to the change under test
 test_script = '''
 <script>
@@ -273,11 +274,16 @@ window.addEventListener('load', function() {
   }
 
   // --- Replace these with change-specific assertions ---
-  var sidebar = document.querySelector('.sidebar, [class*=sidebar]');
-  assert('Sidebar exists', !!sidebar);
+  var sidebarItems = document.querySelectorAll('.phase-item.overview-item');
+  assert('Sidebar nav items exist', sidebarItems.length >= 3);
 
-  var phases = document.querySelectorAll('[class*=phase]');
-  assert('Phase elements rendered', phases.length >= 1);
+  var ttNav = Array.from(sidebarItems).find(function(el) {
+    return el.textContent.indexOf('Time Travel') !== -1;
+  });
+  assert('Time Travel nav exists', !!ttNav);
+
+  var phaseItems = document.querySelectorAll('.phase-item:not(.overview-item)');
+  assert('Phase items rendered', phaseItems.length >= 1);
   // --- End assertions ---
 
   var allPass = results.every(function(r) { return r.startsWith('PASS'); });
@@ -290,12 +296,12 @@ window.addEventListener('load', function() {
 </script>
 '''
 html = html.replace('</body>', test_script + '</body>')
-open('$tmpdir/replay.html', 'w').write(html)
+open('$run_dir/replay.html', 'w').write(html)
 print('Assertions injected')
 "
 
 # 5. Open in Safari, screenshot, read with Read tool
-open -a Safari "$tmpdir/replay.html"
+open -a Safari "$run_dir/replay.html"
 sleep 3
 screencapture -x "$SESSION/screenshot-browser-test.png"
 
@@ -310,6 +316,8 @@ rm -rf "$tmpdir"
 - Must use `sh -c` not `zsh` for recorder sourcing (POSIX project)
 - Assertions must be tailored to the specific change — generic "elements exist" checks are insufficient
 - `.raw.json` files must exist for each phase or the recorder will skip session extraction
+- `lib/recorder.sh` depends on `lib/parser.sh` for `phase_to_var`, `is_progress_phase_header` etc. — always source parser.sh first in standalone contexts
+- `generate_replay` takes ONE argument (`$run_dir`) and writes to `$run_dir/replay.html` — do not pass an output path
 
 ## Step 4: Record observation and investigate
 

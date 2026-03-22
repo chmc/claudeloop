@@ -1,10 +1,10 @@
-# Flight Recorder Specification
+# Replay Specification
 
-Single source of truth for the flight recorder feature. All phases reference this document for data formats, JSON schema, and edge case handling.
+Single source of truth for the replay report feature. All phases reference this document for data formats, JSON schema, and edge case handling.
 
 ## Overview
 
-The flight recorder reconstructs execution data from existing `.claudeloop/` artifacts into a self-contained HTML report at `.claudeloop/replay.html`. No new recording infrastructure — all data already exists.
+The replay report reconstructs execution data from existing `.claudeloop/` artifacts into a self-contained HTML report at `.claudeloop/replay.html`. No new recording infrastructure — all data already exists.
 
 ## Data Sources
 

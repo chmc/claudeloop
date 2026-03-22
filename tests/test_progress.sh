@@ -1931,12 +1931,12 @@ EOF
   [ "$(get_phase_attempt_fail_reason 2 2)" = "verification_failed" ]
 }
 
-@test "write_progress: skip_recorder arg skips flight recorder generation" {
+@test "write_progress: skip_recorder arg skips replay generation" {
   init_progress "$TEST_DIR/PROGRESS.md"
 
-  # Mock generate_flight_recorder
-  generate_flight_recorder() { touch "$TEST_DIR/recorder_marker"; }
-  export -f generate_flight_recorder
+  # Mock generate_replay
+  generate_replay() { touch "$TEST_DIR/recorder_marker"; }
+  export -f generate_replay
 
   # With skip_recorder — should NOT call recorder
   write_progress "$TEST_DIR/PROGRESS.md" "$TEST_DIR/PLAN.md" "skip_recorder"

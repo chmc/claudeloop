@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Flight Recorder Library
+# Recorder library — generates Replay reports
 # Extracts execution data from .claudeloop/ artifacts and produces JSON.
 # All functions use _REC_ prefix for their own variables to avoid polluting
 # the global PHASE_* namespace used by the main orchestrator.
@@ -190,7 +190,7 @@ inject_and_write_html() {
 # Assemble JSON and inject into HTML template to produce replay.html.
 # Silent on failure — must never break the execution loop.
 # Args: $1 - run directory (e.g. ".claudeloop")
-generate_flight_recorder() {
+generate_replay() {
   local run_dir="$1"
   local json_tmp="${run_dir}/recorder.json.tmp"
   local output_html="${run_dir}/replay.html"
@@ -202,7 +202,7 @@ generate_flight_recorder() {
 
   if [ "$_verbose" = "true" ]; then
     _ts=$(date '+%H:%M:%S')
-    printf '[%s] Generating flight recorder...\n' "$_ts" >&2
+    printf '[%s] Generating replay...\n' "$_ts" >&2
 
     # Load progress to count phases for status message
     rec_load_progress "$run_dir" 2>/dev/null

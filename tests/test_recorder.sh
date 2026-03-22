@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # bats file_tags=recorder
 
-# Tests for lib/recorder.sh — flight recorder JSON extraction
+# Tests for lib/recorder.sh — replay JSON extraction
 
 CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 
@@ -564,17 +564,17 @@ EOF
   grep -q '\\u003c' "$output_html"
 }
 
-# --- generate_flight_recorder tests ---
+# --- generate_replay tests ---
 
-@test "generate_flight_recorder: end-to-end with fixture data produces valid HTML" {
+@test "generate_replay: end-to-end with fixture data produces valid HTML" {
   run_dir=$(_create_fixtures)
 
-  generate_flight_recorder "$run_dir"
+  generate_replay "$run_dir"
   [ -f "$run_dir/replay.html" ]
 
   # Should contain HTML structure
   grep -q '<!DOCTYPE html>' "$run_dir/replay.html"
-  grep -q 'ClaudeLoop Flight Recorder' "$run_dir/replay.html"
+  grep -q 'ClaudeLoop Replay' "$run_dir/replay.html"
 
   # Should contain embedded JSON with phase data
   grep -q '"phases":\[' "$run_dir/replay.html"
@@ -582,39 +582,39 @@ EOF
   grep -q '"version":1' "$run_dir/replay.html"
 }
 
-@test "generate_flight_recorder: cleans up temp JSON file" {
+@test "generate_replay: cleans up temp JSON file" {
   run_dir=$(_create_fixtures)
-  generate_flight_recorder "$run_dir"
+  generate_replay "$run_dir"
   [ ! -f "$run_dir/recorder.json.tmp" ]
 }
 
-@test "generate_flight_recorder: silent on failure with invalid run dir" {
-  run generate_flight_recorder "$TEST_DIR/nonexistent"
+@test "generate_replay: silent on failure with invalid run dir" {
+  run generate_replay "$TEST_DIR/nonexistent"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "generate_flight_recorder: shows progress when _RECORDER_VERBOSE is set" {
+@test "generate_replay: shows progress when _RECORDER_VERBOSE is set" {
   run_dir=$(_create_fixtures)
-  _RECORDER_VERBOSE=true run generate_flight_recorder "$run_dir"
+  _RECORDER_VERBOSE=true run generate_replay "$run_dir"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Generating flight recorder"* ]]
+  [[ "$output" == *"Generating replay"* ]]
   [[ "$output" == *"Assembled data for 2 phases"* ]]
   [[ "$output" == *"Writing HTML"* ]]
 }
 
-@test "generate_flight_recorder: verbose shows elapsed time" {
+@test "generate_replay: verbose shows elapsed time" {
   run_dir=$(_create_fixtures)
-  _RECORDER_VERBOSE=true run generate_flight_recorder "$run_dir"
+  _RECORDER_VERBOSE=true run generate_replay "$run_dir"
   [ "$status" -eq 0 ]
   # Elapsed time pattern: (Ns) where N is a number
   [[ "$output" =~ \([0-9]+s\) ]]
 }
 
-@test "generate_flight_recorder: no progress output when _RECORDER_VERBOSE is unset" {
+@test "generate_replay: no progress output when _RECORDER_VERBOSE is unset" {
   run_dir=$(_create_fixtures)
   unset _RECORDER_VERBOSE
-  run generate_flight_recorder "$run_dir"
+  run generate_replay "$run_dir"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   [ -f "$run_dir/replay.html" ]

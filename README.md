@@ -41,7 +41,7 @@ ClaudeLoop takes a different approach: your plan is split into phases, each phas
 
 🛡️ **Safe interrupts** — Ctrl+C saves progress. `--continue` resumes exactly where you left off.
 
-📊 **Flight recorder** — Auto-generated HTML report at `.claudeloop/replay.html`. Timeline, retry filmstrip with prompt diffs, time-travel slider. Updates live during execution.
+📊 **Replay report** — Auto-generated HTML report at `.claudeloop/replay.html`. Timeline, retry filmstrip with prompt diffs, time-travel slider. Updates live during execution.
 
 ## See It In Action
 
@@ -300,7 +300,7 @@ The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--
 </details>
 
 <details>
-<summary><strong>Flight Recorder</strong></summary>
+<summary><strong>Replay Report</strong></summary>
 
 ClaudeLoop automatically generates a self-contained HTML report at `.claudeloop/replay.html` during execution. Open it in any browser to inspect your run — no server or external dependencies required.
 

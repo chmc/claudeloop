@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Flight Recorder — Run Overview
+# Recorder — run overview for Replay reports
 # Extracts run-level overview data from metadata.txt or PROGRESS.md,
 # and aggregates session metrics across all log files.
 # Sourced by lib/recorder.sh.

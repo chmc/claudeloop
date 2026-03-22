@@ -135,9 +135,9 @@ EOF
   # Atomic update
   mv "$temp_file" "$progress_file"
 
-  # Generate flight recorder HTML (non-blocking, failure-tolerant)
-  if [ "$skip_recorder" != "skip_recorder" ] && command -v generate_flight_recorder >/dev/null 2>&1; then
-    generate_flight_recorder "$(dirname "$progress_file")" 2>/dev/null || true
+  # Generate replay HTML (non-blocking, failure-tolerant)
+  if [ "$skip_recorder" != "skip_recorder" ] && command -v generate_replay >/dev/null 2>&1; then
+    generate_replay "$(dirname "$progress_file")" 2>/dev/null || true
   fi
 }
 

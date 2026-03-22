@@ -169,7 +169,7 @@ Or to tail the raw log directly:
 
 Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run.
 
-## Flight Recorder
+## Replay Report
 
 ClaudeLoop auto-generates a visual HTML report at `.claudeloop/replay.html`. Open it in a browser to see:
 
@@ -193,7 +193,7 @@ claudeloop/
 │   ├── ui.sh              # terminal output
 │   ├── ai_parser.sh       # AI plan decomposition
 │   ├── verify.sh          # phase verification
-│   ├── recorder.sh        # flight recorder (JSON extraction + HTML generation)
+│   ├── recorder.sh        # replay report generation (JSON extraction + HTML)
 │   └── release_notes.sh   # release changelog formatter
 ├── tests/
 │   ├── run_all_tests.sh

@@ -1,10 +1,10 @@
-# Flight Recorder for ClaudeLoop
+# Replay Report for ClaudeLoop
 
 Self-contained HTML report auto-generated during claudeloop runs. Always available at `.claudeloop/replay.html`. Open in browser anytime to see execution timeline, retry filmstrip with prompt diff, time-travel slider. Works on active runs (auto-updates) and archived runs.
 
 ## Design Context
 
-Read the full design spec at `docs/flight-recorder-spec.md` (created in Phase 1). Key decisions:
+Read the full design spec at `docs/replay-spec.md` (created in Phase 1). Key decisions:
 - **Reconstruct, don't record:** All data exists in `.claudeloop/` already. Minimal change to recording side (one hook in `write_progress()`).
 - **Single HTML file:** All CSS+JS inline. No external deps. Always at `.claudeloop/replay.html`.
 - **Auto-generated:** HTML regenerates on every `write_progress()` call (after each phase status change). User opens once, refreshes to see updates.
@@ -14,7 +14,7 @@ Read the full design spec at `docs/flight-recorder-spec.md` (created in Phase 1)
 
 Create the design spec document and a self-contained HTML file with **hardcoded dummy data** showing the dashboard layout. No integration yet — just open the HTML directly to verify the visual design.
 
-**Create `docs/flight-recorder-spec.md`:** Contains the JSON schema, data source mapping (which files provide which fields), session line format (`[Session: model=X cost=$Y duration=Zs turns=T tokens=Nin/Nout cache=Nr/Nw]`), log header format (`=== EXECUTION START/END ===`), attempt log naming (`phase-N.attempt-M.log`), and edge case handling. This document is the single source of truth for all subsequent phases.
+**Create `docs/replay-spec.md`:** Contains the JSON schema, data source mapping (which files provide which fields), session line format (`[Session: model=X cost=$Y duration=Zs turns=T tokens=Nin/Nout cache=Nr/Nw]`), log header format (`=== EXECUTION START/END ===`), attempt log naming (`phase-N.attempt-M.log`), and edge case handling. This document is the single source of truth for all subsequent phases.
 
 **Create `assets/replay-template.html`:** Self-contained HTML with embedded dummy JSON data showing a run with 5 phases (one with 3 attempts, one failed). Layout:
 - Dark/light theme via `prefers-color-scheme` (dark = Tokyo Night-inspired)
@@ -23,14 +23,14 @@ Create the design spec document and a self-contained HTML file with **hardcoded 
 - Click phase in sidebar → show phase detail with attempt cards (strategy badge, fail reason, cost, tokens)
 - Vanilla JS, no frameworks. Rendering functions: `renderSidebar()`, `renderOverview()`, `renderPhaseDetail(num)`, `renderAttemptCard(attempt)`
 
-**Create `docs/adr/0033-flight-recorder.md`** and update `docs/adr/README.md`.
+**Create `docs/adr/0033-flight-recorder.md`** (replay report ADR) and update `docs/adr/README.md`.
 
 **Demo:** Open `assets/replay-template.html` directly in browser. See the full dashboard with dummy data.
 
 ## Phase 2: JSON extraction from run data
 **Depends on:** Phase 1
 
-Create `lib/recorder.sh` with functions to extract real data from `.claudeloop/` and produce the JSON blob defined in `docs/flight-recorder-spec.md`.
+Create `lib/recorder.sh` with functions to extract real data from `.claudeloop/` and produce the JSON blob defined in `docs/replay-spec.md`.
 
 **Create `tests/test_recorder.sh` first (TDD).** Setup creates synthetic `.claudeloop/` fixtures:
 - `PROGRESS.md` with 2 phases (1 completed in 1 attempt, 1 completed after 3 attempts)
@@ -62,15 +62,15 @@ Wire everything together: auto-generate `.claudeloop/replay.html` on every progr
 
 **Add to `lib/recorder.sh`:**
 - `inject_and_write_html(json_file, output_path)` — read `assets/replay-template.html`, replace `<!--JSON_DATA-->` marker with `<script>const DATA = {json};</script>`, write output. Use line-split approach (head/tail around marker line, cat JSON between) to avoid awk string-length limits.
-- `generate_flight_recorder(run_dir)` — assemble JSON to temp file, inject into HTML template, write to `{run_dir}/replay.html`. Silent on failure (don't break execution).
+- `generate_replay(run_dir)` — assemble JSON to temp file, inject into HTML template, write to `{run_dir}/replay.html`. Silent on failure (don't break execution).
 
 **Update `assets/replay-template.html`:** Replace hardcoded dummy JSON with `<!--JSON_DATA-->` placeholder.
 
-**Modify `lib/progress.sh`:** In `write_progress()` (after the atomic `mv` at line ~123), add a call to `generate_flight_recorder ".claudeloop"`. Wrap in a guard: only if `lib/recorder.sh` has been sourced. The call must be non-blocking and failure-tolerant (the recorder must never break the execution loop).
+**Modify `lib/progress.sh`:** In `write_progress()` (after the atomic `mv` at line ~123), add a call to `generate_replay ".claudeloop"`. Wrap in a guard: only if `lib/recorder.sh` has been sourced. The call must be non-blocking and failure-tolerant (the recorder must never break the execution loop).
 
 **Source `lib/recorder.sh`** in the main `claudeloop` script (add to the existing lib sourcing block around line ~31-44). Source it conditionally or always — it's lightweight (functions only, no side effects).
 
-**Update `tests/test_recorder.sh`:** Test `inject_and_write_html` produces valid HTML with JSON embedded. Test end-to-end: `generate_flight_recorder` with fixture data → valid HTML file.
+**Update `tests/test_recorder.sh`:** Test `inject_and_write_html` produces valid HTML with JSON embedded. Test end-to-end: `generate_replay` with fixture data → valid HTML file.
 
 **Demo:** Run claudeloop on a real plan → open `.claudeloop/replay.html` in browser → see real data. Refresh after more phases complete → data updates.
 
@@ -84,7 +84,7 @@ Enhance the HTML to show tool usage, file impact, and git commits.
 - New "Files" nav view: table with rows=files, columns=phases, cells=operation (R/W/E). Sorted by most-touched files.
 - Per-phase collapsible "Git Commits" section: SHA + message. Toggle button, default collapsed.
 
-**Demo:** Open flight recorder → tool badges on attempt cards. Click "Files" → cross-phase file impact table. Toggle "Git Commits" on a phase.
+**Demo:** Open replay report → tool badges on attempt cards. Click "Files" → cross-phase file impact table. Toggle "Git Commits" on a phase.
 
 ## Phase 5: Retry filmstrip with prompt diff
 **Depends on:** Phase 4
@@ -104,7 +104,7 @@ The killer feature no existing tool offers. For multi-attempt phases, show a fil
 - **Tool diff:** Side-by-side comparison of tool usage counts between attempts.
 - **File diff:** Files touched in attempt B that weren't in attempt A.
 
-**Demo:** Open flight recorder on a run with retries → filmstrip strip visible. Click between attempts → prompt diff shows how instructions changed. Tool usage shows convergence.
+**Demo:** Open replay report on a run with retries → filmstrip strip visible. Click between attempts → prompt diff shows how instructions changed. Tool usage shows convergence.
 
 ## Phase 6: Time-travel slider
 **Depends on:** Phase 5
@@ -125,7 +125,7 @@ No recorder.sh changes — all timestamps already in JSON.
 ## Phase 7: Documentation + polish
 **Depends on:** Phase 6
 
-- Update `README.md`: document flight recorder (what it shows, where to find it, how it works)
+- Update `README.md`: document replay report (what it shows, where to find it, how it works)
 - Update `QUICKSTART.md` if relevant
 - Create GitHub issues for future features: Phase DAG waterfall, Execution heatmap, Cost Sankey diagram
 - Final visual polish on HTML (spacing, transitions, responsive)
