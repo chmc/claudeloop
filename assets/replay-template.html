@@ -555,6 +555,8 @@ body {
 .tool-call-filter-clear:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .tool-chip-clickable { cursor: pointer; transition: transform 0.1s; }
 .tool-chip-clickable:hover { transform: scale(1.05); text-decoration: underline; }
+.tool-call-elapsed { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); white-space: nowrap; flex-shrink: 0; margin-left: auto; }
+.tool-call-elapsed.elapsed-slow { font-weight: 600; }
 
 /* Git commits section */
 .git-commits-section {
@@ -802,6 +804,14 @@ body {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+
+/* Detail tabs (attempt Summary/Timeline) */
+.detail-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 12px; }
+.detail-tab { padding: 8px 16px; border: none; background: none; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: color 0.15s; font-family: inherit; }
+.detail-tab:hover { color: var(--text-primary); }
+.detail-tab.detail-tab-active { color: var(--accent); border-bottom-color: var(--accent); }
+.detail-tab-pane { display: none; }
+.detail-tab-pane.detail-tab-pane-active { display: block; }
 
 .diff-pair-selector {
   display: flex;
@@ -2407,10 +2417,21 @@ function renderAttemptCard(attempt, autoExpand, hideToggle) {
       html += '<button class="attempt-details-toggle" onclick="toggleAttemptDetails(this, \'' + detailId + '\')">' + (autoExpand ? 'Hide details' : 'Show details') + '</button>';
     }
     html += '<div class="attempt-details' + (autoExpand ? ' expanded' : '') + '" id="' + detailId + '">';
+    // Tab bar
+    html += '<div class="detail-tabs">';
+    html += '<button class="detail-tab detail-tab-active" data-detail-tab="summary" onclick="switchDetailTab(this)">Summary</button>';
+    html += '<button class="detail-tab" data-detail-tab="timeline" onclick="switchDetailTab(this)">Timeline</button>';
+    html += '</div>';
+    // Summary pane (default active)
+    html += '<div class="detail-tab-pane detail-tab-pane-active" data-detail-pane="summary">';
     html += renderSinglePrompt(attempt);
     html += renderSingleToolBreakdown(attempt);
     html += renderSingleFiles(attempt);
+    html += '</div>';
+    // Timeline pane
+    html += '<div class="detail-tab-pane" data-detail-pane="timeline">';
     html += renderToolCallTimeline(attempt);
+    html += '</div>';
     html += '</div>';
   }
 
@@ -2465,6 +2486,18 @@ function toggleAttemptDetails(btn, id) {
     el.classList.add('expanded');
     btn.textContent = 'Hide details';
   }
+}
+
+function switchDetailTab(btn) {
+  var container = btn.closest('.attempt-details');
+  if (!container) return;
+  var tabName = btn.getAttribute('data-detail-tab');
+  container.querySelectorAll('.detail-tab').forEach(function(t) {
+    t.classList.toggle('detail-tab-active', t.getAttribute('data-detail-tab') === tabName);
+  });
+  container.querySelectorAll('.detail-tab-pane').forEach(function(p) {
+    p.classList.toggle('detail-tab-pane-active', p.getAttribute('data-detail-pane') === tabName);
+  });
 }
 
 function renderSingleToolBreakdown(attempt) {
@@ -2570,6 +2603,25 @@ function renderToolCallTimeline(attempt) {
     if (tc.is_error) {
       html += '<span class="tool-call-error-badge" onclick="toggleToolCallError(\'' + errorId + '\')">error</span>';
     }
+    // Elapsed time (right-aligned)
+    var elapsedVal = tc.elapsed_s;
+    if (elapsedVal == null && idx === 0 && attempt.started_at && tc.timestamp) {
+      var startStr = attempt.started_at;
+      if (!/Z$/.test(startStr)) startStr += 'Z';
+      var startMs = new Date(startStr).getTime();
+      var tcMs = new Date(tc.timestamp).getTime();
+      if (startMs > 0 && tcMs > 0) elapsedVal = (tcMs - startMs) / 1000;
+    }
+    var elapsedText = '\u2014';
+    if (elapsedVal != null && elapsedVal >= 0) {
+      if (elapsedVal < 60) {
+        elapsedText = elapsedVal < 0.05 ? '<0.1s' : elapsedVal.toFixed(1) + 's';
+      } else {
+        elapsedText = Math.floor(elapsedVal / 60) + 'm ' + Math.round(elapsedVal % 60) + 's';
+      }
+    }
+    var slowClass = (elapsedVal != null && elapsedVal >= 30) ? ' elapsed-slow' : '';
+    html += '<span class="tool-call-elapsed' + slowClass + '">' + elapsedText + '</span>';
     html += '</div>';
     if (tc.is_error && tc.error_preview) {
       html += '<div class="tool-call-error-detail" id="' + errorId + '">' + escapeHtml(tc.error_preview) + '</div>';
@@ -2604,6 +2656,9 @@ function filterToolCalls(chipEl, toolName) {
   // Find the parent .attempt-details container, then the .tool-calls-list within it
   var details = chipEl.closest('.attempt-details');
   if (!details) return;
+  // Switch to Timeline tab if tabs exist
+  var timelineBtn = details.querySelector('.detail-tab[data-detail-tab="timeline"]');
+  if (timelineBtn) switchDetailTab(timelineBtn);
   var list = details.querySelector('.tool-calls-list');
   if (!list) return;
   var rows = list.querySelectorAll('[data-tc-row]');

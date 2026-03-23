@@ -1212,6 +1212,71 @@ EOF
 }
 
 # =============================================================================
+# Timestamped raw.json fixture for elapsed_s tests
+# =============================================================================
+
+_create_timestamped_raw_fixture() {
+  local file="$1"
+  cat > "$file" << 'EOF'
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t1","name":"Read","input":{"file_path":"lib/retry.sh"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_t1","type":"tool_result","content":"file contents","is_error":false}]},"timestamp":"2026-03-17T16:52:58.175Z"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t2","name":"Bash","input":{"command":"npm test"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_t2","type":"tool_result","content":"ok","is_error":false}]},"timestamp":"2026-03-17T16:52:58.241Z"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_t3","name":"Edit","input":{"file_path":"lib/retry.sh","old_string":"a","new_string":"b"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_t3","type":"tool_result","content":"ok","is_error":false}]},"timestamp":"2026-03-17T16:53:03.056Z"}
+EOF
+}
+
+@test "rec_extract_tool_calls: elapsed_s computed from consecutive timestamps" {
+  local raw_file="$TEST_DIR/timestamped.raw.json"
+  _create_timestamped_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # First call: elapsed_s should be null (no previous timestamp)
+  echo "$result" | grep -q '"seq":1.*"elapsed_s":null'
+  # Second call: ~0.066s delta (58.241 - 58.175 = 0.066)
+  # Match 0.1 (rounded to 1 decimal)
+  echo "$result" | grep -q '"seq":2.*"elapsed_s":0.1'
+  # Third call: ~4.815s delta (03.056 - 58.241 = 4.815)
+  echo "$result" | grep -q '"seq":3.*"elapsed_s":4.8'
+}
+
+@test "rec_extract_tool_calls: elapsed_s null when no timestamps" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # No timestamps in realistic fixture → all elapsed_s should be null
+  echo "$result" | grep -q '"seq":1.*"elapsed_s":null'
+  echo "$result" | grep -q '"seq":5.*"elapsed_s":null'
+  # Verify no non-null elapsed_s values
+  ! echo "$result" | grep -q '"elapsed_s":[0-9]'
+}
+
+@test "rec_extract_tool_calls: timestamp field present in output" {
+  local raw_file="$TEST_DIR/timestamped.raw.json"
+  _create_timestamped_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Raw timestamp string should be in output
+  echo "$result" | grep -q '"timestamp":"2026-03-17T16:52:58.175Z"'
+  echo "$result" | grep -q '"timestamp":"2026-03-17T16:53:03.056Z"'
+}
+
+@test "rec_extract_tool_calls: timestamp null when no timestamps in data" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # All timestamps should be null
+  echo "$result" | grep -q '"seq":1.*"timestamp":null'
+}
+
+@test "rec_extract_tool_calls: output is valid JSON" {
+  local raw_file="$TEST_DIR/timestamped.raw.json"
+  _create_timestamped_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Should be parseable JSON
+  echo "$result" | python3 -c "import json,sys; json.loads(sys.stdin.read())"
+}
+
+# =============================================================================
 # Integration: tool_calls in assemble_recorder_json
 # =============================================================================
 

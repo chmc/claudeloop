@@ -145,9 +145,9 @@ The complete JSON blob embedded in `replay.html`:
             {"path": "src/bar.ts", "ops": ["Write"]}
           ],
           "tool_calls": [
-            {"seq": 1, "name": "Read", "preview": "src/foo.ts"},
-            {"seq": 2, "name": "Edit", "preview": "src/foo.ts"},
-            {"seq": 3, "name": "Bash", "preview": "npm test"}
+            {"seq": 1, "name": "Read", "preview": "src/foo.ts", "is_error": false, "error_preview": "", "elapsed_s": null, "timestamp": "2026-03-17T16:52:58.175Z"},
+            {"seq": 2, "name": "Edit", "preview": "src/foo.ts", "is_error": false, "error_preview": "", "elapsed_s": 1.2, "timestamp": "2026-03-17T16:52:59.375Z"},
+            {"seq": 3, "name": "Bash", "preview": "npm test", "is_error": true, "error_preview": "Error: test failed", "elapsed_s": 38.7, "timestamp": "2026-03-17T16:53:38.075Z"}
           ],
           "git_commits": [
             {"sha": "abc1234", "message": "Phase 1: setup project structure"}
@@ -166,7 +166,7 @@ The complete JSON blob embedded in `replay.html`:
 - `phases[].attempts[].strategy` — one of: `standard`, `stripped`, `targeted`, `escalated`
 - `phases[].attempts[].fail_reason` — null on success, string on failure (e.g. `"exit_code_1"`, `"no_session_line"`, `"verification_failed"`)
 - `phases[].attempts[].session` — null if no `[Session:]` line found (e.g. crash before completion)
-- `phases[].attempts[].tool_calls[]` — individual tool calls in execution order; `seq` is 1-based, `name` is the tool name, `preview` is a truncated input preview (file_path for Read/Edit/Write, command for Bash, pattern for Grep/Glob, etc.); capped at 200 entries; no error status in v1
+- `phases[].attempts[].tool_calls[]` — individual tool calls in execution order; `seq` is 1-based, `name` is the tool name, `preview` is a truncated input preview (file_path for Read/Edit/Write, command for Bash, pattern for Grep/Glob, etc.); capped at 200 entries; `is_error` is true when the tool returned an error; `error_preview` is the first ~120 chars of the error content; `elapsed_s` is the delta (seconds) from the previous tool_result timestamp (null for first call and when timestamps unavailable); `timestamp` is the raw ISO 8601 timestamp from the tool_result event (null when unavailable)
 - `phases[].verification_verdict` — `"passed"`, `"failed"`, or `null` (not verified)
 - `phases[].signal_no_changes` — true if `signals/phase-N.md` exists
 - Token fields default to 0 when absent

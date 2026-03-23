@@ -287,6 +287,20 @@ rec_extract_tool_calls() {
     return s
   }
 
+  # iso_to_epoch(ts) - convert ISO 8601 timestamp to fractional epoch seconds
+  # Input: "2026-03-17T16:52:58.175Z" — POSIX awk, pure arithmetic (no mktime)
+  function iso_to_epoch(ts,    y,mo,d,h,mi,s,ms,days,mdays) {
+    if (ts == "") return 0
+    y  = substr(ts,1,4)+0; mo = substr(ts,6,2)+0; d = substr(ts,9,2)+0
+    h  = substr(ts,12,2)+0; mi = substr(ts,15,2)+0; s = substr(ts,18,2)+0
+    ms = (length(ts) > 20) ? substr(ts,21,3)+0 : 0
+    split("0,31,59,90,120,151,181,212,243,273,304,334", mdays, ",")
+    days = (y - 1970) * 365 + int((y - 1969) / 4) - int((y - 1901) / 100) + int((y - 1601) / 400)
+    days += mdays[mo] + d - 1
+    if (mo > 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0))) days++
+    return days * 86400 + h * 3600 + mi * 60 + s + ms / 1000
+  }
+
   /"type":"tool_use"/ {
     # Skip stream_event lines (contain empty input duplicates)
     if (index($0, "\"type\":\"stream_event\"") > 0) next
@@ -332,14 +346,34 @@ rec_extract_tool_calls() {
         econtent = extract(_tr_segs[2], "content")
         error_previews[s] = json_esc(trunc(econtent, 120))
       }
+      # Extract timestamp from user event (top-level field on the line)
+      ts_str = extract($0, "timestamp")
+      if (ts_str != "") {
+        timestamps[s] = iso_to_epoch(ts_str)
+        raw_timestamps[s] = ts_str
+      }
     }
   }
 
   END {
+    prev_ts = 0
     printf "["
     for (i = 1; i <= seq; i++) {
       if (i > 1) printf ","
-      printf "{\"seq\":%d,\"name\":\"%s\",\"preview\":\"%s\",\"is_error\":%s,\"error_preview\":\"%s\"}", i, names[i], previews[i], errors[i], error_previews[i]
+      # Compute elapsed from previous tool_result timestamp
+      if (timestamps[i] > 0 && prev_ts > 0) {
+        elapsed = sprintf("%.1f", timestamps[i] - prev_ts)
+      } else {
+        elapsed = "null"
+      }
+      if (timestamps[i] > 0) prev_ts = timestamps[i]
+      # Emit raw timestamp or null
+      if (raw_timestamps[i] != "") {
+        ts_json = "\"" raw_timestamps[i] "\""
+      } else {
+        ts_json = "null"
+      }
+      printf "{\"seq\":%d,\"name\":\"%s\",\"preview\":\"%s\",\"is_error\":%s,\"error_preview\":\"%s\",\"elapsed_s\":%s,\"timestamp\":%s}", i, names[i], previews[i], errors[i], error_previews[i], elapsed, ts_json
     }
     printf "]"
   }
