@@ -525,6 +525,36 @@ body {
   word-break: break-word;
 }
 .tool-call-error-detail.expanded { display: block; }
+.tool-call-row.is-highlighted { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.tool-call-row.is-dimmed { opacity: 0.4; }
+.tool-call-filter-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.tool-call-filter-clear {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  background: none;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tool-call-filter-clear:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tool-chip-clickable { cursor: pointer; transition: transform 0.1s; }
+.tool-chip-clickable:hover { transform: scale(1.05); text-decoration: underline; }
 
 /* Git commits section */
 .git-commits-section {
@@ -2369,7 +2399,7 @@ function renderSingleToolBreakdown(attempt) {
       var pct = totalCount > 0 ? (t.count / totalCount * 100).toFixed(1) : '0';
       var barWidth = maxCount > 0 ? (t.count / maxCount * 100).toFixed(1) : '0';
       html += '<tr>';
-      html += '<td><span class="tool-chip tool-' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</span></td>';
+      html += '<td><span class="tool-chip tool-chip-clickable tool-' + escapeHtml(t.name) + '" role="button" tabindex="0" title="Filter timeline to ' + escapeHtml(t.name) + '" onclick="filterToolCalls(this, \'' + escapeHtml(t.name) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \')filterToolCalls(this,\'' + escapeHtml(t.name) + '\')">' + escapeHtml(t.name) + '</span></td>';
       html += '<td>' + t.count + '</td>';
       html += '<td>' + pct + '%</td>';
       html += '<td><div class="tool-bar" style="width:' + barWidth + '%"></div></td>';
@@ -2424,7 +2454,8 @@ function renderToolCallTimeline(attempt) {
   var needsCollapse = calls.length > 30;
   var timelineId = 'tool-calls-' + attempt.number + '-' + Math.random().toString(36).substr(2, 6);
 
-  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' + calls.length + ' tool calls in sequence</div>';
+  html += '<div class="tool-call-filter-indicator" id="filter-' + timelineId + '" style="display:none"></div>';
+  html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;" id="count-' + timelineId + '">' + calls.length + ' tool calls in sequence</div>';
   html += '<div class="tool-calls-list" id="' + timelineId + '">';
   var errorCount = 0;
   calls.forEach(function(tc) { if (tc.is_error) errorCount++; });
@@ -2475,6 +2506,65 @@ function toggleToolCallError(id) {
   var el = document.getElementById(id);
   if (el) el.classList.toggle('expanded');
 }
+
+function filterToolCalls(chipEl, toolName) {
+  // Find the parent .attempt-details container, then the .tool-calls-list within it
+  var details = chipEl.closest('.attempt-details');
+  if (!details) return;
+  var list = details.querySelector('.tool-calls-list');
+  if (!list) return;
+  var rows = list.querySelectorAll('[data-tc-row]');
+  var matched = 0;
+  rows.forEach(function(row) {
+    var tool = row.getAttribute('data-tool');
+    if (tool === toolName) {
+      row.classList.add('is-highlighted');
+      row.classList.remove('is-dimmed');
+      matched++;
+    } else {
+      row.classList.remove('is-highlighted');
+      row.classList.add('is-dimmed');
+    }
+  });
+  // Update filter indicator
+  var listId = list.id;
+  var indicator = document.getElementById('filter-' + listId);
+  if (indicator) {
+    indicator.style.display = 'flex';
+    indicator.innerHTML = 'Showing <strong>' + matched + '</strong> of ' + rows.length + ' calls: <strong>' + escapeHtml(toolName) + '</strong>' +
+      '<button class="tool-call-filter-clear" onclick="clearToolCallFilter(\'' + listId + '\')">Clear</button>';
+  }
+  var countEl = document.getElementById('count-' + listId);
+  if (countEl) countEl.style.display = 'none';
+  // Scroll timeline into view
+  list.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function clearToolCallFilter(listId) {
+  var list = document.getElementById(listId);
+  if (!list) return;
+  var rows = list.querySelectorAll('[data-tc-row]');
+  rows.forEach(function(row) {
+    row.classList.remove('is-highlighted', 'is-dimmed');
+  });
+  var indicator = document.getElementById('filter-' + listId);
+  if (indicator) indicator.style.display = 'none';
+  var countEl = document.getElementById('count-' + listId);
+  if (countEl) countEl.style.display = '';
+}
+
+// Clear filter on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var indicators = document.querySelectorAll('.tool-call-filter-indicator');
+    indicators.forEach(function(ind) {
+      if (ind.style.display !== 'none') {
+        var listId = ind.id.replace('filter-', '');
+        clearToolCallFilter(listId);
+      }
+    });
+  }
+});
 
 /* ── Phase Summary Table (overview) ── */
 function renderPhaseSummaryTable() {
