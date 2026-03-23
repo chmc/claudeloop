@@ -2605,13 +2605,6 @@ function renderToolCallTimeline(attempt) {
     }
     // Elapsed time (right-aligned)
     var elapsedVal = tc.elapsed_s;
-    if (elapsedVal == null && idx === 0 && attempt.started_at && tc.timestamp) {
-      var startStr = attempt.started_at;
-      if (!/Z$/.test(startStr)) startStr += 'Z';
-      var startMs = new Date(startStr).getTime();
-      var tcMs = new Date(tc.timestamp).getTime();
-      if (startMs > 0 && tcMs > 0) elapsedVal = (tcMs - startMs) / 1000;
-    }
     var elapsedText = '\u2014';
     if (elapsedVal != null && elapsedVal >= 0) {
       if (elapsedVal < 60) {
