@@ -518,8 +518,8 @@ EOF
   inject_and_write_html "$json_file" "$output_html"
   [ -f "$output_html" ]
 
-  # Should contain the injected JSON as const DATA
-  grep -q 'const DATA = {"version":1,"phases":\[\]}' "$output_html"
+  # Should contain the injected JSON as DATA assignment
+  grep -q 'DATA = {"version":1,"phases":\[\]}' "$output_html"
 
   # Should still contain HTML structure
   grep -q '<!DOCTYPE html>' "$output_html"
@@ -557,7 +557,7 @@ EOF
   # The literal </script should NOT appear inside the injected data
   # Extract just the const DATA = ... line
   local data_line
-  data_line=$(grep 'const DATA = ' "$output_html")
+  data_line=$(grep '^DATA = ' "$output_html")
   ! echo "$data_line" | grep -q '</script'
 
   # The escaped form \u003c should be present
@@ -1287,4 +1287,115 @@ EOF
   echo "$result" | grep -q '"tool_calls":\['
   # Phase 1 should have tool_calls from its raw.json
   echo "$result" | grep -q '"seq":1,"name":"Read","preview":"src/foo.ts"'
+}
+
+# =============================================================================
+# JSON safety: defensive defaults (defense-in-depth)
+# =============================================================================
+
+@test "safe_json_array: returns [] for empty string" {
+  result=$(safe_json_array "")
+  [ "$result" = "[]" ]
+}
+
+@test "safe_json_array: returns [] for truncated output" {
+  result=$(safe_json_array '[{"name":"Bash"')
+  [ "$result" = "[]" ]
+}
+
+@test "safe_json_array: passes through valid array" {
+  result=$(safe_json_array '[1,2,3]')
+  [ "$result" = "[1,2,3]" ]
+}
+
+@test "safe_json_array: passes through empty array" {
+  result=$(safe_json_array '[]')
+  [ "$result" = "[]" ]
+}
+
+@test "safe_json_object: returns null for empty string" {
+  result=$(safe_json_object "")
+  [ "$result" = "null" ]
+}
+
+@test "safe_json_object: returns null for truncated output" {
+  result=$(safe_json_object '{"model":"test"')
+  [ "$result" = "null" ]
+}
+
+@test "safe_json_object: returns custom default for empty string" {
+  result=$(safe_json_object "" "{}")
+  [ "$result" = "{}" ]
+}
+
+@test "safe_json_object: passes through valid object" {
+  result=$(safe_json_object '{"a":1}')
+  [ "$result" = '{"a":1}' ]
+}
+
+@test "rec_extract_session: defaults empty numeric fields to 0" {
+  local logfile="$TEST_DIR/partial-session.log"
+  cat > "$logfile" << 'EOF'
+[Session: model=test cost=$0.05]
+EOF
+  result=$(rec_extract_session "$logfile")
+  # Must be valid JSON
+  echo "$result" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); assert d['duration_s'] == 0; assert d['turns'] == 0; assert d['input_tokens'] == 0; assert d['output_tokens'] == 0; assert d['cost_usd'] == 0.05"
+}
+
+@test "assemble_recorder_json: produces valid JSON when extractors return empty" {
+  run_dir=$(_create_fixtures)
+  # Mock extractors to return empty string (simulates AWK crash)
+  rec_extract_tools() { printf ''; }
+  rec_extract_files() { printf ''; }
+  rec_extract_tool_calls() { printf ''; }
+  rec_extract_git_commits() { printf ''; }
+  result=$(assemble_recorder_json "$run_dir")
+  # Must be valid JSON
+  echo "$result" | python3 -c "import json,sys; json.loads(sys.stdin.read())"
+  # Array fields must default to []
+  echo "$result" | grep -q '"tools":\[\]'
+  echo "$result" | grep -q '"files":\[\]'
+  echo "$result" | grep -q '"tool_calls":\[\]'
+  echo "$result" | grep -q '"git_commits":\[\]'
+}
+
+@test "assemble_recorder_json: full output is valid JSON (round-trip)" {
+  run_dir=$(_create_fixtures)
+  result=$(assemble_recorder_json "$run_dir")
+  echo "$result" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); assert d['version']==1; assert len(d['phases'])>0"
+}
+
+@test "rec_extract_run_overview: valid JSON when aggregate sessions return empty" {
+  run_dir=$(_create_fixtures)
+  # Test the metadata path (metadata.txt exists in fixtures)
+  _rec_aggregate_sessions() { printf ''; }
+  result=$(rec_extract_run_overview "$run_dir")
+  echo "$result" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); assert d['total_cost_usd'] == 0"
+}
+
+@test "rec_extract_run_overview: valid JSON via progress path when aggregate empty" {
+  run_dir=$(_create_fixtures)
+  rm -f "$run_dir/metadata.txt"
+  _rec_aggregate_sessions() { printf ''; }
+  # Must load progress first since metadata.txt is gone
+  rec_load_progress "$run_dir"
+  result=$(rec_extract_run_overview "$run_dir")
+  echo "$result" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); assert d['total_cost_usd'] == 0"
+}
+
+@test "generate_replay: output HTML has split script blocks with error fallback" {
+  run_dir=$(_create_fixtures)
+  local output="$run_dir/replay.html"
+  # generate_replay writes to $run_dir/replay.html by default
+  generate_replay "$run_dir"
+  [ -f "$output" ]
+  # Must have at least 2 script blocks
+  local script_count
+  script_count=$(grep -c '<script>' "$output")
+  [ "$script_count" -ge 2 ]
+  # Must have error fallback text
+  grep -q 'Replay data error' "$output"
+  # Must have var DATA declaration in first block
+  grep -q 'var DATA' "$output"
 }

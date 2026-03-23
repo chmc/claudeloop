@@ -1624,7 +1624,18 @@ body {
 <div class="main" id="main-panel"></div>
 
 <script>
+var DATA;
 // <!--JSON_DATA-->
+</script>
+
+<script>
+if (typeof DATA === 'undefined' || DATA === null) {
+  document.getElementById('main-panel').innerHTML =
+    '<div style="padding:2em;font-family:monospace;color:var(--error,#ef4444)">' +
+    '<h2>Replay data error</h2>' +
+    '<p>The embedded JSON data failed to parse. This is a bug in claudeloop.</p>' +
+    '<p>Check the browser console for details.</p></div>';
+} else {
 
 /* ── State ── */
 let currentView = 'overview';
@@ -3372,6 +3383,8 @@ document.addEventListener('keydown', function(e) {
 /* ── Init ── */
 renderSidebar();
 renderOverview();
+
+} /* end else (DATA is valid) */
 </script>
 </body>
 </html>
