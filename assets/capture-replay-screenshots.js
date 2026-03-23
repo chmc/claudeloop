@@ -93,6 +93,28 @@ async function main() {
   await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(ASSETS_DIR, 'screenshot-replay-timetravel.png') });
 
+  // 5. Retry Filmstrip (pick phase with most attempts)
+  console.log('Capturing Retry Filmstrip...');
+  const filmstripPhase = await page.evaluate(() => {
+    let best = { num: '1', attempts: 0 };
+    for (const phase of DATA.phases) {
+      const count = phase.attempts ? phase.attempts.length : 0;
+      if (count > best.attempts) best = { num: String(phase.number), attempts: count };
+    }
+    return best.num;
+  });
+  console.log(`  Best phase for filmstrip: ${filmstripPhase}`);
+  await page.evaluate((num) => showPhaseDetail(num), filmstripPhase);
+  await page.waitForTimeout(300);
+
+  // Scroll filmstrip into view
+  await page.evaluate(() => {
+    const filmstrip = document.querySelector('.filmstrip-section');
+    if (filmstrip) filmstrip.scrollIntoView({ block: 'start' });
+  });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(ASSETS_DIR, 'screenshot-replay-filmstrip.png') });
+
   await browser.close();
   console.log('Done! Screenshots saved to assets/');
 }
