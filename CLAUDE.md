@@ -193,6 +193,18 @@ When inside a worktree (`git rev-parse --show-toplevel` points to a `*-wt-*` dir
 - **PR target**: PRs target the base branch the worktree was created from.
 - **Cleanup**: Use `/wt rm <name>` from the main repo, not from inside the worktree.
 
+**VS Code integration (mandatory):**
+- **On worktree enter:** After `EnterWorktree` or `/wt create`, add the worktree to the active VS Code workspace:
+  ```sh
+  VSCODE_CLI="$(find /Applications -name 'code' -path '*/bin/*' 2>/dev/null | head -1)"
+  [ -n "$VSCODE_CLI" ] && "$VSCODE_CLI" --add <worktree-path>
+  ```
+- **On worktree cleanup:** Before `ExitWorktree` or `/wt rm`, remove the worktree from the VS Code workspace:
+  ```sh
+  [ -n "$VSCODE_CLI" ] && "$VSCODE_CLI" --remove <worktree-path>
+  ```
+- Fail silently if VS Code CLI is not found (non-blocking).
+
 ## Testing
 
 Each lib has a corresponding `tests/test_<lib>.sh`.
@@ -208,6 +220,8 @@ Each lib has a corresponding `tests/test_<lib>.sh`.
 When modifying existing behavior, update affected tests before changing implementation code.
 
 **Reproduce before fixing (mandatory):** When fixing a bug, reproduce it first using existing test infrastructure (fake CLI, bats fixtures, `--replay`). If the infrastructure can't reproduce the scenario, extend it. Code tracing alone is insufficient — verify the fix works end-to-end.
+
+**Use project tools for test data (mandatory):** When generating test artifacts (PROGRESS.md, raw.json, replay.html), run the actual execution pipeline (claudeloop with fake_claude, smoke tests) instead of hand-crafting files. Hand-crafted files easily get formats wrong; the project's own tools are the source of truth.
 
 Pre-existing failing suites are mandatory to fix when found.
 

@@ -17,6 +17,13 @@ Run validation checks upfront, stop on hard blocks immediately. Only pause for u
 
 All operations maintain a multi-root workspace file so one VS Code window shows the main repo and all worktrees.
 
+**CLI fallback (mandatory):** In addition to the `.code-workspace` file, always run `code --add`/`code --remove` via the VS Code CLI to update the active window immediately. This also covers `EnterWorktree`/`ExitWorktree` usage where the `.code-workspace` file isn't used:
+```sh
+VSCODE_CLI="$(find /Applications -name 'code' -path '*/bin/*' 2>/dev/null | head -1)"
+# On create: [ -n "$VSCODE_CLI" ] && "$VSCODE_CLI" --add <worktree-path>
+# On remove: [ -n "$VSCODE_CLI" ] && "$VSCODE_CLI" --remove <worktree-path>
+```
+
 - `REPO_NAME="$(basename "$(git rev-parse --show-toplevel)")"`
 - `WORKSPACE_FILE="../${REPO_NAME}.code-workspace"`
 
