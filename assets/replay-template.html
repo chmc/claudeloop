@@ -914,6 +914,36 @@ body {
 .file-diff-badge.new-file { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
 .file-diff-badge.same-file { background: var(--badge-bg); color: var(--text-muted); }
 
+/* Call timeline diff (filmstrip) */
+.call-timeline-diff { display: flex; gap: 12px; overflow-x: auto; }
+.call-diff-col { flex: 1; min-width: 280px; }
+.call-diff-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 6px 6px 0 0;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-bottom: none;
+  font-size: 12px; font-weight: 600;
+}
+.call-diff-count { margin-left: auto; font-size: 10px; color: var(--text-muted); font-weight: 400; }
+.call-diff-badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.call-diff-ok { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+.call-diff-fail { background: color-mix(in srgb, var(--error) 12%, transparent); color: var(--error); }
+.call-diff-rows { border: 1px solid var(--border); border-radius: 0 0 6px 6px; overflow: hidden; }
+.call-diff-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 8px; font-size: 11px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  border-left: 3px solid transparent;
+}
+.call-diff-row:last-child { border-bottom: none; }
+.call-diff-row.call-diff-diverged { background: color-mix(in srgb, var(--warning) 6%, transparent); border-left-color: var(--warning); }
+.call-diff-row.call-diff-error { background: color-mix(in srgb, var(--error) 4%, transparent); border-left-color: var(--error); }
+.call-diff-seq { font-size: 10px; color: var(--text-muted); min-width: 18px; text-align: right; font-family: var(--font-mono); }
+.call-diff-preview {
+  flex: 1; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.call-diff-marker { font-size: 10px; color: var(--warning); flex-shrink: 0; }
+
 /* Phase description */
 .phase-description {
   color: var(--text-secondary);
@@ -1966,10 +1996,10 @@ function renderFilmstrip(phase) {
 
   // Tabs
   html += '<div class="diff-tabs">';
-  var tabs = ['prompt', 'tools', 'files'];
+  var tabs = ['prompt', 'tools', 'files', 'calls'];
   tabs.forEach(function(tab) {
     var active = (tab === state.activeTab) ? ' diff-tab-active' : '';
-    var label = tab === 'prompt' ? 'Prompt Diff' : tab === 'tools' ? 'Tool Diff' : 'File Diff';
+    var label = tab === 'prompt' ? 'Prompt Diff' : tab === 'tools' ? 'Tool Diff' : tab === 'files' ? 'File Diff' : 'Call Timeline';
     html += '<button class="diff-tab' + active + '" data-tab="' + tab + '">' + label + '</button>';
   });
   html += '</div>';
@@ -2096,6 +2126,7 @@ function renderDiffContent(phase, state) {
     case 'prompt': return renderPromptDiff(a, b);
     case 'tools': return renderToolDiff(a, b);
     case 'files': return renderFileDiff(a, b);
+    case 'calls': return renderCallTimelineDiff(a, b);
     default: return '';
   }
 }
@@ -2232,6 +2263,68 @@ function renderFileDiff(a, b) {
       html += '<span class="file-diff-badge same-file">BOTH</span>';
     }
     html += '<span>' + escapeHtml(path) + '</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+/* ── Call Timeline Diff (side-by-side tool call comparison) ── */
+function renderCallTimelineDiff(a, b) {
+  var callsA = a.tool_calls || [];
+  var callsB = b.tool_calls || [];
+  if (callsA.length === 0 && callsB.length === 0) {
+    return '<div class="diff-empty">No tool call data available for these attempts.</div>';
+  }
+
+  // Compute divergence: compare tool name at each sequence index
+  var maxLen = Math.max(callsA.length, callsB.length);
+  var divergedA = {};
+  var divergedB = {};
+  for (var i = 0; i < maxLen; i++) {
+    var nameA = i < callsA.length ? callsA[i].name : null;
+    var nameB = i < callsB.length ? callsB[i].name : null;
+    if (nameA !== nameB) {
+      if (nameA !== null) divergedA[i] = true;
+      if (nameB !== null) divergedB[i] = true;
+    }
+  }
+
+  var html = '<div class="call-timeline-diff">';
+
+  // Column A
+  html += '<div class="call-diff-col">';
+  html += '<div class="call-diff-header">Attempt ' + a.number + ' <span class="call-diff-badge ' + (a.is_success ? 'call-diff-ok' : 'call-diff-fail') + '">' + (a.is_success ? 'success' : 'failed') + '</span>';
+  html += '<span class="call-diff-count">' + callsA.length + ' calls</span></div>';
+  html += renderCallDiffColumn(callsA, divergedA);
+  html += '</div>';
+
+  // Column B
+  html += '<div class="call-diff-col">';
+  html += '<div class="call-diff-header">Attempt ' + b.number + ' <span class="call-diff-badge ' + (b.is_success ? 'call-diff-ok' : 'call-diff-fail') + '">' + (b.is_success ? 'success' : 'failed') + '</span>';
+  html += '<span class="call-diff-count">' + callsB.length + ' calls</span></div>';
+  html += renderCallDiffColumn(callsB, divergedB);
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderCallDiffColumn(calls, diverged) {
+  var html = '<div class="call-diff-rows">';
+  calls.forEach(function(tc, idx) {
+    var classes = 'call-diff-row';
+    if (tc.is_error) classes += ' call-diff-error';
+    else if (diverged[idx]) classes += ' call-diff-diverged';
+    html += '<div class="' + classes + '">';
+    html += '<span class="call-diff-seq">' + tc.seq + '</span>';
+    html += '<span class="tool-chip tool-' + escapeHtml(tc.name) + '" style="font-size:10px;padding:2px 6px;">' + escapeHtml(tc.name) + '</span>';
+    if (tc.preview) {
+      html += '<span class="call-diff-preview">' + escapeHtml(tc.preview) + '</span>';
+    }
+    if (diverged[idx]) {
+      html += '<span class="call-diff-marker">⑂</span>';
+    }
     html += '</div>';
   });
   html += '</div>';
