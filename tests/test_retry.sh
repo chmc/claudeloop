@@ -352,7 +352,7 @@ teardown() { :; }
   [ "$status" -eq 0 ]
 }
 
-@test "has_successful_session: returns true when good session followed by zero-turn session (bug scenario)" {
+@test "has_successful_session: returns true when good session followed by zero-turn crash (sub-agent scenario)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
   printf '[Session: duration=45.2s turns=71 tokens=5000in/2000out]\n' >> "$_log"
   printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
@@ -374,6 +374,34 @@ teardown() { :; }
   printf '[Session: duration=20.0s turns=10 tokens=1000in/500out]\n' >> "$_log"
   printf '=== EXECUTION START phase=1 attempt=2 time=2026-01-01T00:01:00 ===\n' >> "$_log"
   printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns false when turns=1 but zero output tokens (API 500 error)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=33.8s turns=1 tokens=0in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns true when turns=1 with real output tokens (legitimate quick task)" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=15.0s turns=1 tokens=200in/100out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_successful_session: returns false when nonzero input but zero output tokens" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=10.0s turns=1 tokens=500in/0out]\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns false when session line has no token field" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '[Session: duration=5.0s turns=3]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
 }
