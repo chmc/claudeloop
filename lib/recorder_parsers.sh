@@ -297,6 +297,7 @@ rec_extract_tool_calls() {
       if (seq >= 200) next
       seq++
       name = extract(segs[ti], "name")
+      tool_id = extract(segs[ti], "id")
       # Tool-specific preview
       if (name == "Bash") preview = trunc(extract(segs[ti], "command"), 120)
       else if (name == "Read" || name == "Edit" || name == "Write") preview = extract(segs[ti], "file_path")
@@ -309,13 +310,36 @@ rec_extract_tool_calls() {
       # Store for END block output
       names[seq] = name
       previews[seq] = json_esc(preview)
+      errors[seq] = "false"
+      error_previews[seq] = ""
+      # Map tool_use_id → seq for correlating with tool_result
+      if (tool_id != "") id_to_seq[tool_id] = seq
     }
   }
+
+  # Match tool_result lines to extract is_error and error content
+  /"type":"tool_result"/ {
+    # tool_use_id appears before the split point, so extract from full line
+    tid = extract($0, "tool_use_id")
+    if (tid != "" && (tid in id_to_seq)) {
+      s = id_to_seq[tid]
+      ie = extract($0, "is_error")
+      if (ie == "true") {
+        errors[s] = "true"
+        # Extract content — appears after "tool_result" in the line
+        # Use split to get the segment after "tool_result" where content lives
+        split($0, _tr_segs, "\"type\":\"tool_result\"")
+        econtent = extract(_tr_segs[2], "content")
+        error_previews[s] = json_esc(trunc(econtent, 120))
+      }
+    }
+  }
+
   END {
     printf "["
     for (i = 1; i <= seq; i++) {
       if (i > 1) printf ","
-      printf "{\"seq\":%d,\"name\":\"%s\",\"preview\":\"%s\"}", i, names[i], previews[i]
+      printf "{\"seq\":%d,\"name\":\"%s\",\"preview\":\"%s\",\"is_error\":%s,\"error_preview\":\"%s\"}", i, names[i], previews[i], errors[i], error_previews[i]
     }
     printf "]"
   }

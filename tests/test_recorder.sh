@@ -1112,6 +1112,95 @@ EOF
   echo "$result" | grep -q 'hello world'
 }
 
+# Fixture with error tool_results for is_error/error_preview tests
+_create_error_raw_fixture() {
+  local file="$1"
+  cat > "$file" << 'EOF'
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_e1","name":"Read","input":{"file_path":"src/app.ts"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_e1","type":"tool_result","content":"file contents here","is_error":false}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_e2","name":"Bash","input":{"command":"npm test"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_e2","type":"tool_result","content":"Error: test suite failed — expected 4 got 8 in calculate_backoff","is_error":true}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_e3","name":"Edit","input":{"file_path":"src/app.ts","old_string":"a","new_string":"b"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_e3","type":"tool_result","content":"The file was not modified because old_string was not found","is_error":true}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_e4","name":"Bash","input":{"command":"echo ok"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_e4","type":"tool_result","content":"ok","is_error":false}]}}
+EOF
+}
+
+@test "rec_extract_tool_calls: extracts is_error from tool_result" {
+  local raw_file="$TEST_DIR/error.raw.json"
+  _create_error_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Read call (seq 1) should NOT have is_error true
+  echo "$result" | grep -q '"seq":1,"name":"Read".*"is_error":false'
+  # Bash call (seq 2) should have is_error true
+  echo "$result" | grep -q '"seq":2,"name":"Bash".*"is_error":true'
+  # Edit call (seq 3) should have is_error true
+  echo "$result" | grep -q '"seq":3,"name":"Edit".*"is_error":true'
+  # Final Bash call (seq 4) should NOT have is_error true
+  echo "$result" | grep -q '"seq":4,"name":"Bash".*"is_error":false'
+}
+
+@test "rec_extract_tool_calls: extracts error_preview from failed tool_result" {
+  local raw_file="$TEST_DIR/error.raw.json"
+  _create_error_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # Bash error (seq 2) should have error_preview with truncated content
+  echo "$result" | grep -q '"seq":2.*"error_preview":"Error: test suite failed'
+  # Edit error (seq 3) should have error_preview
+  echo "$result" | grep -q '"seq":3.*"error_preview":"The file was not modified'
+  # Successful calls should have empty error_preview
+  echo "$result" | grep -q '"seq":1.*"error_preview":""'
+  echo "$result" | grep -q '"seq":4.*"error_preview":""'
+}
+
+@test "rec_extract_tool_calls: error_preview truncated to 120 chars" {
+  local raw_file="$TEST_DIR/long_error.raw.json"
+  # Create a fixture with a very long error message
+  local long_msg
+  long_msg=$(printf 'x%.0s' $(seq 1 200))
+  cat > "$raw_file" << EOF
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_l1","name":"Bash","input":{"command":"fail"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_l1","type":"tool_result","content":"${long_msg}","is_error":true}]}}
+EOF
+  result=$(rec_extract_tool_calls "$raw_file")
+  # error_preview should be truncated to 120 chars + "..."
+  echo "$result" | grep -q '"is_error":true'
+  # Should not contain the full 200-char message
+  local preview_len
+  preview_len=$(echo "$result" | grep -o '"error_preview":"[^"]*"' | head -1 | wc -c | tr -d ' ')
+  # "error_preview":"<120 chars>..." = 17 + 123 + 1 = 141 max
+  [ "$preview_len" -le 155 ]
+}
+
+@test "rec_extract_tool_calls: is_error defaults false for interrupted session" {
+  local raw_file="$TEST_DIR/interrupted.raw.json"
+  # tool_use with no matching tool_result (session interrupted)
+  cat > "$raw_file" << 'EOF'
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_i1","name":"Read","input":{"file_path":"src/foo.ts"}}]}}
+{"type":"user","message":{"content":[{"tool_use_id":"toolu_i1","type":"tool_result","content":"ok","is_error":false}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_i2","name":"Edit","input":{"file_path":"src/foo.ts","old_string":"a","new_string":"b"}}]}}
+EOF
+  result=$(rec_extract_tool_calls "$raw_file")
+  # First call has result, should be is_error false
+  echo "$result" | grep -q '"seq":1.*"is_error":false'
+  # Second call has no result (interrupted), should default to is_error false
+  echo "$result" | grep -q '"seq":2.*"is_error":false'
+}
+
+@test "rec_extract_tool_calls: backward compat — realistic fixture gets is_error false" {
+  local raw_file="$TEST_DIR/realistic.raw.json"
+  _create_realistic_raw_fixture "$raw_file"
+  result=$(rec_extract_tool_calls "$raw_file")
+  # All 5 calls in realistic fixture have is_error:false in their tool_results
+  echo "$result" | grep -q '"seq":1.*"is_error":false'
+  echo "$result" | grep -q '"seq":5.*"is_error":false'
+  # Should still have all 5 calls
+  local count
+  count=$(echo "$result" | grep -o '"seq":' | wc -l | tr -d ' ')
+  [ "$count" -eq 5 ]
+}
+
 @test "rec_extract_tool_calls: preview with special chars is valid JSON" {
   local raw_file="$TEST_DIR/special.raw.json"
   printf '{"type":"tool_use","name":"Bash","input":{"command":"echo \\"test\\" && cat file"}}\n' > "$raw_file"

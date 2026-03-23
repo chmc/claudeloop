@@ -471,19 +471,25 @@ body {
 .tool-calls-list { font-size: 12px; }
 .tool-call-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 3px 0;
+  padding: 4px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  border-left: 3px solid transparent;
+  border-radius: 2px;
 }
 .tool-call-row:last-child { border-bottom: none; }
+.tool-call-row.is-error { border-left-color: var(--error); background: color-mix(in srgb, var(--error) 4%, transparent); }
 .tool-call-seq {
   font-size: 10px;
   color: var(--text-muted);
   min-width: 24px;
   text-align: right;
   flex-shrink: 0;
+  padding-top: 1px;
 }
+.tool-call-main { flex: 1; min-width: 0; }
+.tool-call-top { display: flex; align-items: center; gap: 8px; }
 .tool-call-preview {
   flex: 1;
   font-family: var(--font-mono);
@@ -493,6 +499,32 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tool-call-error-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--error);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--error) 8%, transparent);
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.tool-call-error-badge:hover { background: color-mix(in srgb, var(--error) 14%, transparent); }
+.tool-call-error-detail {
+  display: none;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--error) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error) 15%, transparent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--error);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.tool-call-error-detail.expanded { display: block; }
 
 /* Git commits section */
 .git-commits-section {
@@ -2394,14 +2426,31 @@ function renderToolCallTimeline(attempt) {
 
   html += '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">' + calls.length + ' tool calls in sequence</div>';
   html += '<div class="tool-calls-list" id="' + timelineId + '">';
+  var errorCount = 0;
+  calls.forEach(function(tc) { if (tc.is_error) errorCount++; });
+  if (errorCount > 0) {
+    html += '<div style="font-size:11px;color:var(--error);margin-bottom:4px;">' + errorCount + ' failed call' + (errorCount > 1 ? 's' : '') + '</div>';
+  }
   calls.forEach(function(tc, idx) {
     var hidden = needsCollapse && idx >= showInitial ? ' style="display:none"' : '';
-    html += '<div class="tool-call-row"' + hidden + ' data-tc-row>';
+    var errorClass = tc.is_error ? ' is-error' : '';
+    var errorId = tc.is_error ? 'tc-err-' + timelineId + '-' + tc.seq : '';
+    html += '<div class="tool-call-row' + errorClass + '"' + hidden + ' data-tc-row data-tool="' + escapeHtml(tc.name) + '">';
     html += '<span class="tool-call-seq">' + tc.seq + '</span>';
+    html += '<div class="tool-call-main">';
+    html += '<div class="tool-call-top">';
     html += '<span class="tool-chip tool-' + escapeHtml(tc.name) + '">' + escapeHtml(tc.name) + '</span>';
     if (tc.preview) {
       html += '<span class="tool-call-preview" title="' + escapeHtml(tc.preview) + '">' + escapeHtml(tc.preview) + '</span>';
     }
+    if (tc.is_error) {
+      html += '<span class="tool-call-error-badge" onclick="toggleToolCallError(\'' + errorId + '\')">error</span>';
+    }
+    html += '</div>';
+    if (tc.is_error && tc.error_preview) {
+      html += '<div class="tool-call-error-detail" id="' + errorId + '">' + escapeHtml(tc.error_preview) + '</div>';
+    }
+    html += '</div>';
     html += '</div>';
   });
   html += '</div>';
@@ -2420,6 +2469,11 @@ function toggleToolCalls(btn, id, total) {
     rows[i].style.display = isCollapsed ? '' : 'none';
   }
   btn.textContent = isCollapsed ? 'Collapse' : 'Show all ' + total + ' tool calls';
+}
+
+function toggleToolCallError(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('expanded');
 }
 
 /* ── Phase Summary Table (overview) ── */
