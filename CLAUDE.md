@@ -192,6 +192,9 @@ When inside a worktree (`git rev-parse --show-toplevel` points to a `*-wt-*` dir
 - **Commit normally**: Conventional commits, push with `git push -u origin wt/<name>`.
 - **PR target**: PRs target the base branch the worktree was created from.
 - **Cleanup**: Use `/wt rm <name>` from the main repo, not from inside the worktree.
+- **CWD isolation (mandatory):** Never `cd` outside the worktree in Bash commands for git write operations (`cherry-pick`, `rebase`, `checkout`, `merge`). These can invalidate the worktree path, permanently breaking all subsequent Bash calls. Use `git -C <path>` for read-only queries if needed.
+- **Landing worktree changes:** Push the branch and create a PR targeting the desired base branch. Never cherry-pick or rebase manually from inside a worktree. `/wt rm` offers integrated "PR then remove".
+- **Broken cwd recovery (mandatory):** If Bash commands fail with "Path does not exist" or similar cwd errors, the worktree directory was removed externally. Do NOT retry Bash commands — they will all fail. Immediately call `ExitWorktree` to restore the session's working directory.
 
 **VS Code integration (mandatory):**
 - **On worktree enter:** After `EnterWorktree` or `/wt create`, add the worktree to the active VS Code workspace:
