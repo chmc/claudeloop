@@ -247,6 +247,23 @@ _setup_epr_stubs() {
   [ "$status" -eq 1 ]
 }
 
+@test "evaluate_phase_result: fails on non-zero exit with turns=1 tokens=0 (API 500 error)" {
+  _setup_epr_stubs
+  local log="$_tmpdir/phase-4.log"
+  local raw="$_tmpdir/phase-4.raw.json"
+  # Log with API 500 error session: turns=1 but zero output tokens
+  printf '=== EXECUTION START phase=4 attempt=1 ===\n' > "$log"
+  printf '=== RESPONSE ===\n' >> "$log"
+  printf 'API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}\n' >> "$log"
+  printf '[Session: duration=33.8s turns=1 tokens=0in/0out]\n' >> "$log"
+  # Raw log with no meaningful events
+  printf '=== EXECUTION START phase=4 attempt=1 ===\n' > "$raw"
+  printf '{"type":"error","error":{"type":"api_error","message":"Internal server error"}}\n' >> "$raw"
+  phase_set ATTEMPTS 4 "1"
+  run evaluate_phase_result 4 1 1 "$log" "$raw"
+  [ "$status" -eq 1 ]
+}
+
 # --- update_fail_reason() ---
 
 @test "update_fail_reason: same reason increments consec" {

@@ -74,16 +74,17 @@ is_empty_log() {
 }
 
 # Check if the most recent execution block in a phase log contains a [Session:] line
-# with turns > 0 (real work was done). Scoped to the last execution block to avoid
-# cross-attempt contamination in multi-attempt logs.
+# with turns > 0 AND non-zero output tokens (real work was done). Scoped to the last
+# execution block to avoid cross-attempt contamination in multi-attempt logs.
 # Multiple [Session:] lines per phase are normal (background sub-invocations each emit one).
+# Rejects API 500 errors where Claude CLI reports turns=1 but tokens=0in/0out.
 # Args: $1 - path to log file
 # Returns: 0 if successful session found in current attempt, 1 otherwise
 has_successful_session() {
   local log_file="$1"
   [ -f "$log_file" ] || return 1
   awk '/^=== EXECUTION START /{found=0; next}
-       /\[Session:/ && /turns=[1-9]/{found=1}
+       /\[Session:/ && /turns=[1-9]/ && /\/[1-9][0-9]*out/{found=1}
        END{exit (found ? 0 : 1)}' "$log_file"
 }
 
