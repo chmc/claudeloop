@@ -117,10 +117,11 @@ Runs `git worktree list` and annotates the output. Reports VS Code workspace sta
 1. `git worktree list`
 2. Annotate `wt/*` branches as managed by this skill.
 3. Note any other worktrees as "not managed by /wt".
-4. If `jq` available and `$WORKSPACE_FILE` exists:
+4. Check for orphan branches: list local branches matching `wt/*` (`git branch --list 'wt/*'`) and compare against active worktrees from step 1. Report any `wt/*` branches without a corresponding worktree as "orphan branches" and suggest `/wt rm <name>` to clean up.
+5. If `jq` available and `$WORKSPACE_FILE` exists:
    - Note which worktrees are in the workspace and which aren't.
    - Detect stale entries: run `jq -r '.folders[].path' "$WORKSPACE_FILE"` and check each with `[ -d "../$dir" ]`. Report any stale entries and offer to run the **prune stale entries** helper.
-5. If `$WORKSPACE_FILE` doesn't exist, note: "No VS Code workspace file. Run `/wt create` to generate one."
+6. If `$WORKSPACE_FILE` doesn't exist, note: "No VS Code workspace file. Run `/wt create` to generate one."
 
 ### `rm` — Remove a worktree
 
@@ -130,7 +131,14 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
 
 1. **Hard block** if `<name>` not provided. Show `git worktree list` and print usage.
 2. Set `WT_DIR="../claudeloop-wt-<name>"`, `WT_BRANCH="wt/<name>"`.
-3. **Hard block** if `$WT_DIR` does not exist.
+3. If `$WT_DIR` does not exist, enter **orphan cleanup mode**:
+   - Print: "Worktree directory not found — cleaning up orphan branch and workspace entry."
+   - `git worktree prune`
+   - If `jq` available and `$WORKSPACE_FILE` exists, run the **prune stale entries** helper.
+   - **Ask** cleanup preference (simplified — no PR option since directory is gone):
+     - **Just remove** (default): `git branch -D "$WT_BRANCH"`, then `git push origin --delete "$WT_BRANCH"` (warn on failure, non-fatal).
+     - **Keep branch**: only prune workspace entry, keep branch for later use.
+   - Print summary and **return** (skip steps 4-7).
 4. Resolve absolute path: `WT_DIR_ABS="$(cd "$WT_DIR" && pwd -P)"`. **Hard block** if `$(git rev-parse --show-toplevel)` equals `$WT_DIR_ABS` — tell user to cd to main repo first.
 5. Check for uncommitted changes: `git -C "$WT_DIR" status --porcelain`. If non-empty, **warn and confirm** — list the changes. User must acknowledge before proceeding with `--force`.
 6. Check for unpushed commits: if `git show-ref --verify --quiet "refs/remotes/origin/$WT_BRANCH"`, run `git log "origin/$WT_BRANCH..$WT_BRANCH" --oneline`. Otherwise, all commits are unpushed — warn with `git log "$WT_BRANCH" --oneline --not --remotes`.
@@ -161,13 +169,14 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
 - Worktree directory exists but isn't a git worktree: `git worktree remove` will fail with a clear error.
 - `jq` not installed: warn, skip workspace file update, all git operations still work.
 - Workspace file manually edited by user: only modify `folders` array, preserve everything else.
-- Stale workspace entries (manual `rm -rf` or interrupted `/wt rm`): caught during `list` and `create` prune step.
-- Interrupted `rm` leaves stale workspace entry: next `list` or `create` detects and cleans it.
+- Orphan state (directory deleted outside `/wt rm`): `rm` enters orphan cleanup mode at step 3 — prunes git worktree tracking, cleans workspace entry, offers branch deletion.
+- Stale workspace entries (manual `rm -rf` or interrupted `/wt rm`): caught during `list`, `create` prune step, and `rm` orphan cleanup.
+- Orphan branches without worktree: detected by `list` step 4, cleaned by `/wt rm`.
 - Last worktree removed: leave workspace file intact (still valid, avoids closing VS Code window).
 
 ## Error handling
 
 - On any git command failure not explicitly handled above, report the error and stop.
-- Never delete a branch without removing the worktree first.
+- Never delete a branch without removing the worktree first (unless in orphan cleanup mode where the directory is already gone).
 - If `gh pr create` fails after push, proceed with worktree removal (commits are safe on remote).
 - Workspace file operations are non-fatal — git operations take priority.
