@@ -40,3 +40,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0032](0032-archive-feature.md) | Archive old plan runs | 2026-03-16 | Accepted |
 | [0033](0033-flight-recorder.md) | Replay — self-contained HTML execution report | 2026-03-17 | Accepted |
 | [0034](0034-fast-interrupt-shutdown.md) | Fast interrupt shutdown — background replay generation | 2026-03-20 | Accepted |
+| [0035](0035-recorder-json-safety.md) | Recorder JSON safety — defense in depth | 2026-03-23 | Accepted |

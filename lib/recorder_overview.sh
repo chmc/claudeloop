@@ -45,6 +45,12 @@ _rec_overview_from_metadata() {
   total_cw=$(printf '%s' "$totals" | cut -d'|' -f5)
   started_at=$(printf '%s' "$totals" | cut -d'|' -f6)
   ended_at=$(printf '%s' "$totals" | cut -d'|' -f7)
+  # Default empty aggregate fields (AWK crash or empty log directory)
+  [ -z "$total_cost" ] && total_cost=0
+  [ -z "$total_in" ] && total_in=0
+  [ -z "$total_out" ] && total_out=0
+  [ -z "$total_cr" ] && total_cr=0
+  [ -z "$total_cw" ] && total_cw=0
 
   plan_file=$(json_escape "$plan_file")
 
@@ -85,6 +91,12 @@ _rec_overview_from_progress() {
   total_cw=$(printf '%s' "$totals" | cut -d'|' -f5)
   started_at=$(printf '%s' "$totals" | cut -d'|' -f6)
   ended_at=$(printf '%s' "$totals" | cut -d'|' -f7)
+  # Default empty aggregate fields (AWK crash or empty log directory)
+  [ -z "$total_cost" ] && total_cost=0
+  [ -z "$total_in" ] && total_in=0
+  [ -z "$total_out" ] && total_out=0
+  [ -z "$total_cr" ] && total_cr=0
+  [ -z "$total_cw" ] && total_cw=0
 
   printf '{"plan_file":"","phase_count":%s,"completed":%s,"failed":%s,"pending":%s,"started_at":"%s","ended_at":"%s","total_cost_usd":%s,"total_input_tokens":%s,"total_output_tokens":%s,"total_cache_read":%s,"total_cache_write":%s}' \
     "$_REC_PHASE_COUNT" "$completed" "$failed" "$pending" \

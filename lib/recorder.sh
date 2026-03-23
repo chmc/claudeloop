@@ -34,6 +34,41 @@ json_escape() {
     }'
 }
 
+# JSON SAFETY: Every shell variable interpolated into a JSON printf via %s
+# MUST be validated. Use safe_json_array() for arrays, safe_json_object()
+# for objects, and [ -z "$var" ] && var="default" for scalar fields.
+# Extractors may return empty or truncated output if AWK crashes.
+
+# Validate JSON array: must start with [ AND end with ]. Falls back to [].
+# Args: $1 - string to validate
+safe_json_array() {
+  case "$1" in
+    '['*']') printf '%s' "$1" ;;
+    *)       printf '[]' ;;
+  esac
+}
+
+# Validate JSON object: must start with { AND end with }. Falls back to default.
+# Args: $1 - string to validate, $2 - default (optional, "null" if omitted)
+safe_json_object() {
+  case "$1" in
+    '{'*'}') printf '%s' "$1" ;;
+    *)       printf '%s' "${2:-null}" ;;
+  esac
+}
+
+# Best-effort JSON file validation. Returns 0 on valid or no validator available.
+# Args: $1 - path to JSON file
+validate_json() {
+  if command -v node >/dev/null 2>&1; then
+    node -e "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$1" 2>/dev/null
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$1" 2>/dev/null
+  else
+    return 0
+  fi
+}
+
 # Parse PROGRESS.md into _REC_PHASE_* variables.
 # Sets _REC_PHASE_COUNT, _REC_PHASE_NUMBERS, and per-phase:
 #   _REC_PHASE_TITLE_N, _REC_PHASE_STATUS_N, _REC_PHASE_ATTEMPTS_N,
@@ -176,8 +211,8 @@ inject_and_write_html() {
     if [ "$before_line" -ge 1 ]; then
       head -n "$before_line" "$template"
     fi
-    # Inject: const DATA = <json>;
-    printf 'const DATA = '
+    # Inject: DATA = <json>; (var DATA declared in template before marker)
+    printf 'DATA = '
     sed 's/</\\u003c/g' "$json_file"
     printf ';\n'
     # Lines after the marker
@@ -256,6 +291,12 @@ generate_replay() {
     printf '[%s]   Writing HTML...\n' "$_ts" >&2
   fi
 
+  # Best-effort JSON validation (warn-only, does not block replay generation)
+  if ! validate_json "$json_tmp"; then
+    printf '[%s]   WARNING: Replay JSON failed validation (may render with errors)\n' \
+      "$(date '+%H:%M:%S')" >&2
+  fi
+
   # Inject into HTML template
   if ! inject_and_write_html "$json_tmp" "$output_html" 2>/dev/null; then
     rm -f "$json_tmp" 2>/dev/null
@@ -278,6 +319,7 @@ assemble_recorder_json() {
 
   local run_overview
   run_overview=$(rec_extract_run_overview "$run_dir")
+  run_overview=$(safe_json_object "$run_overview" "{}")
 
   printf '{"version":1,"generated_at":"%s","run":%s,"phases":[' "$generated_at" "$run_overview"
 
@@ -356,6 +398,7 @@ assemble_recorder_json() {
       local exec_meta session tools files git_commits prompt_text
       exec_meta=$(rec_extract_exec_meta "$log_file")
       session=$(rec_extract_session "$log_file")
+      session=$(safe_json_object "$session")
       prompt_text=$(rec_extract_prompt_text "$log_file")
 
       # Tools and files from per-attempt raw.json
@@ -367,12 +410,12 @@ assemble_recorder_json() {
           raw_file="$run_dir/logs/phase-${pn}.raw.json"
         fi
       fi
-      tools=$(rec_extract_tools "$raw_file")
-      files=$(rec_extract_files "$raw_file")
+      tools=$(safe_json_array "$(rec_extract_tools "$raw_file")")
+      files=$(safe_json_array "$(rec_extract_files "$raw_file")")
       local tool_calls
-      tool_calls=$(rec_extract_tool_calls "$raw_file")
+      tool_calls=$(safe_json_array "$(rec_extract_tool_calls "$raw_file")")
 
-      git_commits=$(rec_extract_git_commits "$pn")
+      git_commits=$(safe_json_array "$(rec_extract_git_commits "$pn")")
 
       # Extract individual fields from exec_meta JSON using sed
       local a_started a_ended a_exit a_duration
@@ -380,6 +423,10 @@ assemble_recorder_json() {
       a_ended=$(printf '%s' "$exec_meta" | sed -n 's/.*"ended_at":\([^,}]*\).*/\1/p')
       a_exit=$(printf '%s' "$exec_meta" | sed -n 's/.*"exit_code":\([^,}]*\).*/\1/p')
       a_duration=$(printf '%s' "$exec_meta" | sed -n 's/.*"duration_s":\([^,}]*\).*/\1/p')
+      [ -z "$a_started" ] && a_started="null"
+      [ -z "$a_ended" ] && a_ended="null"
+      [ -z "$a_exit" ] && a_exit="null"
+      [ -z "$a_duration" ] && a_duration="null"
 
       # Format prompt_text as JSON value (already escaped, wrap in quotes; or null)
       local prompt_json

@@ -32,6 +32,13 @@ rec_extract_session() {
   input_tokens=$(printf '%s' "$session_line" | sed -n 's/.*tokens=\([0-9]*\)in.*/\1/p')
   output_tokens=$(printf '%s' "$session_line" | sed -n 's/.*tokens=[0-9]*in\/\([0-9]*\)out.*/\1/p')
 
+  # Default empty numeric fields (missing from session line or sed match failure)
+  [ -z "$cost" ] && cost=0
+  [ -z "$duration" ] && duration=0
+  [ -z "$turns" ] && turns=0
+  [ -z "$input_tokens" ] && input_tokens=0
+  [ -z "$output_tokens" ] && output_tokens=0
+
   # Cache fields are optional
   cache_read=$(printf '%s' "$session_line" | sed -n 's/.*cache=\([0-9]*\)r.*/\1/p')
   cache_write=$(printf '%s' "$session_line" | sed -n 's/.*cache=[0-9]*r\/\([0-9]*\)w.*/\1/p')
