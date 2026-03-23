@@ -2,7 +2,7 @@ Output assets/demo-execution.gif
 Set Shell "bash"
 Set FontSize 20
 Set Width 1200
-Set Height 700
+Set Height 780
 Set Theme "Catppuccin Mocha"
 Set Padding 20
 Set TypingSpeed 35ms
@@ -18,6 +18,6 @@ Show
 
 Type "claudeloop"
 Enter
-Sleep 14s
+Sleep 24s
 Sleep 4s
 Screenshot assets/screenshot-completion.png

@@ -16,14 +16,14 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo-execution.gif" alt="ClaudeLoop executing a 3-phase plan with live progress" width="700">
+  <img src="assets/demo-execution.gif" alt="ClaudeLoop executing a 5-phase plan with live progress" width="700">
 </p>
 
 ## The Problem
 
 Long AI coding sessions hit a wall. Context fills up, the model forgets earlier decisions, and quality degrades — task 10 is dumber than task 1. You end up babysitting, copying context manually, or just accepting worse output.
 
-ClaudeLoop fixes this. Write a plan, and each task gets a **brand-new Claude instance** with fresh context. Progress is saved between tasks. If something fails, it retries automatically with escalating strategies.
+ClaudeLoop fixes this. Describe what you want — structured phases or just free-form notes — and each task gets a **brand-new Claude instance** with fresh context. Progress is saved between tasks. If something fails, it retries automatically with escalating strategies.
 
 ## Install
 
@@ -41,8 +41,8 @@ See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative
 |---|---|---|
 | **Fresh Context** | **Dependency Graph** | **Smart Retries** |
 | Each task spawns a new Claude instance. No context degradation, ever. | Declare dependencies between tasks. ClaudeLoop resolves execution order automatically. | Strategy rotation on failure: full prompt → stripped → error-focused. Quota-aware delays. |
-| **Network Resilience** | **Verification** | **Auto-Refactor** |
-| Detects failures, rolls back partial changes, resumes automatically. | `--verify` spawns a read-only Claude to check each task with pass/fail verdicts. | `--refactor` runs code quality passes after each task. Rolls back on failure. |
+| **Natural Language Plans** | **Verification** | **Auto-Refactor** |
+| Write bullet points or rough notes. `--ai-parse` decomposes them into phases with dependencies. | `--verify` spawns a read-only Claude to check each task with pass/fail verdicts. | `--refactor` runs code quality passes after each task. Rolls back on failure. |
 
 ### ClaudeLoop vs. the alternatives
 
@@ -55,10 +55,46 @@ See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative
 | **Verification** | Trust the output | Manual review | **Fresh read-only Claude checks work** |
 | **Code quality** | Hope for the best | Manual cleanup | **Auto-refactor with rollback** |
 | **Observability** | Scroll terminal | Scroll terminal | **Live monitoring + HTML replay** |
+| **Plan authoring** | Write it yourself | Write it yourself | **Free-form notes → auto-structured** |
 
 ## Quick Start
 
-**1. Write a plan** — create `PLAN.md` in your project:
+**1. Jot down what you want built** — create `PLAN.md` in your project:
+
+```markdown
+# Todo API
+
+- Set up Express + SQLite project structure
+- Database schema for todos (id, title, completed, timestamps)
+- CRUD model with prepared statements and error handling
+- REST endpoints: GET/POST/PUT/DELETE /todos
+- Tests for model and API (aim for >90% coverage)
+```
+
+**2. Let ClaudeLoop decompose and execute:**
+
+```sh
+claudeloop --ai-parse
+```
+
+ClaudeLoop turns your notes into ordered **phases** with dependencies and shows the plan for confirmation before running. Each phase gets a **fresh Claude instance** — no context degradation, automatic retries, progress saved between tasks.
+
+**3. Watch it work** from a second terminal:
+
+```sh
+claudeloop --monitor
+```
+
+<p align="center">
+  <img src="assets/screenshot-completion.png" alt="ClaudeLoop run complete — all phases done" width="700">
+</p>
+
+> **Tip:** Add `--dry-run` to preview the plan without executing: `claudeloop --ai-parse --dry-run`
+
+<details>
+<summary><strong>Want full control? Write phases yourself</strong></summary>
+
+Skip `--ai-parse` and write the structured format directly:
 
 ```markdown
 # My Project
@@ -77,23 +113,28 @@ Implement the main business logic.
 Write tests for all core functionality.
 ```
 
-**2. Run it:**
+Then run with no flags:
 
 ```sh
 claudeloop
 ```
 
-**3. Watch it work** from a second terminal:
+Explicit control over phase boundaries, descriptions, and dependency wiring.
+See `examples/PLAN.md.example` for a complete example and [Plan File Format](#plan-file-format) for the syntax.
+
+</details>
+
+## AI Plan Decomposition
 
 ```sh
-claudeloop --monitor
+claudeloop --plan ideas.md --ai-parse --dry-run
 ```
 
-<p align="center">
-  <img src="assets/screenshot-completion.png" alt="ClaudeLoop run complete — all phases done" width="700">
-</p>
+Turn free-form notes into executable tasks. Write bullet points, get a structured plan with dependencies.
 
-> **Tip:** Run `claudeloop --dry-run` first to validate your plan without executing.
+<p align="center">
+  <img src="assets/demo-dryrun.gif" alt="AI plan decomposition — turning notes into phases" width="700">
+</p>
 
 ## Replay Report
 
@@ -166,18 +207,6 @@ Real-time progress with todo and task tracking from a second terminal.
 
 <p align="center">
   <img src="assets/demo-todos.gif" alt="Live todo tracking from a second terminal" width="700">
-</p>
-
-## AI Plan Decomposition
-
-```sh
-claudeloop --plan ideas.md --ai-parse --dry-run
-```
-
-Turn free-form notes into executable tasks. Write bullet points, get a structured plan with dependencies.
-
-<p align="center">
-  <img src="assets/demo-dryrun.gif" alt="AI plan decomposition — turning notes into phases" width="700">
 </p>
 
 ## How It Works

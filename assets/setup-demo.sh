@@ -8,8 +8,9 @@ FAKE_DIR=$(mktemp -d)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDELOOP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Create a simple 3-phase plan
-cat > "$DEMO_DIR/PLAN.md" << 'PLAN'
+# Create a 5-phase plan (matches README Quick Start)
+mkdir -p "$DEMO_DIR/.claudeloop"
+cat > "$DEMO_DIR/.claudeloop/ai-parsed-plan.md" << 'PLAN'
 # Todo API
 
 ## Phase 1: Project Setup
@@ -24,12 +25,24 @@ Create SQLite schema for todos table:
 - id, title, completed, created_at
 Add migration script.
 
-## Phase 3: API Routes
+## Phase 3: CRUD Model
 **Depends on:** Phase 2
+
+Implement Todo model with create, findAll, findById, update, and delete.
+Use prepared statements and error handling.
+
+## Phase 4: REST Endpoints
+**Depends on:** Phase 3
 
 Implement REST endpoints:
 - GET /todos, POST /todos, PUT /todos/:id, DELETE /todos/:id
 Include validation and error handling.
+
+## Phase 5: Tests
+**Depends on:** Phase 3, Phase 4
+
+Write tests for model and API layers.
+Aim for >90% coverage.
 PLAN
 
 # Initialize git repo (required by claudeloop)
@@ -38,9 +51,9 @@ git init -q
 git add .
 git commit -q -m "init"
 
-# Create .claudeloop config to disable AI parsing, verification, and refactoring
-mkdir -p "$DEMO_DIR/.claudeloop"
+# Create .claudeloop config pointing to the ai-parsed plan
 cat > "$DEMO_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+PLAN_FILE=.claudeloop/ai-parsed-plan.md
 AI_PARSE=false
 VERIFY_PHASES=false
 REFACTOR_PHASES=false

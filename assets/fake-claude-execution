@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fake Claude CLI for execution demo.
-# Three calls: one per phase of the 3-phase "Todo API" plan.
+# Five calls: one per phase of the 5-phase "Todo API" plan.
 # Paced NDJSON output with TodoWrite events for realistic GIF recording.
 
 FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
@@ -77,7 +77,7 @@ case "$count" in
     # Initial todos: all pending
     printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read project structure","status":"pending"},{"content":"Create database schema","status":"pending"},{"content":"Run migration","status":"pending"}]},"id":"toolu_demo_2t1"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_2t1"}\n'
-    sleep 0.4
+    sleep 0.3
 
     printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/app.js"},"id":"toolu_demo_201"}\n'
     printf '{"type":"tool_result","content":"const express = require('"'"'express'"'"');\\nconst app = express();","id":"toolu_demo_201"}\n'
@@ -89,7 +89,7 @@ case "$count" in
 
     # Thinking pause — triggers spinner
     printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
-    sleep 0.4
+    sleep 0.3
 
     printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/db/schema.sql"},"id":"toolu_demo_202"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_202"}\n'
@@ -115,58 +115,156 @@ case "$count" in
     printf '{"type":"result","total_cost_usd":0.022,"duration_ms":9000,"num_turns":3,"usage":{"input_tokens":5100,"output_tokens":1400},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":5100,"output_tokens":1400}}}\n'
     ;;
   3)
-    # Phase 3: API Routes — read context, implement routes, test
+    # Phase 3: CRUD Model — read schema, implement model with prepared statements
     printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
-    sleep 0.3
+    sleep 0.2
 
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll implement the REST API endpoints with validation.\\n"}]}}\n'
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll create the Todo model with CRUD operations using prepared statements.\\n"}]}}\n'
 
     # Initial todos: all pending
-    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing code","status":"pending"},{"content":"Implement REST endpoints","status":"pending"},{"content":"Test route loading","status":"pending"}]},"id":"toolu_demo_3t1"}\n'
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read schema and database code","status":"pending"},{"content":"Implement Todo model","status":"pending"},{"content":"Test module loading","status":"pending"}]},"id":"toolu_demo_3t1"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_3t1"}\n'
-    sleep 0.4
+    sleep 0.3
 
-    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/app.js"},"id":"toolu_demo_301"}\n'
-    printf '{"type":"tool_result","content":"const express = require('"'"'express'"'"');\\nconst app = express();","id":"toolu_demo_301"}\n'
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/db/schema.sql"},"id":"toolu_demo_301"}\n'
+    printf '{"type":"tool_result","content":"CREATE TABLE todos (\\n  id INTEGER PRIMARY KEY,\\n  title TEXT NOT NULL,\\n  completed BOOLEAN DEFAULT 0,\\n  created_at DATETIME DEFAULT CURRENT_TIMESTAMP\\n);","id":"toolu_demo_301"}\n'
     sleep 0.2
 
     printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/db/migrate.js"},"id":"toolu_demo_302"}\n'
     printf '{"type":"tool_result","content":"const sqlite3 = require('"'"'sqlite3'"'"');","id":"toolu_demo_302"}\n'
 
     # Update: 1 completed, 1 in_progress
-    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing code","status":"completed"},{"content":"Implement REST endpoints","status":"in_progress"},{"content":"Test route loading","status":"pending"}]},"id":"toolu_demo_3t2"}\n'
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read schema and database code","status":"completed"},{"content":"Implement Todo model","status":"in_progress"},{"content":"Test module loading","status":"pending"}]},"id":"toolu_demo_3t2"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_3t2"}\n'
-    sleep 0.2
 
     # Thinking pause — triggers spinner
     printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
-    sleep 0.4
+    sleep 0.3
 
-    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/routes/todos.js"},"id":"toolu_demo_303"}\n'
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/models/todo.js"},"id":"toolu_demo_303"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_303"}\n'
     sleep 0.2
 
-    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/app.js","new_string":"app.use('"'"'/todos'"'"', require('"'"'./routes/todos'"'"'));"},"id":"toolu_demo_304"}\n'
-    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_304"}\n'
-
     # Update: 2 completed, 1 in_progress
-    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing code","status":"completed"},{"content":"Implement REST endpoints","status":"completed"},{"content":"Test route loading","status":"in_progress"}]},"id":"toolu_demo_3t3"}\n'
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read schema and database code","status":"completed"},{"content":"Implement Todo model","status":"completed"},{"content":"Test module loading","status":"in_progress"}]},"id":"toolu_demo_3t3"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_3t3"}\n'
-    sleep 0.2
 
-    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"require('"'"'./src/app'"'"')\" && echo '"'"'Routes loaded successfully'"'"'"},"id":"toolu_demo_305"}\n'
-    printf '{"type":"tool_result","content":"Routes loaded successfully","id":"toolu_demo_305"}\n'
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"require('"'"'./src/models/todo'"'"')\""},"id":"toolu_demo_304"}\n'
+    printf '{"type":"tool_result","content":"","id":"toolu_demo_304"}\n'
 
     # All completed
-    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read existing code","status":"completed"},{"content":"Implement REST endpoints","status":"completed"},{"content":"Test route loading","status":"completed"}]},"id":"toolu_demo_3t4"}\n'
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read schema and database code","status":"completed"},{"content":"Implement Todo model","status":"completed"},{"content":"Test module loading","status":"completed"}]},"id":"toolu_demo_3t4"}\n'
     printf '{"type":"tool_result","content":"ok","id":"toolu_demo_3t4"}\n'
     sleep 0.1
 
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All REST endpoints implemented: GET/POST/PUT/DELETE /todos. Validation and error handling included.\\n"}]}}\n'
-    printf '{"type":"result","total_cost_usd":0.031,"duration_ms":15000,"num_turns":4,"usage":{"input_tokens":6800,"output_tokens":2100},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":6800,"output_tokens":2100}}}\n'
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Todo model created with create, findAll, findById, update, and delete methods.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.026,"duration_ms":10000,"num_turns":3,"usage":{"input_tokens":6200,"output_tokens":1600},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":6200,"output_tokens":1600}}}\n'
+    ;;
+  4)
+    # Phase 4: REST Endpoints — read model, implement routes, test integration
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.2
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll implement the REST API endpoints for the Todo resource.\\n"}]}}\n'
+
+    # Initial todos: all pending
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read model API and app structure","status":"pending"},{"content":"Implement REST endpoints","status":"pending"},{"content":"Verify route integration","status":"pending"}]},"id":"toolu_demo_4t1"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_4t1"}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/models/todo.js"},"id":"toolu_demo_401"}\n'
+    printf '{"type":"tool_result","content":"const db = require('"'"'../db/migrate'"'"');","id":"toolu_demo_401"}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/app.js"},"id":"toolu_demo_402"}\n'
+    printf '{"type":"tool_result","content":"const express = require('"'"'express'"'"');\\nconst app = express();","id":"toolu_demo_402"}\n'
+
+    # Update: 1 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read model API and app structure","status":"completed"},{"content":"Implement REST endpoints","status":"in_progress"},{"content":"Verify route integration","status":"pending"}]},"id":"toolu_demo_4t2"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_4t2"}\n'
+
+    # Thinking pause — triggers spinner
+    printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/routes/todos.js"},"id":"toolu_demo_403"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_403"}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/app.js","new_string":"app.use('"'"'/todos'"'"', require('"'"'./routes/todos'"'"'));"},"id":"toolu_demo_404"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_404"}\n'
+
+    # Update: 2 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read model API and app structure","status":"completed"},{"content":"Implement REST endpoints","status":"completed"},{"content":"Verify route integration","status":"in_progress"}]},"id":"toolu_demo_4t3"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_4t3"}\n'
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"node -e \"require('"'"'./src/app'"'"')\" && echo '"'"'Routes loaded successfully'"'"'"},"id":"toolu_demo_405"}\n'
+    printf '{"type":"tool_result","content":"Routes loaded successfully","id":"toolu_demo_405"}\n'
+
+    # All completed
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read model API and app structure","status":"completed"},{"content":"Implement REST endpoints","status":"completed"},{"content":"Verify route integration","status":"completed"}]},"id":"toolu_demo_4t4"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_4t4"}\n'
+    sleep 0.1
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"REST endpoints implemented: GET/POST/PUT/DELETE /todos with validation and error handling.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.034,"duration_ms":14000,"num_turns":4,"usage":{"input_tokens":7500,"output_tokens":2200},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":7500,"output_tokens":2200}}}\n'
+    ;;
+  5)
+    # Phase 5: Tests — write model + API tests, run test suite
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.2
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'"'"'ll write comprehensive tests for the model and API layers.\\n"}]}}\n'
+
+    # Initial todos: all pending
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"pending"},{"content":"Write model tests","status":"pending"},{"content":"Write API tests","status":"pending"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_demo_5t1"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_5t1"}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/models/todo.js"},"id":"toolu_demo_501"}\n'
+    printf '{"type":"tool_result","content":"const db = require('"'"'../db/migrate'"'"');","id":"toolu_demo_501"}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Read","input":{"file_path":"src/routes/todos.js"},"id":"toolu_demo_502"}\n'
+    printf '{"type":"tool_result","content":"const router = require('"'"'express'"'"').Router();","id":"toolu_demo_502"}\n'
+
+    # Update: 1 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Write model tests","status":"in_progress"},{"content":"Write API tests","status":"pending"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_demo_5t2"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_5t2"}\n'
+
+    # Thinking pause — triggers spinner
+    printf '{"type":"assistant","message":{"role":"assistant","content":[]}}\n'
+    sleep 0.2
+
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"tests/todo.model.test.js"},"id":"toolu_demo_503"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_503"}\n'
+    sleep 0.2
+
+    # Update: 2 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Write model tests","status":"completed"},{"content":"Write API tests","status":"in_progress"},{"content":"Run test suite","status":"pending"}]},"id":"toolu_demo_5t3"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_5t3"}\n'
+
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"tests/todo.api.test.js"},"id":"toolu_demo_504"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_504"}\n'
+
+    # Update: 3 completed, 1 in_progress
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Write model tests","status":"completed"},{"content":"Write API tests","status":"completed"},{"content":"Run test suite","status":"in_progress"}]},"id":"toolu_demo_5t4"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_5t4"}\n'
+
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npx jest --coverage"},"id":"toolu_demo_505"}\n'
+    printf '{"type":"tool_result","content":"8 passed, 0 failed. Coverage: 94.2%%","id":"toolu_demo_505"}\n'
+
+    # All completed
+    printf '{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Read source files","status":"completed"},{"content":"Write model tests","status":"completed"},{"content":"Write API tests","status":"completed"},{"content":"Run test suite","status":"completed"}]},"id":"toolu_demo_5t5"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_demo_5t5"}\n'
+    sleep 0.1
+
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All tests passing: 8 tests across model and API layers. Coverage at 94.2%%.\\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.041,"duration_ms":16000,"num_turns":4,"usage":{"input_tokens":8800,"output_tokens":2800},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":8800,"output_tokens":2800}}}\n'
     ;;
   *)
     printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-1"}\n'
+    sleep 0.1
     printf '{"type":"result","total_cost_usd":0.001,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"claude-sonnet-4-1":{"input_tokens":100,"output_tokens":20}}}\n'
     ;;
 esac

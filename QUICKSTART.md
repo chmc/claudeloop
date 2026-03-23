@@ -63,6 +63,8 @@ Describe what Claude should do in this phase.
 Describe what Claude should do next.
 ```
 
+> **Tip:** Prefer free-form notes? Use `claudeloop --ai-parse` and let AI structure them into phases.
+
 ## 3. Run
 
 ```bash
