@@ -124,7 +124,7 @@ claudeloop --plan ideas.md --ai-parse --dangerously-skip-permissions
 
 ## Config file
 
-ClaudeLoop creates `.claudeloop/.claudeloop.conf` automatically on first run. After that, you can just run `claudeloop` with no arguments:
+On first run, an interactive setup wizard configures your project with smart defaults — just press Enter to accept them all. Settings are saved to `.claudeloop/.claudeloop.conf`. After that, just run `claudeloop` with no arguments:
 
 ```bash
 # First run — conf is created with your settings

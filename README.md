@@ -91,6 +91,8 @@ claudeloop --monitor
 
 > **Tip:** Add `--dry-run` to preview the plan without executing: `claudeloop --ai-parse --dry-run`
 
+> **First run?** A setup wizard configures your project with smart defaults — just press Enter. Settings are saved for future runs, no flags needed.
+
 <details>
 <summary><strong>Want full control? Write phases yourself</strong></summary>
 
@@ -262,11 +264,19 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 </details>
 
 <details>
-<summary><strong>Config File</strong></summary>
+<summary><strong>Setup & Config</strong></summary>
 
-On first run, ClaudeLoop automatically creates `.claudeloop/.claudeloop.conf` with the active settings. You can then run `claudeloop` with no arguments and it will reuse those settings.
+On first run, ClaudeLoop launches an **interactive setup wizard** that walks you through project configuration:
 
-If you pass CLI arguments on a subsequent run, only the explicitly set keys are updated in the conf file.
+- **Files** — plan file path, progress file location
+- **Resilience** — max retries per phase, quota wait time
+- **Output** — plain mode, permission handling, custom prompt templates
+- **AI** — plan decomposition, granularity (phases/tasks/steps)
+- **Quality** — phase verification with fresh AI, auto-refactoring
+
+Every question has a smart default — press Enter to accept all defaults for a working setup. Settings are saved to `.claudeloop/.claudeloop.conf` and reused on subsequent runs.
+
+If you pass CLI flags, those questions are skipped in the wizard. In non-interactive environments (no TTY or `--yes` mode), the wizard is skipped and defaults are used.
 
 `--dry-run` never writes or modifies the conf file.
 
@@ -285,10 +295,10 @@ If you pass CLI arguments on a subsequent run, only the explicitly set keys are 
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
 | `IDLE_TIMEOUT` | `--idle-timeout` | `600` |
 | `VERIFY_TIMEOUT` | `--verify-timeout` | `300` |
-| `AI_PARSE` | `--ai-parse` | `false` |
+| `AI_PARSE` | `--ai-parse` | `true` |
 | `GRANULARITY` | `--granularity` | `tasks` |
-| `VERIFY_PHASES` | `--verify` | `false` |
-| `REFACTOR_PHASES` | `--refactor` | `false` |
+| `VERIFY_PHASES` | `--verify` | `true` |
+| `REFACTOR_PHASES` | `--refactor` | `true` |
 
 Example `.claudeloop/.claudeloop.conf`:
 
