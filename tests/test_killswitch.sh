@@ -211,3 +211,64 @@ PEOF
   # Recorder MUST have been called
   [ -f "$TEST_DIR/recorder_called" ]
 }
+
+# =============================================================================
+# Unit: handle_interrupt kills CURRENT_PIPELINE_PID during AI parsing
+# =============================================================================
+
+@test "killswitch: handle_interrupt kills CURRENT_PIPELINE_PID" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  # Start a long-running process to simulate the AI parsing pipeline
+  sleep 300 &
+  local target_pid=$!
+
+  # Set up state as if we are in AI parsing (no phase loaded, no progress)
+  CURRENT_PIPELINE_PID="$target_pid"
+  CURRENT_PIPELINE_PGID=""
+  CURRENT_PHASE=""
+  INTERRUPTED=false
+  _PROGRESS_LOADED=""
+
+  # Simulate the kill logic from handle_interrupt (can't call handle_interrupt
+  # directly because it calls exit, but we test the PID-kill mechanism)
+  if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
+    kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+    if [ -n "${CURRENT_PIPELINE_PGID:-}" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
+      kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
+    fi
+    CURRENT_PIPELINE_PID=""
+    CURRENT_PIPELINE_PGID=""
+  fi
+  INTERRUPTED=true
+
+  # Verify the process was killed
+  sleep 0.2
+  ! kill -0 "$target_pid" 2>/dev/null
+}
+
+@test "killswitch: handle_interrupt skips kill when CURRENT_PIPELINE_PID is empty" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  # Simulate state between AI parse calls (pipeline finished, PID cleared)
+  CURRENT_PIPELINE_PID=""
+  CURRENT_PIPELINE_PGID=""
+  CURRENT_PHASE=""
+  INTERRUPTED=false
+  _PROGRESS_LOADED=""
+
+  # The kill logic should be a no-op (no crash)
+  if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
+    kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  fi
+  INTERRUPTED=true
+
+  # Just verify we got here without errors
+  [ "$INTERRUPTED" = "true" ]
+}

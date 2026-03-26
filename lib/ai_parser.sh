@@ -4,21 +4,18 @@
 # Uses claude CLI to decompose free-form plans into structured phases
 
 # Run claude --print with streaming output and error handling
-# Args: $1 - prompt text
-# Returns: 0 on success (stdout = claude output), 1 on failure
+# Args: $1 - prompt text, $2 - output file path
+# Returns: 0 on success (output written to $2), 1 on failure
 # Streams output to stderr in real-time via process_stream_json
+# Sets CURRENT_PIPELINE_PID so handle_interrupt can kill the pipeline on Ctrl+C.
 run_claude_print() {
   local prompt="$1"
+  local output_file="$2"
 
   if ! command -v claude > /dev/null 2>&1; then
     print_error "claude CLI not found in PATH"
     return 1
   fi
-
-  # Close inherited stdin so subprocess pipelines cannot consume the caller's
-  # interactive input (claude reads from a temp file, not stdin).
-  # Safe because run_claude_print is always called inside $() subshells.
-  exec 0</dev/null
 
   local tmp_prompt tmp_log tmp_raw _exit_tmp
   tmp_prompt=$(mktemp)
@@ -30,19 +27,34 @@ run_claude_print() {
 
   unset CLAUDECODE  # allow nested claude invocations (same pattern as execute_phase)
 
-  # Stream-json pipeline: claude → inject_heartbeats → process_stream_json
-  # process_stream_json stdout (timestamped text) → stderr (visible to user)
-  # process_stream_json writes clean text to tmp_log
+  # Pipeline runs in background — NO set -m needed.
+  # Without set -m, the pipeline shares the shell's process group,
+  # so terminal SIGINT reaches it directly. wait is interruptible
+  # by signals (no bash 3.2 set -m/wait deadlock).
   {
-    exec 3<&- 2>/dev/null  # prevent pipeline descendants from inheriting caller's saved-stdin fd
+    exec 0</dev/null           # close stdin in subshell (claude reads from temp file)
+    exec 3<&- 2>/dev/null      # prevent inheriting caller's saved-stdin fd
     _rc=0
     claude --print --output-format=stream-json --verbose --include-partial-messages \
       < "$tmp_prompt" 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" >&2
+  } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0" >&2 &
+  CURRENT_PIPELINE_PID=$!
+  wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  printf '\r%-12s\r' '' >/dev/stderr
+  CURRENT_PIPELINE_PID=""
 
-  local rc
-  rc=$(cat "$_exit_tmp")
+  # Exit-code wait loop — stream processor (last pipeline stage) may exit
+  # before claude (first stage) writes the exit code file
+  local _ec_wait=0
+  while [ ! -s "$_exit_tmp" ] && [ "$_ec_wait" -lt "${_EXIT_CODE_WAIT:-5}" ]; do
+    sleep 1
+    _ec_wait=$((_ec_wait + 1))
+  done
+
+  local rc=1
+  [ -f "$_exit_tmp" ] && rc=$(cat "$_exit_tmp")
+  case "$rc" in ''|*[!0-9]*) rc=1 ;; esac
 
   if [ "$rc" -ne 0 ]; then
     print_error "claude --print failed with exit code $rc"
@@ -50,10 +62,8 @@ run_claude_print() {
     return 1
   fi
 
-  # Strip process_stream_json metadata before returning
-  grep -v '^\[.*\] model=' "$tmp_log" | sed 's/\[Session:[^]]*\]//g' > "${tmp_log}.clean"
-  mv "${tmp_log}.clean" "$tmp_log"
-  cat "$tmp_log"
+  # Strip process_stream_json metadata, write cleaned output to output_file
+  grep -v '^\[.*\] model=' "$tmp_log" | sed 's/\[Session:[^]]*\]//g' > "$output_file"
   rm -f "$tmp_prompt" "$tmp_log" "$tmp_raw" "$_exit_tmp"
   return 0
 }
@@ -165,8 +175,14 @@ ${plan_content}
 
   print_success "Calling AI to decompose plan (granularity: $granularity)..."
 
-  local ai_output
-  ai_output=$(run_claude_print "$prompt") || return 1
+  local ai_output _rcp_out
+  _rcp_out=$(mktemp)
+  if ! run_claude_print "$prompt" "$_rcp_out"; then
+    rm -f "$_rcp_out"
+    return 1
+  fi
+  ai_output=$(cat "$_rcp_out")
+  rm -f "$_rcp_out"
 
   # Validate output is not empty
   if [ -z "$ai_output" ]; then
@@ -197,7 +213,13 @@ ${plan_content}
 Your previous output was invalid: ${validation_error}
 Please output ONLY the ## Phase markdown format as specified. No preamble, no commentary."
 
-    ai_output=$(run_claude_print "$retry_prompt") || return 1
+    _rcp_out=$(mktemp)
+    if ! run_claude_print "$retry_prompt" "$_rcp_out"; then
+      rm -f "$_rcp_out"
+      return 1
+    fi
+    ai_output=$(cat "$_rcp_out")
+    rm -f "$_rcp_out"
 
     if [ -z "$ai_output" ]; then
       print_error "AI retry returned empty output"
@@ -274,8 +296,14 @@ ${parsed_content}
 
   print_success "Verifying AI-generated plan against original..."
 
-  local verify_output
-  verify_output=$(run_claude_print "$prompt") || return 1
+  local verify_output _rcp_out
+  _rcp_out=$(mktemp)
+  if ! run_claude_print "$prompt" "$_rcp_out"; then
+    rm -f "$_rcp_out"
+    return 1
+  fi
+  verify_output=$(cat "$_rcp_out")
+  rm -f "$_rcp_out"
 
   # Parse first line (case-insensitive, strip whitespace and punctuation)
   local first_line
@@ -353,8 +381,14 @@ Fix the issues identified above. Remember:
 
   print_success "Reparsing with feedback (granularity: $granularity)..."
 
-  local ai_output
-  ai_output=$(run_claude_print "$prompt") || return 1
+  local ai_output _rcp_out
+  _rcp_out=$(mktemp)
+  if ! run_claude_print "$prompt" "$_rcp_out"; then
+    rm -f "$_rcp_out"
+    return 1
+  fi
+  ai_output=$(cat "$_rcp_out")
+  rm -f "$_rcp_out"
 
   if [ -z "$ai_output" ]; then
     print_error "AI retry returned empty output"

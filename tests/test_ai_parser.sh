@@ -333,7 +333,8 @@ EOF
 @test "run_claude_print: captures stderr on failure" {
   mock_claude_fail "API key expired"
 
-  run run_claude_print "test prompt"
+  CURRENT_PIPELINE_PID=""
+  run run_claude_print "test prompt" "$TEST_DIR/rcp_out"
   [ "$status" -eq 1 ]
   echo "$output" | grep -q "failed with exit code"
 }
@@ -604,24 +605,28 @@ line three"
 
   # Capture stderr separately — stderr should contain the streamed output
   local stderr_file="$TEST_DIR/stderr_capture"
-  run_claude_print "test prompt" > /dev/null 2> "$stderr_file"
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2> "$stderr_file"
   grep -q "line one" "$stderr_file"
   grep -q "line two" "$stderr_file"
   grep -q "line three" "$stderr_file"
 }
 
-@test "run_claude_print: stdout still returns full output for capture" {
+@test "run_claude_print: output file contains full output for capture" {
   mock_claude "capture this output"
 
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
   local result
-  result=$(run_claude_print "test prompt" 2>/dev/null)
+  result=$(cat "$TEST_DIR/rcp_out")
   [ "$result" = "capture this output" ]
 }
 
 @test "run_claude_print: exit code recovered correctly on failure" {
   mock_claude_fail "some error"
 
-  run run_claude_print "test prompt"
+  CURRENT_PIPELINE_PID=""
+  run run_claude_print "test prompt" "$TEST_DIR/rcp_out"
   [ "$status" -eq 1 ]
 }
 
@@ -632,7 +637,8 @@ AI response line 2"
   export LIVE_LOG="$TEST_DIR/live.log"
   : > "$LIVE_LOG"
 
-  run_claude_print "test prompt" > /dev/null 2>/dev/null
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
   # LIVE_LOG should contain the AI response (written by process_stream_json)
   grep -q "AI response line 1" "$LIVE_LOG"
   grep -q "AI response line 2" "$LIVE_LOG"
@@ -642,7 +648,8 @@ AI response line 2"
   mock_claude "some output"
 
   export LIVE_LOG=""
-  run_claude_print "test prompt" > /dev/null 2>/dev/null
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
   # No crash, no log file created
   [ ! -f "$TEST_DIR/live.log" ]
 }
@@ -1276,8 +1283,10 @@ EOF
 @test "run_claude_print: strips metadata lines from output" {
   mock_claude_with_metadata "PASS"
 
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
   local result
-  result=$(run_claude_print "test prompt" 2>/dev/null)
+  result=$(cat "$TEST_DIR/rcp_out")
   # Must NOT contain metadata lines
   ! printf '%s\n' "$result" | grep -q '^\[.*\] model='
   ! printf '%s\n' "$result" | grep -q '^\[Session:'
@@ -1302,8 +1311,10 @@ printf '{"type":"result","total_cost_usd":0.25,"duration_ms":85200,"num_turns":"
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
 
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
   local result
-  result=$(run_claude_print "test prompt" 2>/dev/null)
+  result=$(cat "$TEST_DIR/rcp_out")
 
   # If the stream processor happens to put [Session:] on its own line, the old code
   # would have handled it. The real bug is mid-line concatenation. To test that case
@@ -1440,7 +1451,8 @@ EOF
 
 @test "run_claude_print: returns 1 when claude not in PATH" {
   export PATH="/usr/bin:/bin"
-  run run_claude_print "test"
+  CURRENT_PIPELINE_PID=""
+  run run_claude_print "test" "$TEST_DIR/rcp_out"
   [ "$status" -eq 1 ]
 }
 
@@ -1884,4 +1896,26 @@ EOF
   echo "$output" | grep -q '\[Y\]es'
   echo "$output" | grep -q '\[n\]o'
   echo "$output" | grep -q '\[e\]dit'
+}
+
+# =============================================================================
+# PID tracking tests (for Ctrl+C interrupt support)
+# =============================================================================
+
+@test "run_claude_print: clears CURRENT_PIPELINE_PID after completion" {
+  mock_claude "test output"
+
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null
+  # After completion, PID should be cleared
+  [ -z "$CURRENT_PIPELINE_PID" ]
+}
+
+@test "run_claude_print: clears CURRENT_PIPELINE_PID on failure" {
+  mock_claude_fail "error"
+
+  CURRENT_PIPELINE_PID=""
+  run_claude_print "test prompt" "$TEST_DIR/rcp_out" 2>/dev/null || true
+  # After failure, PID should still be cleared
+  [ -z "$CURRENT_PIPELINE_PID" ]
 }
