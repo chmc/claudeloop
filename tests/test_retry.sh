@@ -285,6 +285,49 @@ teardown() { :; }
   rm -f "${_raw_dir}/raw-phase-log.json"
 }
 
+# --- is_auth_error() ---
+
+@test "is_auth_error: returns false when log missing" {
+  run is_auth_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_auth_error: returns false for clean output" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_auth_error: detects authentication_error" {
+  printf 'Error: authentication_error\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_auth_error: detects invalid credentials" {
+  printf 'Invalid authentication credentials provided\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_auth_error: detects invalid api key" {
+  printf 'invalid api key\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_auth_error: detects not_authorized" {
+  printf 'not_authorized\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_auth_error: does not match authentication (without _error)" {
+  printf 'authentication completed successfully\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
 # --- is_empty_log() ---
 
 @test "is_empty_log: missing file returns 0 (empty)" {
@@ -340,6 +383,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns false when only turns=0 session" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
@@ -347,6 +391,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns true when session has turns > 0" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=12.3s turns=71 tokens=500in/200out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 0 ]
@@ -354,6 +399,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns true when good session followed by zero-turn crash (sub-agent scenario)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=45.2s turns=71 tokens=5000in/2000out]\n' >> "$_log"
   printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
   run has_successful_session "$_log"
@@ -362,6 +408,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns true when multiple sessions all turns > 0 (normal multi-subagent case)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=30.1s turns=57 tokens=4000in/1500out]\n' >> "$_log"
   printf '[Session: duration=5.2s turns=1 tokens=200in/100out]\n' >> "$_log"
   printf '[Session: duration=4.8s turns=1 tokens=180in/90out]\n' >> "$_log"
@@ -371,8 +418,10 @@ teardown() { :; }
 
 @test "has_successful_session: returns false when current attempt has turns=0 even if prior attempt had turns > 0 (cross-attempt scoping)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=20.0s turns=10 tokens=1000in/500out]\n' >> "$_log"
   printf '=== EXECUTION START phase=1 attempt=2 time=2026-01-01T00:01:00 ===\n' >> "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=0.0s turns=0 tokens=0in/0out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
@@ -380,6 +429,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns false when turns=1 but zero output tokens (API 500 error)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=33.8s turns=1 tokens=0in/0out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
@@ -387,6 +437,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns true when turns=1 with real output tokens (legitimate quick task)" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=15.0s turns=1 tokens=200in/100out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 0 ]
@@ -394,6 +445,7 @@ teardown() { :; }
 
 @test "has_successful_session: returns false when nonzero input but zero output tokens" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=10.0s turns=1 tokens=500in/0out]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
@@ -401,9 +453,34 @@ teardown() { :; }
 
 @test "has_successful_session: returns false when session line has no token field" {
   printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
   printf '[Session: duration=5.0s turns=3]\n' >> "$_log"
   run has_successful_session "$_log"
   [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns false when matching session line is in PROMPT section (prompt pollution)" {
+  printf '=== EXECUTION START phase=6 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== PROMPT ===\n' >> "$_log"
+  printf '## Phase 6: Notifications\n' >> "$_log"
+  printf '**Files**: src/views/statusBar.ts[Session: model=claude-opus-4-6 cost=0.25 duration=85.2s turns=1 tokens=2in/5685out cache=7616r/18048w]\n' >> "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
+  printf 'Failed to authenticate. API Error: 401\n' >> "$_log"
+  printf '[Session: duration=5.2s turns=1 tokens=0in/0out]\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=1 duration=7s time=2026-01-01T00:00:07 ===\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_successful_session: returns true when matching session line is in RESPONSE section" {
+  printf '=== EXECUTION START phase=1 attempt=1 time=2026-01-01T00:00:00 ===\n' > "$_log"
+  printf '=== PROMPT ===\n' >> "$_log"
+  printf 'do something\n' >> "$_log"
+  printf '=== RESPONSE ===\n' >> "$_log"
+  printf '[Session: duration=30.0s turns=5 tokens=500in/200out]\n' >> "$_log"
+  printf '=== EXECUTION END exit_code=0 duration=30s time=2026-01-01T00:00:30 ===\n' >> "$_log"
+  run has_successful_session "$_log"
+  [ "$status" -eq 0 ]
 }
 
 # --- has_write_actions() ---

@@ -239,7 +239,7 @@ evaluate_phase_result() {
     run_refactor_if_needed "$_epr_phase"
     return 0
   else
-    if has_successful_session "$_epr_log"; then
+    if has_successful_session "$_epr_log" && has_write_actions "$_epr_raw"; then
       log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but successful session detected"
       if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
         return 1
@@ -282,9 +282,29 @@ run_adaptive_verification() {
       return 1
     fi
   elif [ "$_vmode" = "quick" ]; then
-    log_verbose "execute_phase: quick verification (skipping verify agent, attempt $_rav_attempt)"
+    log_verbose "execute_phase: quick verification (attempt $_rav_attempt)"
+    local _rav_raw=".claudeloop/logs/phase-${_rav_phase}.raw.json"
+    if ! has_write_actions "$_rav_raw"; then
+      update_fail_reason "$_rav_phase" "no_write_actions"
+      print_error "Phase $_rav_phase: quick verification failed (no write actions)"
+      update_phase_status "$_rav_phase" "failed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 1
+    fi
   fi
-  # skip mode: no verification at all
+  # skip mode: still verify write actions as minimum sanity check
+  if [ "$_vmode" = "skip" ]; then
+    local _rav_raw=".claudeloop/logs/phase-${_rav_phase}.raw.json"
+    if ! has_write_actions "$_rav_raw"; then
+      update_fail_reason "$_rav_phase" "no_write_actions"
+      print_error "Phase $_rav_phase: verification failed (no write actions)"
+      update_phase_status "$_rav_phase" "failed"
+      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+      CURRENT_PHASE=""
+      return 1
+    fi
+  fi
   return 0
 }
 

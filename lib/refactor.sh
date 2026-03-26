@@ -186,6 +186,10 @@ $_err_ctx
     run_claude_pipeline "$_rp_prompt" "$_rp_phase" "$_rp_log" "$_rp_raw"
 
     if [ "$_LAST_CLAUDE_EXIT" -ne 0 ]; then
+      if is_auth_error "$_rp_log"; then
+        print_error "Phase $_rp_phase: refactoring hit authentication error — aborting retries"
+        break
+      fi
       if has_successful_session "$_rp_log"; then
         log_ts "Phase $_rp_phase: exit code $_LAST_CLAUDE_EXIT but successful session detected — continuing"
       else

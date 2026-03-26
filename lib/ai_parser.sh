@@ -51,7 +51,7 @@ run_claude_print() {
   fi
 
   # Strip process_stream_json metadata before returning
-  grep -v '^\[.*\] model=' "$tmp_log" | grep -v '^\[Session:' > "${tmp_log}.clean"
+  grep -v '^\[.*\] model=' "$tmp_log" | sed 's/\[Session:[^]]*\]//g' > "${tmp_log}.clean"
   mv "${tmp_log}.clean" "$tmp_log"
   cat "$tmp_log"
   rm -f "$tmp_prompt" "$tmp_log" "$tmp_raw" "$_exit_tmp"

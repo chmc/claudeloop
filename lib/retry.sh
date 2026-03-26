@@ -51,6 +51,20 @@ is_network_error() {
   return 1
 }
 
+# Check if a phase log contains authentication/authorization error output
+# Checks both the formatted log and the raw JSON log (errors may only appear in one).
+# Args: $1 - path to log file
+# Returns: 0 if auth error detected, 1 otherwise
+is_auth_error() {
+  local log_file="$1"
+  local raw_file _auth_pat
+  _auth_pat="authentication_error|invalid.*credentials|invalid.api.key|not_authorized"
+  [ -f "$log_file" ] && grep -qiE "$_auth_pat" "$log_file" && return 0
+  raw_file="$(dirname "$log_file")/raw-phase-$(basename "$log_file" .log | sed 's/^phase-//').json"
+  [ -f "$raw_file" ] && grep -qiE "$_auth_pat" "$raw_file" && return 0
+  return 1
+}
+
 # Check if a phase log is missing or empty (Claude produced no output)
 # Args: $1 - path to log file
 # Returns: 0 if empty/missing, 1 if non-empty
@@ -83,8 +97,11 @@ is_empty_log() {
 has_successful_session() {
   local log_file="$1"
   [ -f "$log_file" ] || return 1
-  awk '/^=== EXECUTION START /{found=0; next}
-       /\[Session:/ && /turns=[1-9]/ && /\/[1-9][0-9]*out/{found=1}
+  awk 'BEGIN{in_response=1}
+       /^=== EXECUTION START /{found=0; in_response=0; next}
+       /^=== RESPONSE ===$/{in_response=1; next}
+       /^=== EXECUTION END /{in_response=0; next}
+       in_response && /\[Session:/ && /turns=[1-9]/ && /\/[1-9][0-9]*out/{found=1}
        END{exit (found ? 0 : 1)}' "$log_file"
 }
 

@@ -725,6 +725,11 @@ main_loop() {
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         continue
       fi
+      if is_auth_error "$_log_file"; then
+        print_error "Phase $next_phase: authentication error — check your API key or session."
+        print_error "This is a permanent error — retrying will not help."
+        return 1
+      fi
       # Normal error: existing retry logic (unchanged)
       if should_retry_phase "$next_phase"; then
         local _attempts _fail_reason _consec

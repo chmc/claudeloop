@@ -1095,6 +1095,7 @@ EOF
   setup_recovery
   cat > "$TEST_DIR/.claudeloop/logs/phase-1.log" << 'EOF'
 === EXECUTION START phase=1 attempt=1 time=2026-03-01T10:00:00 ===
+=== RESPONSE ===
 [Session: duration=120.0s turns=5 tokens=3000in/1200out]
 === EXECUTION END exit_code=1 duration=120s time=2026-03-01T10:02:00 ===
 EOF

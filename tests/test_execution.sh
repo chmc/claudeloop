@@ -195,8 +195,8 @@ _setup_epr_stubs() {
   local raw="$_tmpdir/phase-1.raw.json"
   # Log with successful session but no write actions
   printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$log"
-  printf '[Session: duration=30.0s turns=15 tokens=5000in/2000out]\n' >> "$log"
   printf '=== RESPONSE ===\nAll checks passed.\n' >> "$log"
+  printf '[Session: duration=30.0s turns=15 tokens=5000in/2000out]\n' >> "$log"
   # Raw log with only read actions (no writes)
   printf '=== EXECUTION START phase=1 attempt=1 ===\n' > "$raw"
   printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
@@ -341,4 +341,77 @@ _setup_epr_stubs() {
   rollback_line=$(grep -n 'rolling back partial edits' "$src" | head -1 | cut -d: -f1)
   [ -n "$rollback_line" ]
   [ "$rollback_line" -gt "$eval_line" ]
+}
+
+# --- evaluate_phase_result: non-zero exit with successful session but no write actions ---
+
+@test "evaluate_phase_result: non-zero exit with successful session but no write actions returns failure" {
+  _setup_epr_stubs
+  local log="$_tmpdir/phase-5.log"
+  local raw="$_tmpdir/phase-5.raw.json"
+  # Log with successful session (turns=15, tokens>0)
+  printf '=== EXECUTION START phase=5 attempt=1 ===\n' > "$log"
+  printf '=== RESPONSE ===\nSome output here.\n' >> "$log"
+  printf '[Session: duration=30.0s turns=15 tokens=5000in/2000out]\n' >> "$log"
+  # Raw log with only read actions (no writes)
+  printf '=== EXECUTION START phase=5 attempt=1 ===\n' > "$raw"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
+  # NO signal file
+  rm -f ".claudeloop/signals/phase-5.md"
+  phase_set ATTEMPTS 5 "1"
+  # Non-zero exit (exit=1), successful session present, but no write actions
+  run evaluate_phase_result 5 1 1 "$log" "$raw"
+  [ "$status" -eq 1 ]
+}
+
+# --- run_adaptive_verification: write action checks ---
+
+# Helper to set up stubs needed by run_adaptive_verification
+_setup_rav_stubs() {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/retry.sh"
+  PROGRESS_FILE="$_tmpdir/progress"
+  PLAN_FILE="$_tmpdir/plan"
+  CURRENT_PHASE=""
+  MAX_RETRIES=15
+  # Stub functions called by run_adaptive_verification
+  update_phase_status() { phase_set STATUS "$1" "$2"; }
+  write_progress() { :; }
+  print_error() { :; }
+  verify_phase() { return 0; }
+  mkdir -p .claudeloop/logs
+}
+
+@test "run_adaptive_verification: quick mode fails without write actions" {
+  _setup_rav_stubs
+  local raw=".claudeloop/logs/phase-1.raw.json"
+  # Raw log with no write actions
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' > "$raw"
+  # attempt=6 with MAX_RETRIES=15 → third=(15+2)/3=5, quick range is 6..10
+  run run_adaptive_verification 1 6 "$_tmpdir/phase-1.log"
+  [ "$status" -eq 1 ]
+  rm -rf .claudeloop
+}
+
+@test "run_adaptive_verification: quick mode passes with write actions" {
+  _setup_rav_stubs
+  local raw=".claudeloop/logs/phase-1.raw.json"
+  # Raw log WITH write actions (Edit tool)
+  printf '{"type":"tool_use","name":"Edit","input":{}}\n' > "$raw"
+  # attempt=6 with MAX_RETRIES=15 → quick mode
+  run run_adaptive_verification 1 6 "$_tmpdir/phase-1.log"
+  [ "$status" -eq 0 ]
+  rm -rf .claudeloop
+}
+
+@test "run_adaptive_verification: skip mode fails without write actions" {
+  _setup_rav_stubs
+  local raw=".claudeloop/logs/phase-1.raw.json"
+  # Raw log with no write actions
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' > "$raw"
+  # attempt=12 with MAX_RETRIES=15 → third=5, skip range is >10
+  run run_adaptive_verification 1 12 "$_tmpdir/phase-1.log"
+  [ "$status" -eq 1 ]
+  rm -rf .claudeloop
 }
