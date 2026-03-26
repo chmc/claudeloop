@@ -1529,6 +1529,18 @@ JSON"
   fi
 }
 
+@test "session summary starts on its own line when text lacks trailing newline" {
+  # When the last assistant text chunk doesn't end with \n, the session summary
+  # must still start on its own line in log_file. This invariant prevents
+  # downstream parsers from seeing "content[Session: ...]" concatenated.
+  local text_event='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PASS"}]}}'
+  local result_event='{"type":"result","total_cost_usd":0.01,"duration_ms":1500,"num_turns":"1","input_tokens":"2","output_tokens":"33","modelUsage":{"claude-opus-4-6[1m]":{"input":2,"output":33}}}'
+  run bash -c "printf '%s\n%s\n' '$text_event' '$result_event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  # The log must have [Session: at the start of a line, not mid-line
+  grep -q '^\[Session:' "$_log"
+}
+
 @test "spinner shows Todo count (not Task) when both present" {
   local tc='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d"}}'
   local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'

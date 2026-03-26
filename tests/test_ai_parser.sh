@@ -51,13 +51,13 @@ mock_claude_with_metadata() {
 #!/bin/sh
 cat /dev/stdin > /dev/null
 # Emit system/init event (produces "[HH:MM:SS] model=..." in log)
-printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-20250514"}\n'
+printf '{"type":"system","subtype":"init","model":"claude-opus-4-6[1m]"}\n'
 # Emit assistant text events
 cat << 'ENDOUT' | text_to_stream_json
 $1
 ENDOUT
 # Emit result event (produces "[Session: ...]" in log)
-printf '{"type":"result","total_cost_usd":0.01,"duration_ms":1500,"num_turns":"1","input_tokens":"100","output_tokens":"50","modelUsage":{"claude-sonnet-4-20250514":{"input":100,"output":50}}}\n'
+printf '{"type":"result","total_cost_usd":0.01,"duration_ms":1500,"num_turns":"1","input_tokens":"100","output_tokens":"50","modelUsage":{"claude-opus-4-6[1m]":{"input":100,"output":50}}}\n'
 MOCK
   chmod +x "$TEST_DIR/bin/claude"
 }
@@ -1321,8 +1321,14 @@ MOCK
   # directly, also verify the sed pipeline on a hand-crafted string.
   local crafted_line="**Files**: src/views/statusBar.ts[Session: model=claude-opus-4-6 cost=\$0.25 duration=85.2s turns=1 tokens=2in/5685out]"
   local cleaned
-  cleaned=$(printf '%s\n' "$crafted_line" | sed 's/\[Session:[^]]*\]//g')
+  cleaned=$(printf '%s\n' "$crafted_line" | sed 's/\[Session:.*//')
   [ "$cleaned" = "**Files**: src/views/statusBar.ts" ]
+
+  # Bracket model names: claude-opus-4-6[1m] contains ] which breaks [^]]* regex
+  local crafted_brackets="PASS[Session: model=claude-opus-4-6[1m] cost=\$0.1067 duration=3.3s turns=1 tokens=2in/33out cache=14929r/15737w]"
+  local cleaned_brackets
+  cleaned_brackets=$(printf '%s\n' "$crafted_brackets" | sed 's/\[Session:.*//')
+  [ "$cleaned_brackets" = "PASS" ]
 }
 
 @test "ai_verify_plan: correctly parses PASS after metadata lines" {

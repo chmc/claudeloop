@@ -396,6 +396,7 @@ process_stream_json() {
     sticky_all_done = 0
     term_height = (override_term_height + 0 > 0) ? override_term_height + 0 : 0
     at_line_start = 1
+    log_at_line_start = 1
     live_at_line_start = 1
     spinner = "|/-\\"
     spinner_idx = 0
@@ -436,6 +437,7 @@ process_stream_json() {
       clear_bottom_block()
       print line
       print line >> log_file
+      log_at_line_start = 1
       fflush()
       if (live_log != "") { printf "[%s] %s\n", get_time(), line >> live_log; fflush(live_log) }
       render_sticky()
@@ -466,6 +468,7 @@ process_stream_json() {
         printf "%s", text >> log_file
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
+        log_at_line_start = at_line_start
         if (at_line_start) render_sticky()
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
         idle_hb = 0; meaningful_seen = 1
@@ -708,6 +711,11 @@ process_stream_json() {
       fflush()
       print summary > "/dev/stderr"
       fflush("/dev/stderr")
+      # INVARIANT: [Session:...] must start on its own line in log_file.
+      # Downstream parsers (ai_parser.sh, recorder_parsers.sh) depend on this.
+      # Note: at_line_start tracks stdout state; log_file may diverge because
+      # clear_line() writes \n to stdout but not log_file. Use log_at_line_start.
+      if (!log_at_line_start) { printf "\n" >> log_file; log_at_line_start = 1 }
       print summary >> log_file
       if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
