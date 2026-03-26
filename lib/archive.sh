@@ -3,6 +3,26 @@
 # Archive Library
 # Manages archiving, listing, and restoring old plan run state
 
+# Clean .claudeloop/ of everything except archive/ and lock
+# Called after archive_current_run to ensure a fresh start
+clean_claudeloop_dir() {
+  for _item in .claudeloop/*; do
+    [ -e "$_item" ] || continue
+    case "$_item" in
+      .claudeloop/archive|.claudeloop/lock) continue ;;
+    esac
+    rm -rf "$_item" 2>/dev/null || true
+  done
+  # Dotfiles (e.g., .claudeloop.conf)
+  for _item in .claudeloop/.*; do
+    [ -e "$_item" ] || continue
+    case "$_item" in
+      .claudeloop/.|.claudeloop/..) continue ;;
+    esac
+    rm -rf "$_item" 2>/dev/null || true
+  done
+}
+
 # Check if all phases are completed
 # Returns 0 (true) if PHASE_COUNT > 0 and every phase status is "completed"
 is_run_complete() {
@@ -104,7 +124,8 @@ archive_current_run() {
     .claudeloop/signals \
     .claudeloop/live.log \
     .claudeloop/ai-verify-reason.txt \
-    .claudeloop/replay.html; do
+    .claudeloop/replay.html \
+    .claudeloop/ai-parsed-plan.md; do
     [ -e "$_item" ] || continue
     mv "$_item" "$_archive_dir/" 2>/dev/null || true
   done
@@ -123,6 +144,9 @@ archive_current_run() {
 
   # 6. Announce
   print_success "Run archived to ${_archive_dir}"
+
+  # 7. Clean up leftover files (keep only archive/ and lock)
+  clean_claudeloop_dir
 }
 
 # List all archived runs
@@ -198,12 +222,12 @@ restore_archive() {
   fi
 
   # Move contents back (skip plan.md and metadata.txt — those are archive-only)
-  for _item in "$_archive_dir"/*; do
+  for _item in "$_archive_dir"/* "$_archive_dir"/.*; do
     [ -e "$_item" ] || continue
     local _basename
     _basename=$(basename "$_item")
     case "$_basename" in
-      plan.md|metadata.txt|.claudeloop.conf) continue ;;
+      .|..|plan.md|metadata.txt) continue ;;
     esac
     mv "$_item" ".claudeloop/" 2>/dev/null || true
   done

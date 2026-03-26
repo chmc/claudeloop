@@ -224,3 +224,56 @@ _init_git_repo() {
   # other.txt should still be staged (not committed)
   git status --porcelain other.txt | grep -q '^A'
 }
+
+# --- load_config() with custom path ---
+
+@test "load_config: accepts custom conf path argument" {
+  mkdir -p "$_tmpdir/custom"
+  printf 'MAX_RETRIES=42\n' > "$_tmpdir/custom/my.conf"
+  cd "$_tmpdir"
+  load_config "$_tmpdir/custom/my.conf"
+  [ "$MAX_RETRIES" = "42" ]
+}
+
+# --- load_config_from_latest_archive() ---
+
+@test "load_config_from_latest_archive: loads from most recent archive" {
+  mkdir -p "$_tmpdir/.claudeloop/archive/20260315-120000"
+  printf 'MAX_RETRIES=3\n' > "$_tmpdir/.claudeloop/archive/20260315-120000/.claudeloop.conf"
+  mkdir -p "$_tmpdir/.claudeloop/archive/20260316-120000"
+  printf 'MAX_RETRIES=7\n' > "$_tmpdir/.claudeloop/archive/20260316-120000/.claudeloop.conf"
+  cd "$_tmpdir"
+
+  load_config_from_latest_archive
+
+  [ "$MAX_RETRIES" = "7" ]
+}
+
+@test "load_config_from_latest_archive: no-op when no archives exist" {
+  mkdir -p "$_tmpdir/.claudeloop"
+  cd "$_tmpdir"
+  MAX_RETRIES=10
+
+  load_config_from_latest_archive
+
+  [ "$MAX_RETRIES" = "10" ]
+}
+
+@test "load_config_from_latest_archive: no-op when latest archive has no conf" {
+  mkdir -p "$_tmpdir/.claudeloop/archive/20260316-120000"
+  # No .claudeloop.conf in this archive
+  cd "$_tmpdir"
+  MAX_RETRIES=10
+
+  load_config_from_latest_archive
+
+  [ "$MAX_RETRIES" = "10" ]
+}
+
+@test "load_config_from_latest_archive: no-op when no archive dir exists" {
+  cd "$_tmpdir"
+  MAX_RETRIES=10
+
+  run load_config_from_latest_archive
+  [ "$status" -eq 0 ]
+}

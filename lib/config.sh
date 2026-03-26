@@ -5,7 +5,7 @@
 
 # Load .claudeloop.conf key=value config file (do NOT source)
 load_config() {
-  local conf_file=".claudeloop/.claudeloop.conf"
+  local conf_file="${1:-.claudeloop/.claudeloop.conf}"
   [ ! -f "$conf_file" ] && return 0
 
   local line key value
@@ -38,6 +38,20 @@ load_config() {
       REFACTOR_MAX_RETRIES) REFACTOR_MAX_RETRIES="$value" ;;
     esac
   done < "$conf_file"
+}
+
+# Load config from the most recent archive's .claudeloop.conf
+# Used as a fallback when the active conf was cleaned after archive
+load_config_from_latest_archive() {
+  [ -d ".claudeloop/archive" ] || return 0
+  local _latest="" _dir
+  for _dir in .claudeloop/archive/*/; do
+    [ -d "$_dir" ] || continue
+    _latest="$_dir"
+  done
+  [ -n "$_latest" ] || return 0
+  [ -f "${_latest}.claudeloop.conf" ] || return 0
+  load_config "${_latest}.claudeloop.conf"
 }
 
 # Replace or append a key=value line in the conf file (POSIX, no sed -i)
@@ -146,10 +160,22 @@ run_setup_wizard() {
   [ -z "$_WIZARD_FORCE" ] && ! [ -t 0 ] && return 0
   [ -z "$_WIZARD_FORCE" ] && [ "$YES_MODE" = "true" ] && return 0
 
+  local response
+
+  # Returning user: defaults already loaded via apply_config_precedence
+  if [ -d ".claudeloop/archive" ]; then
+    printf '\nPrevious run archived. Run setup wizard to change settings? [y/N] '
+    read -r response || return 0
+    case "$response" in
+      [Yy]) ;;  # fall through to full wizard below
+      *)
+        write_config
+        return 0 ;;
+    esac
+  fi
+
   printf '\nWelcome to claudeloop! Let'"'"'s configure your project.\n'
   printf 'Press Enter to accept the default [shown in brackets].\n\n'
-
-  local response
 
   # PLAN_FILE
   if [ -n "$_CLI_PLAN_FILE" ]; then

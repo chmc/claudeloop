@@ -305,7 +305,7 @@ Options:
                          (up to 4 API calls per phase with --verify)
   --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
-  --archive              Archive current run state and exit
+  --archive              Archive current run state, start fresh, and exit
   --list-archives        List archived runs and exit
   --restore <name>       Restore an archived run and exit
   --replay [archive]    Regenerate replay.html and exit (optionally for an archived run)
@@ -835,6 +835,17 @@ run_monitor() {
 # Apply config file → env var → CLI argument precedence chain
 apply_config_precedence() {
   load_config
+  # Fallback: if no conf exists, load defaults from most recent archive
+  if [ ! -f ".claudeloop/.claudeloop.conf" ]; then
+    load_config_from_latest_archive
+    # If PLAN_FILE loaded from archive points to a missing .claudeloop/ file,
+    # reset to default so AI parsing re-triggers or wizard asks
+    case "${PLAN_FILE:-}" in
+      .claudeloop/*)
+        [ -f "$PLAN_FILE" ] || PLAN_FILE="PLAN.md"
+        ;;
+    esac
+  fi
 
   # Apply env var overrides (env vars take priority over config file)
   [ -n "$_CL_PLAN_FILE" ]              && PLAN_FILE="$_CL_PLAN_FILE"
@@ -1155,6 +1166,7 @@ main() {
     if [ "$_ARCHIVE_COMPLETED" = true ]; then
       LIVE_LOG=""
       init_live_log
+      write_config
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     fi
   fi

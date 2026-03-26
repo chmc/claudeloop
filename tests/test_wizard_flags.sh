@@ -44,7 +44,7 @@ EOF
 
 _cl_wizard() {
   local input="$1"; shift
-  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 _WIZARD_FORCE=1 \"$CLAUDELOOP\" $*"
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 \"$CLAUDELOOP\" $*"
 }
 
 # =============================================================================
@@ -67,14 +67,14 @@ _cl_wizard() {
 }
 
 @test "wizard: does not run when stdin is not a tty; conf still created with defaults" {
-  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 '$CLAUDELOOP' --plan PLAN.md"
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && BASE_DELAY=0 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 '$CLAUDELOOP' --plan PLAN.md"
   [ "$status" -eq 0 ]
   [[ "$output" != *"Welcome to claudeloop!"* ]]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
 }
 
 @test "wizard: does not run in YES_MODE (-y)" {
-  run sh -c "cd '$TEST_DIR' && printf '\n\n\n\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 '$CLAUDELOOP' --plan PLAN.md -y"
+  run sh -c "cd '$TEST_DIR' && printf '\n\n\n\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 '$CLAUDELOOP' --plan PLAN.md -y"
   [ "$status" -eq 0 ]
   [[ "$output" != *"Welcome to claudeloop!"* ]]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]

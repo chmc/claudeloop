@@ -114,7 +114,7 @@ EOF
   grep -q "plan_file=" "${archive_dir}metadata.txt"
 }
 
-@test "archive_current_run: preserves .claudeloop.conf and lock, copies conf to archive" {
+@test "archive_current_run: cleans .claudeloop.conf after archiving, preserves lock" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   echo "$$" > .claudeloop/lock
@@ -122,11 +122,11 @@ EOF
   run archive_current_run --internal
   [ "$status" -eq 0 ]
 
-  # Originals preserved
-  [ -f .claudeloop/.claudeloop.conf ]
+  # Conf removed by cleanup, lock preserved
+  [ ! -f .claudeloop/.claudeloop.conf ]
   [ -f .claudeloop/lock ]
 
-  # Config copied to archive
+  # Config copied to archive before cleanup
   local archive_dir
   archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
   [ -f "${archive_dir}.claudeloop.conf" ]
@@ -436,14 +436,14 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "restore_archive: skips .claudeloop.conf (snapshot only)" {
+@test "restore_archive: restores .claudeloop.conf from archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
 
   archive_current_run --internal
 
-  # Remove the original conf (archive has a copy)
-  rm -f .claudeloop/.claudeloop.conf
+  # After archive+clean, conf is gone
+  [ ! -f .claudeloop/.claudeloop.conf ]
 
   local archive_name
   archive_name=$(ls .claudeloop/archive/ 2>/dev/null | head -1)
@@ -454,11 +454,12 @@ EOF
   run restore_archive "$archive_name"
   [ "$status" -eq 0 ]
 
-  # .claudeloop.conf should NOT be restored from archive
-  [ ! -f .claudeloop/.claudeloop.conf ]
+  # .claudeloop.conf SHOULD be restored from archive
+  [ -f .claudeloop/.claudeloop.conf ]
+  grep -q "BASE_DELAY=0" .claudeloop/.claudeloop.conf
 }
 
-@test "archive_current_run: ai-parsed-plan.md is NOT moved (persists for reuse)" {
+@test "archive_current_run: ai-parsed-plan.md is archived and removed" {
   mkdir -p .claudeloop/logs
   printf 'test\n' > .claudeloop/PROGRESS.md
   printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
@@ -470,12 +471,12 @@ EOF
   local _archive_dir
   _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
   [ -f "${_archive_dir}plan.md" ]
-  # ai-parsed-plan.md is NOT moved — it persists for reuse
-  [ ! -f "${_archive_dir}ai-parsed-plan.md" ]
-  [ -f ".claudeloop/ai-parsed-plan.md" ]
+  # ai-parsed-plan.md is moved to archive and removed from .claudeloop/
+  [ -f "${_archive_dir}ai-parsed-plan.md" ]
+  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
 }
 
-@test "archive_current_run: ai-parsed-plan.md persists even with external plan file" {
+@test "archive_current_run: ai-parsed-plan.md archived even with external plan file" {
   _create_run_state
   printf 'parsed plan content\n' > .claudeloop/ai-parsed-plan.md
 
@@ -483,8 +484,8 @@ EOF
 
   local _archive_dir
   _archive_dir=$(ls -d .claudeloop/archive/*/ | head -1)
-  [ ! -f "${_archive_dir}ai-parsed-plan.md" ]
-  [ -f ".claudeloop/ai-parsed-plan.md" ]
+  [ -f "${_archive_dir}ai-parsed-plan.md" ]
+  [ ! -f ".claudeloop/ai-parsed-plan.md" ]
 }
 
 @test "prompt_archive_completed_run: sets _ARCHIVE_COMPLETED=true in YES_MODE" {
@@ -524,7 +525,7 @@ EOF
   [ -f .claudeloop/PROGRESS.md ]
 }
 
-@test "prompt_archive_completed_run: preserves .claudeloop.conf after archive" {
+@test "prompt_archive_completed_run: cleans .claudeloop.conf after archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   phase_set STATUS "1" "completed"
@@ -533,10 +534,10 @@ EOF
 
   prompt_archive_completed_run --internal
 
-  [ -f .claudeloop/.claudeloop.conf ]
+  [ ! -f .claudeloop/.claudeloop.conf ]
 }
 
-@test "prompt_archive_completed_run: archive/ conf and parsed plan remain after archive" {
+@test "prompt_archive_completed_run: only archive/ remains after archive" {
   _create_run_state
   echo "BASE_DELAY=0" > .claudeloop/.claudeloop.conf
   printf 'parsed plan\n' > .claudeloop/ai-parsed-plan.md
@@ -546,12 +547,12 @@ EOF
 
   prompt_archive_completed_run --internal
 
-  # archive/, .claudeloop.conf, and ai-parsed-plan.md should remain
+  # Only archive/ should remain (lock may also be present)
   local _remaining
-  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' | grep -v '^\.claudeloop\.conf$' | grep -v '^ai-parsed-plan\.md$' || true)
+  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' | grep -v '^lock$' || true)
   [ -z "$_remaining" ]
-  [ -f .claudeloop/.claudeloop.conf ]
-  [ -f .claudeloop/ai-parsed-plan.md ]
+  [ ! -f .claudeloop/.claudeloop.conf ]
+  [ ! -f .claudeloop/ai-parsed-plan.md ]
 }
 
 # --- archive_current_run mkdir failure ---
@@ -592,4 +593,55 @@ EOF
   chmod 755 .claudeloop/archive  # restore for cleanup
   [ "$status" -eq 1 ]
   [[ "$output" == *"Failed to create archive directory"* ]]
+}
+
+# =============================================================================
+# clean_claudeloop_dir
+# =============================================================================
+
+@test "clean_claudeloop_dir: removes all files except archive/ and lock" {
+  mkdir -p .claudeloop/archive/20260316-120000 .claudeloop/state .claudeloop/logs
+  echo "$$" > .claudeloop/lock
+  echo "conf" > .claudeloop/.claudeloop.conf
+  echo "progress" > .claudeloop/PROGRESS.md
+  echo "plan" > .claudeloop/ai-parsed-plan.md
+  echo "live" > .claudeloop/live.log
+  echo "reason" > .claudeloop/ai-verify-reason.txt
+  echo "stale" > .claudeloop/recorder.json.tmp
+
+  clean_claudeloop_dir
+
+  # Preserved
+  [ -d .claudeloop/archive ]
+  [ -f .claudeloop/lock ]
+
+  # Removed
+  [ ! -f .claudeloop/.claudeloop.conf ]
+  [ ! -f .claudeloop/PROGRESS.md ]
+  [ ! -f .claudeloop/ai-parsed-plan.md ]
+  [ ! -f .claudeloop/live.log ]
+  [ ! -f .claudeloop/ai-verify-reason.txt ]
+  [ ! -f .claudeloop/recorder.json.tmp ]
+  [ ! -d .claudeloop/state ]
+  [ ! -d .claudeloop/logs ]
+}
+
+@test "clean_claudeloop_dir: no-op when .claudeloop/ is empty" {
+  mkdir -p .claudeloop
+  run clean_claudeloop_dir
+  [ "$status" -eq 0 ]
+}
+
+@test "archive_current_run: unknown leftover files are cleaned" {
+  _create_run_state
+  echo "stale" > .claudeloop/some-random-file.txt
+  echo "temp" > .claudeloop/recorder.json.tmp
+  mkdir -p .claudeloop/unknown-dir
+
+  archive_current_run --internal
+
+  # Everything except archive/ should be gone
+  local _remaining
+  _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' || true)
+  [ -z "$_remaining" ]
 }

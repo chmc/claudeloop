@@ -44,7 +44,7 @@ EOF
 
 _cl_wizard() {
   local input="$1"; shift
-  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 _WIZARD_FORCE=1 \"$CLAUDELOOP\" $*"
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' \"$input\" | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 \"$CLAUDELOOP\" $*"
 }
 
 # Helper: replace setup()'s pre-baked .gitignore with one that lacks .claudeloop/
