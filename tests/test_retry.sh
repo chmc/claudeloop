@@ -145,10 +145,10 @@ teardown() { :; }
   [ "$status" -eq 0 ]
 }
 
-@test "is_quota_error: detects 'overloaded'" {
+@test "is_quota_error: does NOT match 'overloaded' (moved to is_overload_error)" {
   printf 'The API is overloaded, please try again later.\n' > "$_log"
   run is_quota_error "$_log"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 1 ]
 }
 
 # --- is_permission_error() ---
@@ -1023,4 +1023,186 @@ teardown() { :; }
   rm -f ".claudeloop/signals/phase-99.md"
   run has_signal_file "99"
   [ "$status" -eq 1 ]
+}
+
+# --- is_overload_error() ---
+
+@test "is_overload_error: nonexistent file returns 1" {
+  run is_overload_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_overload_error: clean output returns 1" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_overload_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_overload_error: detects 'overloaded'" {
+  printf 'The API is overloaded, please try again later.\n' > "$_log"
+  run is_overload_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_overload_error: detects 'overloaded_error' in raw JSON" {
+  local _raw="$BATS_TEST_TMPDIR/raw.json"
+  printf '{"error":{"type":"overloaded_error","message":"Overloaded"}}\n' > "$_raw"
+  printf 'All good\n' > "$_log"
+  run is_overload_error "$_log" "$_raw"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_overload_error: detects 529 status" {
+  printf 'HTTP 529 — API overloaded\n' > "$_log"
+  run is_overload_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+# --- is_server_error() ---
+
+@test "is_server_error: nonexistent file returns 1" {
+  run is_server_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_server_error: clean output returns 1" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_server_error: detects 'api_error'" {
+  printf 'Error: api_error\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: detects 'internal_server_error'" {
+  printf 'Error: internal_server_error from API\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: detects 'Server error'" {
+  printf 'Server error: please try again\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: detects HTTP 500" {
+  printf 'HTTP 500 Internal Server Error\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: detects HTTP 502" {
+  printf 'HTTP 502 Bad Gateway\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: detects HTTP 503" {
+  printf 'HTTP 503 Service Unavailable\n' > "$_log"
+  run is_server_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_server_error: checks raw JSON log as fallback" {
+  local _raw="$BATS_TEST_TMPDIR/raw.json"
+  printf 'All good\n' > "$_log"
+  printf '{"error":{"type":"api_error","message":"Internal server error"}}\n' > "$_raw"
+  run is_server_error "$_log" "$_raw"
+  [ "$status" -eq 0 ]
+}
+
+# --- is_timeout_error() ---
+
+@test "is_timeout_error: nonexistent file returns 1" {
+  run is_timeout_error "/nonexistent/path/phase-99.log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_timeout_error: clean output returns 1" {
+  printf 'All good, task completed.\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_timeout_error: detects 'request_timeout'" {
+  printf 'Error: request_timeout\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_timeout_error: detects HTTP 408" {
+  printf 'HTTP 408 Request Timeout\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_timeout_error: detects 'request timed out'" {
+  printf 'The request timed out waiting for a response\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+# --- is_rate_limit_error() (renamed, no longer matches overloaded) ---
+
+@test "is_rate_limit_error: detects 'rate_limit_error'" {
+  printf 'type: rate_limit_error\n' > "$_log"
+  run is_rate_limit_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_rate_limit_error: detects 'usage limit'" {
+  printf 'Error: usage limit exceeded\n' > "$_log"
+  run is_rate_limit_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_rate_limit_error: does NOT match 'overloaded'" {
+  printf 'The API is overloaded, please try again later.\n' > "$_log"
+  run is_rate_limit_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "is_quota_error: still works as alias for backward compat" {
+  printf 'Error: usage limit exceeded\n' > "$_log"
+  run is_quota_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+# --- is_auth_error() expanded ---
+
+@test "is_auth_error: detects permission_error" {
+  printf 'Error: permission_error — your key cannot access this resource\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_auth_error: detects not_found_error" {
+  printf 'Error: not_found_error — model not available\n' > "$_log"
+  run is_auth_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+# --- fail_reason_hint: permission_denied ---
+
+@test "fail_reason_hint: permission_denied returns hint about skipping denied files" {
+  run fail_reason_hint "permission_denied"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  echo "$output" | grep -qi "permission\|denied\|skip"
+}
+
+# --- escalate_strategy: permission_denied ---
+
+@test "escalate_strategy: escalates for permission_denied at consec=3" {
+  run escalate_strategy "standard" "permission_denied" 3
+  [ "$output" = "stripped" ]
+}
+
+@test "escalate_strategy: escalates for permission_denied at consec=5" {
+  run escalate_strategy "standard" "permission_denied" 5
+  [ "$output" = "targeted" ]
 }

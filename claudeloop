@@ -39,6 +39,7 @@ _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
 . "$SCRIPT_DIR/lib/prompt.sh"
 . "$SCRIPT_DIR/lib/stream_processor.sh"
 . "$SCRIPT_DIR/lib/ai_parser.sh"
+. "$SCRIPT_DIR/lib/permission_handler.sh"
 . "$SCRIPT_DIR/lib/verify.sh"
 . "$SCRIPT_DIR/lib/refactor.sh"
 . "$SCRIPT_DIR/lib/execution.sh"
@@ -233,6 +234,8 @@ handle_interrupt() {
     CURRENT_PIPELINE_PID=""
     CURRENT_PIPELINE_PGID=""
   fi
+  # Close permission FIFO write end (FD 7) if still open
+  exec 7>&- 2>/dev/null || true
   INTERRUPTED=true
   echo ""
   print_warning "Interrupt received (Ctrl+C)"
@@ -633,6 +636,8 @@ _add_platform_gitignore() {
 main_loop() {
   local continue_execution=true
   local _net_retries=0
+  local _overload_retries=0
+  local _server_retries=0
 
   while $continue_execution; do
     # Check for interruption
@@ -679,15 +684,62 @@ main_loop() {
     if execute_phase "$next_phase"; then
       log_verbose "main_loop: phase $next_phase succeeded, continuing"
       _net_retries=0
+      _overload_retries=0
+      _server_retries=0
       # Success - continue to next phase
       continue
     else
-      local _log_file
+      local _log_file _raw_file
       _log_file=".claudeloop/logs/phase-${next_phase}.log"
-      if is_quota_error "$_log_file"; then
-        # Quota error: restore attempt counter (same pattern as handle_interrupt)
+      _raw_file=".claudeloop/logs/phase-${next_phase}.raw.json"
+      if is_overload_error "$_log_file" "$_raw_file"; then
+        _overload_retries=$((_overload_retries + 1))
         reset_phase_for_retry "$next_phase"
-        log_verbose "main_loop: quota error on phase $next_phase, attempts restored"
+        # Exponential backoff: 5, 10, 20, 40, 80, 120, 120... (cap 120s)
+        local _ol_delay=0
+        if [ "${BASE_DELAY:-5}" -gt 0 ]; then
+          _ol_delay=$((5 * (1 << (_overload_retries - 1))))
+          [ "$_ol_delay" -gt 120 ] && _ol_delay=120
+        fi
+        log_verbose "main_loop: overload error on phase $next_phase (retry $_overload_retries), waiting ${_ol_delay}s"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        print_overload_wait "$next_phase" "$_overload_retries" "$_ol_delay"
+        sleep "$_ol_delay"
+        if [ "$_overload_retries" -ge 20 ]; then
+          if [ -t 0 ] && [ "$YES_MODE" != "true" ]; then
+            printf 'API overloaded for an extended period. Press Enter to keep retrying or Ctrl+C to exit: '
+            read -r _dummy 2>/dev/null || return 1
+            _overload_retries=0
+          fi
+        fi
+        continue
+      fi
+      if is_server_error "$_log_file" "$_raw_file" || is_timeout_error "$_log_file"; then
+        _server_retries=$((_server_retries + 1))
+        reset_phase_for_retry "$next_phase"
+        # Exponential backoff: 5, 10, 20, 40, 80, 160, 300, 300... (cap 300s)
+        local _sv_delay=0
+        if [ "${BASE_DELAY:-5}" -gt 0 ]; then
+          _sv_delay=$((5 * (1 << (_server_retries - 1))))
+          [ "$_sv_delay" -gt 300 ] && _sv_delay=300
+        fi
+        log_verbose "main_loop: server/timeout error on phase $next_phase (retry $_server_retries), waiting ${_sv_delay}s"
+        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+        print_server_error_wait "$next_phase" "$_server_retries" "$_sv_delay"
+        sleep "$_sv_delay"
+        if [ "$_server_retries" -ge 20 ]; then
+          if [ -t 0 ] && [ "$YES_MODE" != "true" ]; then
+            printf 'API server errors for an extended period. Press Enter to keep retrying or Ctrl+C to exit: '
+            read -r _dummy 2>/dev/null || return 1
+            _server_retries=0
+          fi
+        fi
+        continue
+      fi
+      if is_rate_limit_error "$_log_file"; then
+        # Rate-limit/quota error: restore attempt counter (same pattern as handle_interrupt)
+        reset_phase_for_retry "$next_phase"
+        log_verbose "main_loop: rate-limit error on phase $next_phase, attempts restored"
         write_progress "$PROGRESS_FILE" "$PLAN_FILE"
         print_quota_wait "$next_phase" "$QUOTA_RETRY_INTERVAL"
         sleep "$QUOTA_RETRY_INTERVAL"

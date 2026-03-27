@@ -13,6 +13,7 @@ _write_claude_stub() {
   mkdir -p "$dir/bin"
   cat > "$dir/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
@@ -475,6 +476,7 @@ EOF
   # Embed TEST_DIR into the stub at write-time so the path is resolved now
   cat > "$TEST_DIR/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 if [ -n "\${CLAUDECODE:-}" ]; then exit 99; fi
 count_file="$TEST_DIR/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)

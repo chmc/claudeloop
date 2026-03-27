@@ -247,6 +247,30 @@ print_network_wait() {
   log_live "  Press Ctrl+C to stop and save state."
 }
 
+# Print an overload (529) retry notice with exponential backoff info
+# Args: $1 - phase_num, $2 - retry_count, $3 - delay_seconds
+print_overload_wait() {
+  local phase_num="$1"
+  local retry_count="$2"
+  local delay_secs="$3"
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}⏳ Phase $phase_num: API overloaded (529) — retry $retry_count, waiting ${delay_secs}s...${COLOR_RESET}"
+  log_live "⏳ Phase $phase_num: API overloaded (529) — retry $retry_count, waiting ${delay_secs}s..."
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
+  log_live "  Press Ctrl+C to stop and save state."
+}
+
+# Print a server error retry notice with exponential backoff info
+# Args: $1 - phase_num, $2 - retry_count, $3 - delay_seconds
+print_server_error_wait() {
+  local phase_num="$1"
+  local retry_count="$2"
+  local delay_secs="$3"
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}⚠ Phase $phase_num: API server error — retry $retry_count, waiting ${delay_secs}s...${COLOR_RESET}"
+  log_live "⚠ Phase $phase_num: API server error — retry $retry_count, waiting ${delay_secs}s..."
+  printf '%b\n' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}  Press Ctrl+C to stop and save state.${COLOR_RESET}"
+  log_live "  Press Ctrl+C to stop and save state."
+}
+
 # Print a message only when VERBOSE_MODE is true
 log_verbose() {
   [ "$VERBOSE_MODE" = "true" ] && printf '[verbose] %s\n' "$*" >&2 || true

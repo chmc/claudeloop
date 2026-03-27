@@ -16,6 +16,7 @@ setup() {
   . "$CLAUDELOOP_DIR/lib/phase_state.sh"
   . "$CLAUDELOOP_DIR/lib/ui.sh"
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
+  . "$CLAUDELOOP_DIR/lib/permission_handler.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
 
   # Set up minimal phase data
@@ -45,8 +46,8 @@ setup() {
   mkdir -p "$TEST_DIR/bin"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-# Read stdin (prompt) to /dev/null
-cat > /dev/null
+# Read first line from stdin (stream-json message) and discard
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Running verification..."}}\n'
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed.\nVERIFICATION_PASSED\n"}}\n'
@@ -101,7 +102,7 @@ teardown() {
   # Replace stub with one that fails
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Tests failed!"}}\n'
 exit 1
@@ -120,7 +121,7 @@ STUB
   # Stub exits 0, outputs text mentioning "Bash" but no "type":"tool_use" JSON events
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"I would run Bash but skipping.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
@@ -150,7 +151,7 @@ STUB
   # Replace claude stub with one that captures stdin
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /tmp/verify_prompt_capture
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_capture
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
@@ -169,7 +170,7 @@ STUB
     > ".claudeloop/logs/phase-1.log"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /tmp/verify_prompt_capture2
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_capture2
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 exit 0
@@ -184,7 +185,7 @@ STUB
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /tmp/verify_prompt_verdict
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_verdict
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 exit 0
@@ -200,13 +201,13 @@ STUB
 # SKIP_PERMISSIONS pass-through
 # =============================================================================
 
-@test "verify_phase: respects SKIP_PERMISSIONS" {
+@test "verify_phase: uses bidirectional stdio protocol flags" {
   VERIFY_PHASES=true
   SKIP_PERMISSIONS=true
   # Replace claude stub with one that captures args
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '%s\n' "$*" > /tmp/verify_args_capture
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
@@ -214,7 +215,9 @@ exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
   verify_phase "1" ".claudeloop/logs/phase-1.log"
-  grep -q "dangerously-skip-permissions" /tmp/verify_args_capture
+  # Should use stream-json input and permission-prompt-tool stdio
+  grep -q "permission-prompt-tool" /tmp/verify_args_capture
+  grep -q "input-format" /tmp/verify_args_capture
   rm -f /tmp/verify_args_capture
 }
 
@@ -227,7 +230,7 @@ STUB
   MAX_PHASE_TIME=0
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 sleep 30
 exit 0
@@ -273,7 +276,7 @@ STUB
   : > "$LIVE_LOG"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Running verification..."}}\n'
 printf '{"type":"tool_use","name":"Bash","input":{"command":"bats tests/test_parser.sh"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed.\nVERIFICATION_PASSED\n"}}\n'
@@ -306,7 +309,7 @@ STUB
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Tests are broken.\nVERIFICATION_FAILED\n"}}\n'
 exit 0
@@ -320,7 +323,7 @@ STUB
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Checking things..."}}\n'
 exit 0
@@ -334,7 +337,7 @@ STUB
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Initially I thought VERIFICATION_PASSED but actually\nVERIFICATION_FAILED tests broken\n"}}\n'
 exit 0
@@ -348,7 +351,7 @@ STUB
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"I would use Bash to run tests and Read files.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
@@ -368,7 +371,7 @@ STUB
   # Stub that sleeps longer than VERIFY_TIMEOUT to prove timeout is applied
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 sleep 5
 exit 0
@@ -389,7 +392,7 @@ STUB
   MAX_PHASE_TIME=60
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 sleep 5
 exit 0
@@ -474,7 +477,7 @@ STUB
   # We simulate this by having the claude process killed before writing exit code
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 # Exit normally — we rely on the exit code guard for empty/corrupt _exit_tmp
