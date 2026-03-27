@@ -131,7 +131,7 @@ run_claude_pipeline() {
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
   rm -f "$_sentinel"
   # Clear spinner remnants and show cursor
-  printf '\r%-12s\r' '' >/dev/stderr
+  printf '\r%-24s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
 

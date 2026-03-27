@@ -326,7 +326,7 @@ process_stream_json() {
       printf "\r\033[%dA\033[J", sticky_rendered > "/dev/stderr"
       sticky_rendered = 0
     } else if (!at_line_start && spinner_start > 0) {
-      printf "\r%-12s\r", "" > "/dev/stderr"
+      printf "\r%-24s\r", "" > "/dev/stderr"
     } else if (!at_line_start) {
       printf "\n"
     }
@@ -377,6 +377,16 @@ process_stream_json() {
 
   function clear_line() {
     clear_bottom_block()
+  }
+
+  function restart_spinner(    now) {
+    if (got_result) return
+    now = get_epoch()
+    spinner_start = now
+    printf "%s 0s%s", substr(spinner, (spinner_idx % 4) + 1, 1), spinner_suffix() > "/dev/stderr"
+    fflush("/dev/stderr")
+    at_line_start = 0
+    spinner_idx++
   }
 
   BEGIN {
@@ -530,6 +540,7 @@ process_stream_json() {
         if (live_log != "") fflush(live_log)
         clear_bottom_block()
         render_sticky()
+        restart_spinner()
       } else {
         # Thinking-only assistant event — update spinner but do NOT reset idle timer
         now = get_epoch()
@@ -619,6 +630,7 @@ process_stream_json() {
       if (name == "TaskCreate" || name == "TaskUpdate") handle_task_event(name, line)
       else if (name == "TodoWrite") handle_todo_event(line)
       render_sticky()
+      restart_spinner()
 
     } else if (etype == "tool_result") {
       idle_hb = 0; meaningful_seen = 1; tool_idle_hb = 0
@@ -648,6 +660,7 @@ process_stream_json() {
       printf "  %s[Tool result: %d chars] %s%s\n", C_CYAN, total, trunc(preview, 200), C_RESET > "/dev/stderr"
       if (live_log != "") { printf "  [%s] [Tool result: %d chars] %s\n", get_time(), total, trunc(preview, 200) >> live_log; fflush(live_log) }
       render_sticky()
+      restart_spinner()
 
     } else if (etype == "user") {
       idle_hb = 0; meaningful_seen = 1
@@ -660,6 +673,7 @@ process_stream_json() {
         printf "  %s[Result%s: %d chars] %s%s\n", _c, is_err, length(tool_result), trunc(tool_result, 200), C_RESET > "/dev/stderr"
         if (live_log != "") { printf "  [%s] [Result%s: %d chars] %s\n", get_time(), is_err, length(tool_result), trunc(tool_result, 200) >> live_log; fflush(live_log) }
         render_sticky()
+        restart_spinner()
       }
 
     } else if (etype == "result") {
