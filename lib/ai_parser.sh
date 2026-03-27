@@ -459,6 +459,10 @@ ai_parse_and_verify() {
   local cl_dir="${3:-.claudeloop}"
   local max_retries="${AI_RETRY_MAX:-3}"
 
+  # Clear verdict state from any previous call
+  _AI_VERIFY_VERDICT=""
+  _AI_VERIFY_REASON=""
+
   # Save stdin to fd 3 so subprocesses in run_claude_print cannot consume it
   exec 3<&0
 
@@ -474,6 +478,7 @@ ai_parse_and_verify() {
   while true; do
     # Verify
     if ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"; then
+      _AI_VERIFY_VERDICT=pass
       exec 3<&-
       return 0
     fi
@@ -493,7 +498,9 @@ ai_parse_and_verify() {
           case "$_answer" in
             [Aa]*) exec 3<&-; return 1 ;;
           esac
-          # Continue: clean up and return success
+          # Continue: capture reason before cleanup, then return success
+          _AI_VERIFY_REASON=$(cat "$cl_dir/ai-verify-reason.txt" 2>/dev/null)
+          _AI_VERIFY_VERDICT=continued
           rm -f "$cl_dir/ai-verify-reason.txt"
           exec 3<&-
           return 0
@@ -514,6 +521,8 @@ ai_parse_and_verify() {
         [Cc]*)
           # Continue with plan as-is if it has at least one phase
           if grep -q '^## Phase [0-9]' "$ai_plan" 2>/dev/null; then
+            _AI_VERIFY_REASON=$(cat "$cl_dir/ai-verify-reason.txt" 2>/dev/null)
+            _AI_VERIFY_VERDICT=continued
             rm -f "$cl_dir/ai-verify-reason.txt"
             exec 3<&-
             return 0
@@ -578,6 +587,26 @@ confirm_ai_plan() {
 
   show_ai_plan "$parsed_file"
 
+  # Show verification verdict summary (set by ai_parse_and_verify)
+  case "${_AI_VERIFY_VERDICT:-}" in
+    pass)
+      print_success "AI plan verified"
+      ;;
+    continued)
+      if [ -n "${_AI_VERIFY_REASON:-}" ]; then
+        local _short_reason
+        _short_reason=$(printf '%s' "${_AI_VERIFY_REASON}" | head -n 1 | cut -c1-60)
+        # Split printf: color codes via %b, reason via %s to avoid backslash interpretation
+        printf '%b' "[$(date '+%H:%M:%S')] ${COLOR_YELLOW}⚠ AI verification failed — "
+        printf '%s' "$_short_reason"
+        printf '%b\n' "${COLOR_RESET}"
+        log_live "⚠ AI verification failed — $_short_reason"
+      else
+        print_warning "AI verification failed"
+      fi
+      ;;
+  esac
+
   # Auto-approve in non-interactive contexts
   if [ "${YES_MODE:-false}" = "true" ] || [ "${DRY_RUN:-false}" = "true" ]; then
     print_success "Auto-approved (non-interactive mode)"
@@ -603,6 +632,8 @@ confirm_ai_plan() {
         return 1
         ;;
       [Ee]*)
+        # Clear verdict — plan was edited, verification is stale
+        _AI_VERIFY_VERDICT=""
         ${EDITOR:-vi} "$parsed_file"
         # Validate edited content
         if ! grep -q '^## Phase [0-9]' "$parsed_file"; then

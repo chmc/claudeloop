@@ -1925,3 +1925,274 @@ EOF
   # After failure, PID should still be cleared
   [ -z "$CURRENT_PIPELINE_PID" ]
 }
+
+# --- verdict display in confirm_ai_plan tests ---
+
+@test "confirm_ai_plan: shows pass verdict" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=true
+  export _AI_VERIFY_VERDICT=pass
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "AI plan verified"
+}
+
+@test "confirm_ai_plan: shows continued verdict with reason" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=true
+  export _AI_VERIFY_VERDICT=continued
+  export _AI_VERIFY_REASON="missing test coverage for auth module"
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "AI verification failed"
+  echo "$output" | grep -q "missing test coverage"
+}
+
+@test "confirm_ai_plan: shows continued verdict without reason" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=true
+  export _AI_VERIFY_VERDICT=continued
+  unset _AI_VERIFY_REASON
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "AI verification failed"
+  # Should NOT have a trailing dash
+  ! echo "$output" | grep -q "AI verification failed —"
+}
+
+@test "confirm_ai_plan: no verdict when variable unset" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=true
+  unset _AI_VERIFY_VERDICT
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qi "verified\|verification"
+}
+
+@test "confirm_ai_plan: no verdict when variable is empty string" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  export YES_MODE=true
+  export _AI_VERIFY_VERDICT=""
+  run confirm_ai_plan "$TEST_DIR/parsed.md"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qi "verified\|verification"
+}
+
+@test "ai_parse_and_verify: sets verdict=pass on success" {
+  # Call 1: parse (valid). Call 2: verify (PASS).
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'PASS\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
+      echo "VERDICT=$_AI_VERIFY_VERDICT"
+    '
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "VERDICT=pass"
+}
+
+@test "ai_parse_and_verify: sets verdict=continued on user continue" {
+  # Call 1: parse (valid). Call 2: verify (FAIL). User types 'c' → return 0
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nMinor title rephrasing.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  printf 'c\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+      echo "VERDICT=$_AI_VERIFY_VERDICT"
+    '
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "VERDICT=continued"
+}
+
+@test "ai_parse_and_verify: captures reason on user continue" {
+  # Call 1: parse (valid). Call 2: verify (FAIL). User types 'c' → return 0
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'FAIL\nPhase titles were rephrased from the original.\n' | text_to_stream_json ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  printf 'c\n' > "$TEST_DIR/user_input"
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    LIVE_LOG="" SIMPLE_MODE=false MOCK_COUNTER_DIR="$TEST_DIR" \
+    PATH="$TEST_DIR/bin:$PATH" YES_MODE=false \
+    _AI_VERIFY_FORCE=1 \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
+      echo "REASON=$_AI_VERIFY_REASON"
+    '
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "REASON=Phase titles were rephrased"
+}
+
+@test "confirm_ai_plan: reason with backslash-n is not interpreted as newline" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=true DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    _AI_VERIFY_VERDICT=continued \
+    _AI_VERIFY_REASON='Missing\nvalidation' \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 0 ]
+  # The backslash-n should appear literally on the same line, not as a newline
+  echo "$output" | grep -q 'Missing\\nvalidation'
+}
+
+@test "confirm_ai_plan: editor clears verdict" {
+  cat > "$TEST_DIR/parsed.md" << 'EOF'
+## Phase 1: Setup
+Do stuff.
+EOF
+
+  # Mock editor that writes valid ## Phase content
+  cat > "$TEST_DIR/bin/mock_editor" << 'MOCK'
+#!/bin/sh
+cat > "$1" << 'CONTENT'
+## Phase 1: Setup
+Do stuff.
+
+## Phase 2: Build
+Build it.
+CONTENT
+MOCK
+  chmod +x "$TEST_DIR/bin/mock_editor"
+
+  local script_dir="${BATS_TEST_DIRNAME}/.."
+  run env \
+    YES_MODE=false DRY_RUN=false LIVE_LOG="" SIMPLE_MODE=false \
+    EDITOR="$TEST_DIR/bin/mock_editor" _AI_CONFIRM_FORCE=1 \
+    _AI_VERIFY_VERDICT=pass \
+    PATH="$TEST_DIR/bin:$PATH" \
+    sh -c '
+      . "'"$script_dir"'/lib/ui.sh"
+      . "'"$script_dir"'/lib/parser.sh"
+      . "'"$script_dir"'/lib/phase_state.sh"
+      . "'"$script_dir"'/lib/stream_processor.sh"
+      . "'"$script_dir"'/lib/ai_parser.sh"
+      printf "e\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
+    '
+  [ "$status" -eq 0 ]
+  # "AI plan verified" should appear exactly once (before the edit, not after)
+  local count
+  count=$(echo "$output" | grep -c "AI plan verified" || true)
+  [ "$count" -eq 1 ]
+}
