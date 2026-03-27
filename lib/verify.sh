@@ -4,6 +4,10 @@
 # Runs a read-only Claude instance to verify phase completion.
 # Verdict-based: requires explicit VERIFICATION_PASSED keyword + tool_use JSON events.
 
+# Fallback definitions when sourced outside claudeloop (e.g. tests)
+command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
+command -v _safe_disable_jobctl >/dev/null 2>&1 || _safe_disable_jobctl() { set +m; }
+
 # verify_phase(phase_num, log_file)
 # Returns 0 if verification passes (or VERIFY_PHASES is disabled), 1 on failure.
 verify_phase() {
@@ -79,6 +83,10 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   _sentinel=$(mktemp)
   rm -f "$_sentinel"
 
+  # Save terminal settings (Claude CLI may corrupt them via setRawMode/cfmakeraw)
+  local _saved_stty=""
+  _saved_stty=$(stty -g 2>/dev/null < /dev/tty) || true
+
   set -m
   {
     _rc=0
@@ -91,7 +99,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
       "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
-  set +m
+  _safe_disable_jobctl
 
   # Timeout: use MAX_PHASE_TIME if set, otherwise default 300s for verification
   local _timer_pid _vp_pid _vp_pgid _verify_timeout
@@ -105,10 +113,11 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   set -m
   ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
   _timer_pid=$!
-  set +m
+  _safe_disable_jobctl
 
   # Wait for stream processor to finish (sentinel-based, same as execute_phase)
   while [ ! -f "$_sentinel" ]; do
+    _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
     sleep "${_SENTINEL_POLL:-1}"
   done
 
@@ -122,6 +131,11 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
+
+  # Restore terminal settings if Claude CLI corrupted them
+  if [ -n "$_saved_stty" ]; then
+    stty "$_saved_stty" 2>/dev/null < /dev/tty || true
+  fi
 
   # Cancel timer
   if [ -n "$_timer_pid" ]; then

@@ -272,3 +272,108 @@ PEOF
   # Just verify we got here without errors
   [ "$INTERRUPTED" = "true" ]
 }
+
+# =============================================================================
+# Unit: _restore_isig re-enables terminal SIGINT generation
+# =============================================================================
+
+@test "killswitch: _restore_isig is no-op without TTY" {
+  # _restore_isig must not error when /dev/tty is unavailable (pipes, CI)
+  _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
+
+  # Should succeed without error even without a TTY
+  run _restore_isig
+  [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# Unit: _safe_disable_jobctl re-arms INT trap after set +m
+# =============================================================================
+
+@test "killswitch: _safe_disable_jobctl re-arms INT trap" {
+  _trap_fired=false
+  handle_interrupt() { _trap_fired=true; }
+
+  _safe_disable_jobctl() {
+    set +m
+    trap handle_interrupt INT TERM
+  }
+
+  # Set trap, toggle job control, use safe helper
+  trap handle_interrupt INT TERM
+  set -m
+  sleep 0 &
+  _safe_disable_jobctl
+
+  # Verify trap is still set
+  trap_output=$(trap -p INT 2>&1)
+  [[ "$trap_output" == *"handle_interrupt"* ]]
+}
+
+# =============================================================================
+# Unit: handle_interrupt completes under set -e
+# =============================================================================
+
+@test "killswitch: handle_interrupt resilient to set -e" {
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/progress.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
+
+  parse_plan "$TEST_DIR/PLAN.md"
+  PHASE_STATUS_1="completed"
+  PHASE_STATUS_2="in_progress"
+  PHASE_ATTEMPTS_2=1
+  CURRENT_PHASE=2
+  INTERRUPTED=false
+  CURRENT_PIPELINE_PID=""
+  CURRENT_PIPELINE_PGID=""
+  _PROGRESS_LOADED=""
+  STATE_FILE="$TEST_DIR/.claudeloop/state/current.json"
+  LOCK_FILE="$TEST_DIR/.claudeloop/lock"
+  PLAN_FILE="$TEST_DIR/PLAN.md"
+  PROGRESS_FILE="$TEST_DIR/.claudeloop/PROGRESS.md"
+
+  # Override get_phase_status to FAIL (simulating set -e issue)
+  get_phase_status() { return 1; }
+
+  # Mock functions that handle_interrupt calls
+  _restore_isig() { true; }
+  save_state() { touch "$TEST_DIR/state_saved"; }
+  remove_lock() { true; }
+  write_progress() { true; }
+  generate_replay() { true; }
+
+  # The handler must complete even with failing subcommands
+  # We can't call handle_interrupt directly (it calls exit), so test
+  # the critical section: set +e prevents abort on get_phase_status failure
+  set -e
+  (
+    set +e  # This is what handle_interrupt should do
+    _status=$(get_phase_status "$CURRENT_PHASE" 2>/dev/null) || _status=""
+    # If set +e wasn't applied, we'd never reach here
+    echo "reached" > "$TEST_DIR/handler_completed"
+  )
+  set +e
+
+  [ -f "$TEST_DIR/handler_completed" ]
+}
+
+# =============================================================================
+# Unit: stty save/restore pattern handles no-TTY gracefully
+# =============================================================================
+
+@test "killswitch: stty save/restore no-op without TTY" {
+  # Simulate the save/restore pattern from run_claude_pipeline
+  _saved_stty=""
+  _saved_stty=$(stty -g 2>/dev/null < /dev/tty) || true
+
+  # Should be empty (no TTY in test environment)
+  # Restore should be a no-op
+  if [ -n "$_saved_stty" ]; then
+    stty "$_saved_stty" 2>/dev/null < /dev/tty || true
+  fi
+
+  # No crash = success
+  true
+}

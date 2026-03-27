@@ -27,6 +27,10 @@ update_fail_reason() {
 # Run Claude CLI pipeline (backgrounded for interruptibility and timeout)
 # Args: $1 - prompt, $2 - phase_num, $3 - log_file, $4 - raw_log
 # Sets: _LAST_CLAUDE_EXIT (global), CURRENT_PIPELINE_PID, CURRENT_PIPELINE_PGID
+# Fallback definitions when sourced outside claudeloop (e.g. tests)
+command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
+command -v _safe_disable_jobctl >/dev/null 2>&1 || _safe_disable_jobctl() { set +m; }
+
 # WARNING: Pure cut-paste extraction. Do not refactor internals — contains set -m/+m,
 #          PGID-based cleanup, sentinel polling, and macOS bash 3.2 workarounds.
 run_claude_pipeline() {
@@ -48,6 +52,10 @@ run_claude_pipeline() {
   local _sentinel
   _sentinel=$(mktemp)
   rm -f "$_sentinel"
+
+  # Save terminal settings (Claude CLI may corrupt them via setRawMode/cfmakeraw)
+  local _saved_stty=""
+  _saved_stty=$(stty -g 2>/dev/null < /dev/tty) || true
 
   # Use job control (set -m) so the background pipeline gets its own process group.
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
@@ -73,7 +81,7 @@ run_claude_pipeline() {
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
-  set +m
+  _safe_disable_jobctl
 
   # Phase timeout: kill entire pipeline PGID after MAX_PHASE_TIME seconds (0 = disabled)
   local _timer_pid _pl_pid _pl_pgid
@@ -88,7 +96,7 @@ run_claude_pipeline() {
     set -m
     ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
     _timer_pid=$!
-    set +m
+    _safe_disable_jobctl
   fi
 
   # Wait for stream processor to finish (sentinel-based).
@@ -98,6 +106,7 @@ run_claude_pipeline() {
   _sentinel_max=${_SENTINEL_MAX_WAIT:-1800}
   _sentinel_interval=${_SENTINEL_POLL:-1}
   while [ ! -f "$_sentinel" ]; do
+    _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
     sleep "$_sentinel_interval"
     _sentinel_polls=$((_sentinel_polls + 1))
     # Use awk for float-safe comparison (_sentinel_interval may be 0.1 in tests)
@@ -125,6 +134,11 @@ run_claude_pipeline() {
   printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
   CURRENT_PIPELINE_PGID=""
+
+  # Restore terminal settings if Claude CLI corrupted them
+  if [ -n "$_saved_stty" ]; then
+    stty "$_saved_stty" 2>/dev/null < /dev/tty || true
+  fi
 
   # Cancel timer if phase completed before timeout
   if [ -n "$_timer_pid" ]; then

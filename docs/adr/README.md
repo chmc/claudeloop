@@ -41,3 +41,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0033](0033-flight-recorder.md) | Replay — self-contained HTML execution report | 2026-03-17 | Accepted |
 | [0034](0034-fast-interrupt-shutdown.md) | Fast interrupt shutdown — background replay generation | 2026-03-20 | Accepted |
 | [0035](0035-recorder-json-safety.md) | Recorder JSON safety — defense in depth | 2026-03-23 | Accepted |
+| [0036](0036-stty-isig-restoration.md) | Restore terminal ISIG after Claude CLI pipeline | 2026-03-27 | Accepted |

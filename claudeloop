@@ -206,8 +206,24 @@ remove_lock() {
   rm -f "$LOCK_FILE"
 }
 
+# Restore terminal ISIG flag (Ctrl+C → SIGINT generation).
+# Claude CLI may disable ISIG via setRawMode (Node.js cfmakeraw) — this re-enables it.
+# No-op when not connected to a terminal (pipes, CI).
+_restore_isig() {
+  stty isig 2>/dev/null < /dev/tty || true
+}
+
+# Re-arm INT/TERM trap after set +m.
+# Defensive: bash 3.2 may reset signal disposition when toggling job control.
+_safe_disable_jobctl() {
+  set +m
+  trap handle_interrupt INT TERM
+}
+
 # Signal handler for graceful shutdown
 handle_interrupt() {
+  set +e          # bash 3.2 does not exempt trap handlers from set -e
+  _restore_isig   # re-enable Ctrl+C in case Claude CLI disabled ISIG
   # Kill running claude pipeline immediately (don't wait for it to clean up)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
