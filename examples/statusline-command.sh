@@ -27,6 +27,15 @@ if [ -z "$branch" ]; then
   branch=$(git -C "$git_dir" --no-optional-locks branch --show-current 2>/dev/null)
 fi
 
+# Show active wt/* worktrees from /wt skill (only in non-worktree sessions)
+if [ -z "$wt_branch" ] && [ -n "$cwd" ]; then
+  wt_names=$(git -C "$cwd" --no-optional-locks worktree list 2>/dev/null \
+    | sed -n 's/.*\[wt\/\(.*\)\]/wt\/\1/p' \
+    | paste -sd ',' - \
+    | sed 's/,/, /g')
+  [ -n "$wt_names" ] && branch="${branch:+$branch }($wt_names)"
+fi
+
 if [ -n "$used" ]; then
   ctx="ctx: $(printf '%.0f' "$used")%"
 else

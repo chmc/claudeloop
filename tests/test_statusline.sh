@@ -112,3 +112,66 @@ run_statusline() {
   [ "$status" -eq 0 ]
   [ "$output" = "Opus | ctx: 88%" ]
 }
+
+# --- /wt skill worktree detection (git worktree list) ---
+
+# Helper: create a temp git repo with a wt/* worktree
+setup_temp_repo_with_worktree() {
+  local repo_dir="$BATS_TEST_TMPDIR/test-repo"
+  local wt_dir="$BATS_TEST_TMPDIR/test-repo-wt-feature"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -b main --quiet
+  git -C "$repo_dir" commit --allow-empty -m "init" --quiet
+  git -C "$repo_dir" worktree add -b "wt/feature" "$wt_dir" --quiet
+  echo "$repo_dir"
+}
+
+@test "statusline: shows active wt/* worktree names in parentheses" {
+  local repo_dir
+  repo_dir=$(setup_temp_repo_with_worktree)
+  local json='{"model":{"display_name":"Opus"},"context_window":{"used_percentage":50},"cwd":"'"$repo_dir"'"}'
+  run run_statusline "$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"main (wt/feature)"* ]]
+}
+
+@test "statusline: multiple wt/* worktrees shown comma-separated" {
+  local repo_dir="$BATS_TEST_TMPDIR/test-repo-multi"
+  local wt1="$BATS_TEST_TMPDIR/test-repo-multi-wt-foo"
+  local wt2="$BATS_TEST_TMPDIR/test-repo-multi-wt-bar"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -b main --quiet
+  git -C "$repo_dir" commit --allow-empty -m "init" --quiet
+  git -C "$repo_dir" worktree add -b "wt/foo" "$wt1" --quiet
+  git -C "$repo_dir" worktree add -b "wt/bar" "$wt2" --quiet
+  local json='{"model":{"display_name":"Opus"},"context_window":{"used_percentage":50},"cwd":"'"$repo_dir"'"}'
+  run run_statusline "$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"wt/foo"* ]]
+  [[ "$output" == *"wt/bar"* ]]
+  [[ "$output" == *"("* ]]
+  [[ "$output" == *")"* ]]
+}
+
+@test "statusline: no parentheses when repo has no wt/* worktrees" {
+  local repo_dir="$BATS_TEST_TMPDIR/test-repo-nowt"
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -b main --quiet
+  git -C "$repo_dir" commit --allow-empty -m "init" --quiet
+  local json='{"model":{"display_name":"Opus"},"context_window":{"used_percentage":50},"cwd":"'"$repo_dir"'"}'
+  run run_statusline "$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"("* ]]
+  [ "$output" = "Opus | ctx: 50% | main" ]
+}
+
+@test "statusline: wt/* worktree names skipped when worktree.branch is set" {
+  # In a --worktree session, don't also show the git worktree list names
+  local repo_dir
+  repo_dir=$(setup_temp_repo_with_worktree)
+  local json='{"model":{"display_name":"Opus"},"context_window":{"used_percentage":50},"cwd":"'"$repo_dir"'","worktree":{"branch":"wt/override","path":"/tmp/fake"}}'
+  run run_statusline "$json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"wt/override"* ]]
+  [[ "$output" != *"("* ]]
+}
