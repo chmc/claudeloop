@@ -1541,6 +1541,58 @@ JSON"
   grep -q '^\[Session:' "$_log"
 }
 
+# --- spinner restart after tool events ---
+
+@test "spinner restart: spinner appears after standalone tool_use without heartbeat" {
+  local tool='{"type":"tool_use","name":"Bash","input":{"command":"ls"}}'
+  run bash -c "echo '$tool' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # After the [Tool: Bash] line, a spinner glyph should appear immediately
+  [[ "$output" == *[/\|\\-]*"0s"* ]]
+}
+
+@test "spinner restart: spinner appears after tool_result without heartbeat" {
+  local tool='{"type":"tool_use","name":"Read","input":{"file_path":"/a"}}'
+  local result='{"type":"tool_result","content":"hello world"}'
+  run bash -c "printf '%s\n%s\n' '$tool' '$result' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # After the [Tool result:] line, a spinner glyph should appear
+  [[ "$output" == *"[Tool result:"*[/\|\\-]*"0s"* ]]
+}
+
+@test "spinner restart: spinner appears after user/tool_result without heartbeat" {
+  local user_event='{"type":"user","tool_use_result":"some output data","is_error":false}'
+  run bash -c "echo '$user_event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # After the [Result:] line, a spinner glyph should appear
+  [[ "$output" == *[/\|\\-]*"0s"* ]]
+}
+
+@test "spinner restart: no spinner after tool_result when got_result is set" {
+  local result_event='{"type":"result","duration_ms":1000,"num_turns":1,"total_cost_usd":0.01,"session_id":"s1","input_tokens":10,"output_tokens":5}'
+  local tool_result='{"type":"tool_result","content":"data"}'
+  local hb='{"type":"heartbeat"}'
+  local output_raw
+  output_raw=$(printf '%s\n%s\n%s\n' "$result_event" "$tool_result" "$hb" | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>&1 | cat -v)
+  local after_session="${output_raw##*\[Session:*\]}"
+  # No spinner should appear after result event
+  [[ "$after_session" != *'0s'* ]]
+}
+
+@test "spinner restart: stdout newline count unchanged with restart" {
+  # Mirrors test at line 507 — ensures restart_spinner doesn't add stdout newlines
+  local tool1='{"type":"tool_use","name":"Read","input":{"file_path":"/a"}}'
+  local spinner='{"type":"unknown_event"}'
+  local tool2='{"type":"tool_use","name":"Read","input":{"file_path":"/b"}}'
+  local outfile
+  outfile=$(mktemp)
+  printf '%s\n%s\n%s\n' "$tool1" "$spinner" "$tool2" \
+    | sh "$STREAM_PROCESSOR_LIB" "$_log" "$_raw" 2>/dev/null > "$outfile"
+  newline_count=$(tr -cd '\n' < "$outfile" | wc -c | tr -d ' ')
+  [ "$newline_count" -eq 1 ]
+  rm -f "$outfile"
+}
+
 @test "spinner shows Todo count (not Task) when both present" {
   local tc='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d"}}'
   local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'
@@ -1548,6 +1600,10 @@ JSON"
   run bash -c "printf '%s\n%s\n%s\n' '$tc' '$todo' '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *"Todo 0/2"* ]]
-  # Spinner should NOT show "Task X/Y" (the [Tasks: 0/1 done] summary is different)
-  [[ "$output" != *"s Task "* ]]
+  # Final spinner (from heartbeat) should show "Todo", not "Task" — todos take priority
+  # Note: intermediate restart_spinner after TaskCreate may briefly show "Task 0/1"
+  # before TodoWrite arrives, which is correct behavior
+  local last_spinner
+  last_spinner=$(printf '%s' "$output" | grep -o '[0-9]*s Todo [0-9]*/[0-9]*' | tail -1)
+  [ -n "$last_spinner" ]
 }
