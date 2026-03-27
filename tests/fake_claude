@@ -23,7 +23,25 @@ count=$((count + 1))
 printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
 
 mkdir -p "$FAKE_CLAUDE_DIR/prompts" "$FAKE_CLAUDE_DIR/args"
-cat > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+
+# Detect stream-json input format (bidirectional stdio protocol)
+_stream_json_input=false
+for _arg in "$@"; do
+  case "$_arg" in
+    --input-format) _stream_json_input=true ;;
+    stream-json) ;; # handled by prior flag
+    --permission-prompt-tool) ;; # accept but ignore
+    stdio) ;; # accept but ignore
+  esac
+done
+
+if [ "$_stream_json_input" = "true" ]; then
+  # Read stream-json message from stdin (one line of JSON, don't wait for EOF)
+  IFS= read -r _raw_input 2>/dev/null || _raw_input=""
+  printf '%s' "$_raw_input" > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+else
+  cat > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+fi
 printf '%s\n' "$@" > "$FAKE_CLAUDE_DIR/args/args_$count"
 
 # --- Scenario selection ---
@@ -267,6 +285,38 @@ scenario_read_only() {
   printf '{"type":"tool_result","content":"/tmp/test.sh:echo hello","id":"toolu_fake_031"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The code looks correct.\\n"}]}}\n'
   printf '{"type":"result","total_cost_usd":0.02,"duration_ms":5000,"num_turns":3,"usage":{"input_tokens":800,"output_tokens":300},"modelUsage":{"fake-claude-v1":{"input_tokens":800,"output_tokens":300}}}\n'
+}
+
+scenario_overload_error() {
+  default_exit=1
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"overloaded_error: The API is overloaded, please try again later\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0,"duration_ms":200,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0},"modelUsage":{"fake-claude-v1":{"input_tokens":0,"output_tokens":0}}}\n'
+}
+
+scenario_server_error() {
+  default_exit=1
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"api_error: Internal server error\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0,"duration_ms":200,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0},"modelUsage":{"fake-claude-v1":{"input_tokens":0,"output_tokens":0}}}\n'
+}
+
+scenario_timeout_error() {
+  default_exit=1
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"request_timeout: The request timed out\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0,"duration_ms":200,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0},"modelUsage":{"fake-claude-v1":{"input_tokens":0,"output_tokens":0}}}\n'
+}
+
+scenario_permission_request() {
+  # Emits a control_request (permission prompt) then continues with success
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"control_request","request_id":"req_perm_001","request":{"type":"can_use_tool","tool_name":"Write","input":{"file_path":".claude/skills/test.md","content":"test"}}}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make changes."}]}}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_perm_001"}\n'
+  printf '{"type":"tool_result","content":"ok","id":"toolu_perm_001"}\n'
+  printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
 }
 
 scenario_custom() {

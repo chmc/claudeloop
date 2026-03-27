@@ -34,6 +34,7 @@ PLAN
   mkdir -p "$TEST_DIR/bin"
   cat > "$TEST_DIR/bin/claude" << 'EOF'
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 printf 'PASS\n## Phase 1: Hello\nDo something\n'
 printf '{"type":"tool_use","name":"Edit","input":{}}\n'
 exit 0

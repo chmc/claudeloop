@@ -17,13 +17,49 @@ calculate_backoff() {
   echo "$BASE_DELAY"
 }
 
-# Check if a phase log contains quota/rate-limit error output
+# Check if a phase log contains a rate-limit/quota error (not overloaded — see is_overload_error)
 # Args: $1 - path to log file
-# Returns: 0 if quota error detected, 1 otherwise
-is_quota_error() {
+# Returns: 0 if rate-limit error detected, 1 otherwise
+is_rate_limit_error() {
   local log_file="$1"
   [ -f "$log_file" ] || return 1
-  grep -qiE "usage limit|quota|rate.?limit|too many requests|rate_limit_error|overloaded" "$log_file"
+  grep -qiE "usage limit|quota|rate.?limit|too many requests|rate_limit_error" "$log_file"
+}
+
+# Backward-compatible alias
+is_quota_error() { is_rate_limit_error "$@"; }
+
+# Check if a phase log contains an overloaded/529 error
+# Args: $1 - log file, $2 - raw JSON log (optional)
+# Returns: 0 if overload error detected, 1 otherwise
+is_overload_error() {
+  local log_file="$1"
+  local raw_file="${2:-}"
+  local _olp="overloaded|overloaded_error|529"
+  [ -f "$log_file" ] && grep -qiE "$_olp" "$log_file" && return 0
+  [ -n "$raw_file" ] && [ -f "$raw_file" ] && grep -qiE "$_olp" "$raw_file" && return 0
+  return 1
+}
+
+# Check if a phase log contains a server error (500/502/503/api_error)
+# Args: $1 - log file, $2 - raw JSON log (optional)
+# Returns: 0 if server error detected, 1 otherwise
+is_server_error() {
+  local log_file="$1"
+  local raw_file="${2:-}"
+  local _sep="api_error|internal_server_error|[Ss]erver error|HTTP 50[023]"
+  [ -f "$log_file" ] && grep -qiE "$_sep" "$log_file" && return 0
+  [ -n "$raw_file" ] && [ -f "$raw_file" ] && grep -qiE "$_sep" "$raw_file" && return 0
+  return 1
+}
+
+# Check if a phase log contains a request timeout error (408)
+# Args: $1 - log file
+# Returns: 0 if timeout error detected, 1 otherwise
+is_timeout_error() {
+  local log_file="$1"
+  [ -f "$log_file" ] || return 1
+  grep -qiE "request_timeout|HTTP 408|request timed out" "$log_file"
 }
 
 # Check if a phase log contains an unanswered permission prompt from Claude
@@ -58,7 +94,7 @@ is_network_error() {
 is_auth_error() {
   local log_file="$1"
   local raw_file _auth_pat
-  _auth_pat="authentication_error|invalid.*credentials|invalid.api.key|not_authorized"
+  _auth_pat="authentication_error|invalid.*credentials|invalid.api.key|not_authorized|permission_error|not_found_error"
   [ -f "$log_file" ] && grep -qiE "$_auth_pat" "$log_file" && return 0
   raw_file="$(dirname "$log_file")/raw-phase-$(basename "$log_file" .log | sed 's/^phase-//').json"
   [ -f "$raw_file" ] && grep -qiE "$_auth_pat" "$raw_file" && return 0
@@ -174,6 +210,8 @@ fail_reason_hint() {
       echo "The previous attempt crashed or was killed before completing. Start fresh and work through the task methodically." ;;
     verification_failed)
       echo "Your previous changes failed verification. See the verification section below for details." ;;
+    permission_denied)
+      echo "Permission was denied for a file operation. Skip the denied file or use a different approach." ;;
     *) ;;
   esac
 }
@@ -214,7 +252,7 @@ escalate_strategy() {
 
   local _escalated="$_base"
   case "$_reason" in
-    trapped_tool_calls|no_write_actions)
+    trapped_tool_calls|no_write_actions|permission_denied)
       if [ "$_consec" -ge 5 ]; then
         _escalated="targeted"
       elif [ "$_consec" -ge 3 ]; then

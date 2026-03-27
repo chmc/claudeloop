@@ -13,6 +13,7 @@ _write_claude_stub() {
   mkdir -p "$dir/bin"
   cat > "$dir/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
@@ -178,6 +179,7 @@ _call_count() {
   # Writing in a loop ensures SIGPIPE is delivered when the downstream pipe breaks.
   cat > "$TEST_DIR/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="$TEST_DIR/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
@@ -228,11 +230,12 @@ EOF
   # Stub: captures stdin (the prompt) to a per-call file, first call outputs error+fails
   cat > "$TEST_DIR/bin/claude" << EOF
 #!/bin/sh
+read -r _line 2>/dev/null || true
 count_file="$TEST_DIR/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
 printf '%s\n' "\$count" > "\$count_file"
-cat > "$TEST_DIR/claude_prompt_\${count}.txt"
+printf '%s\n' "\$_line" > "$TEST_DIR/claude_prompt_\${count}.txt"
 if [ "\$count" -eq 1 ]; then
   printf 'UNIQUE_ERROR_MARKER_XYZ123\n'
   exit 1
@@ -336,6 +339,7 @@ PROG
   # should detect stream processor exit and kill the lingering Claude process.
   cat > "$TEST_DIR/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="$TEST_DIR/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))

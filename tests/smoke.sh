@@ -40,6 +40,7 @@ write_stub() {
   mkdir -p "$dir/bin"
   cat > "$dir/bin/claude" << STUBEOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))

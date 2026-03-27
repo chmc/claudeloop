@@ -57,6 +57,21 @@ run_claude_pipeline() {
   local _saved_stty=""
   _saved_stty=$(stty -g 2>/dev/null < /dev/tty) || true
 
+  # Create named pipe for bidirectional stdio protocol
+  local _claude_fifo
+  _claude_fifo=$(mktemp -u).fifo
+  mkfifo "$_claude_fifo"
+
+  # Build prompt as stream-json message
+  local _prompt_json
+  _prompt_json=$(_build_stream_message "$_rcp_prompt")
+
+  # Open FIFO in read-write mode — avoids blocking that happens with
+  # write-only open when no reader exists yet. All pipeline stages inherit FD 7.
+  # permission_filter writes control_responses to FD 7, which claude reads via stdin.
+  exec 7<>"$_claude_fifo"
+  printf '%s\n' "$_prompt_json" >&7
+
   # Use job control (set -m) so the background pipeline gets its own process group.
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
   # not just the last process. Without set -m, kill -TERM $! only kills the last
@@ -65,19 +80,13 @@ run_claude_pipeline() {
   {
     _rc=0
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
-    if [ "$SKIP_PERMISSIONS" = "true" ]; then
-      # shellcheck disable=SC2086
-      printf '%s\n' "$_rcp_prompt" | claude --print --dangerously-skip-permissions \
-        --output-format=stream-json --verbose --include-partial-messages \
-        $_claude_debug_flag 2>&1 || _rc=$?
-    else
-      # shellcheck disable=SC2086
-      printf '%s\n' "$_rcp_prompt" | claude --print \
-        --output-format=stream-json --verbose --include-partial-messages \
-        $_claude_debug_flag 2>&1 || _rc=$?
-    fi
+    # shellcheck disable=SC2086
+    claude --input-format stream-json --output-format stream-json \
+      --permission-prompt-tool stdio --verbose --include-partial-messages \
+      $_claude_debug_flag \
+      < "$_claude_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | { process_stream_json "$_rcp_log" "$_rcp_raw" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}"; : > "$_sentinel"; } &
+  } | permission_filter | inject_heartbeats | { process_stream_json "$_rcp_log" "$_rcp_raw" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
@@ -129,7 +138,9 @@ run_claude_pipeline() {
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  exec 7>&- 2>/dev/null || true
   rm -f "$_sentinel"
+  rm -f "$_claude_fifo"
   # Clear spinner remnants and show cursor
   printf '\r%-24s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""

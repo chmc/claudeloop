@@ -71,7 +71,7 @@ setup() {
   mkdir -p "$TEST_DIR/bin"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactoring..."}}\n'
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo refactored"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Done.\nVERIFICATION_PASSED\n"}}\n'
@@ -110,7 +110,7 @@ teardown() {
   # Stub that always fails (non-zero exit), counts calls
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -138,7 +138,7 @@ STUB
 
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -197,7 +197,7 @@ STUB
   # First call: refactor (makes commit). Second call: verify (passes).
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -237,7 +237,7 @@ STUB
   # Stub that always exits non-zero
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Crash"}}\n'
 exit 1
 STUB
@@ -258,7 +258,7 @@ STUB
   # Stub that exits 0 but makes no commits
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing to do"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Code is well-structured, nothing to refactor.\n"}}\n'
 exit 0
@@ -296,7 +296,7 @@ STUB
   # Stub that outputs tool_use + VERIFICATION_PASSED
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff HEAD~1"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Refactoring is clean.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
@@ -336,7 +336,7 @@ STUB
   # Stub: first call = refactor (no-op), second call = verify
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
 exit 0
@@ -362,7 +362,7 @@ STUB
   # Stub that exits 0 but makes no commits (nothing to refactor)
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
 exit 0
@@ -386,7 +386,7 @@ STUB
   echo "0" > "$TEST_DIR/call_count"
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -421,7 +421,7 @@ STUB
   echo "0" > "$TEST_DIR/call_count"
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -468,7 +468,7 @@ STUB
   # Stub that exits 0, makes no commits (nothing to refactor)
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
 exit 0
@@ -497,7 +497,7 @@ STUB
   # Stub that exits 0, makes no commits
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
 exit 0
@@ -555,7 +555,7 @@ STUB
   # Stub: refactor call modifies files but does NOT commit; verify passes
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -596,7 +596,7 @@ STUB
   # Stub: first call crashes with uncommitted changes, second call succeeds with verify
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -651,7 +651,7 @@ STUB
   # Stub that always fails — copies PROGRESS.md at each attempt to capture status
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -686,7 +686,7 @@ STUB
   # Stub that always fails
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -713,8 +713,9 @@ STUB
   # Stub: first call fails with error output, second call captures prompt
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-# Save the prompt from stdin
-cat > "$TEST_DIR/prompt_\$(cat "$TEST_DIR/call_count")"
+# Save the prompt from stdin (single line from FIFO)
+read -r _line 2>/dev/null || true
+printf '%s\n' "\$_line" > "$TEST_DIR/prompt_\$(cat "$TEST_DIR/call_count")"
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -771,7 +772,7 @@ STUB
   # Stub that captures the prompt and passes
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > "$TEST_DIR/verify_prompt"
+read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
 exit 0
@@ -813,7 +814,7 @@ STUB
   # Stub that exits 0, makes no commits (nothing to refactor)
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo nothing"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Nothing to refactor.\n"}}\n'
 exit 0
@@ -860,7 +861,7 @@ STUB
   # Stub that exits 0 but makes no code changes (only reads files)
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Read","input":{"file_path":"file.txt"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"Code looks good, nothing to refactor.\n"}}\n'
 exit 0
@@ -892,7 +893,7 @@ STUB
   # Stub: attempt 1 crashes after writing a source file, attempt 2 exits 0 with no writes
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -939,7 +940,7 @@ STUB
   # Stub that captures the prompt
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > "$TEST_DIR/verify_prompt_captured"
+read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt_captured"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
 exit 0
@@ -962,7 +963,7 @@ STUB
 @test "verify_refactor: prompt mentions regression-based verification" {
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > "$TEST_DIR/verify_prompt_captured"
+read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt_captured"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
 exit 0
@@ -1000,7 +1001,7 @@ STUB
 
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -1040,7 +1041,7 @@ STUB
   # Stub that always fails (non-zero exit), counts calls
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -1069,7 +1070,7 @@ STUB
   # Stub that captures progress at attempt 1 then fails
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -1098,7 +1099,7 @@ STUB
   # then verify passes
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"
@@ -1144,7 +1145,7 @@ STUB
   # Stub that captures progress at each attempt then fails
   cat > "$TEST_DIR/bin/claude" << STUB
 #!/bin/sh
-cat > /dev/null
+read -r _discard 2>/dev/null || true
 n=\$(cat "$TEST_DIR/call_count")
 n=\$((n + 1))
 echo "\$n" > "$TEST_DIR/call_count"

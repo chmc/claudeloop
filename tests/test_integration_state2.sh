@@ -13,6 +13,7 @@ _write_claude_stub() {
   mkdir -p "$dir/bin"
   cat > "$dir/bin/claude" << EOF
 #!/bin/sh
+read -r _discard 2>/dev/null || true
 count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
@@ -105,12 +106,13 @@ _write_verify_claude_stub() {
   mkdir -p "$dir/bin"
   cat > "$dir/bin/claude" << EOF
 #!/bin/sh
+read -r _line 2>/dev/null || true
 count_file="${dir}/claude_call_count"
 count=\$(cat "\$count_file" 2>/dev/null || echo 0)
 count=\$((count + 1))
 printf '%s\n' "\$count" > "\$count_file"
 
-cat > "${dir}/claude_stdin_\${count}" 2>/dev/null || true
+printf '%s\n' "\$_line" > "${dir}/claude_stdin_\${count}" 2>/dev/null || true
 
 exit_codes_file="${dir}/claude_exit_codes"
 exit_code=0

@@ -71,12 +71,17 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   : > "$verify_formatted_log"
 
   # Run claude piped through process_stream_json (same pattern as execute_phase)
-  local _exit_tmp _skip_flag
+  local _exit_tmp
   _exit_tmp=$(mktemp)
-  _skip_flag=""
-  if [ "$SKIP_PERMISSIONS" = "true" ]; then
-    _skip_flag="--dangerously-skip-permissions"
-  fi
+
+  # Create named pipe for bidirectional stdio protocol
+  local _verify_fifo
+  _verify_fifo=$(mktemp -u).fifo
+  mkfifo "$_verify_fifo"
+
+  # Build prompt as stream-json message
+  local _prompt_json
+  _prompt_json=$(_build_stream_message "$prompt")
 
   # Sentinel file: created when stream processor (AWK) exits.
   local _sentinel
@@ -87,15 +92,20 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   local _saved_stty=""
   _saved_stty=$(stty -g 2>/dev/null < /dev/tty) || true
 
+  # Open FIFO in read-write mode — avoids blocking that happens with
+  # write-only open when no reader exists yet. All pipeline stages inherit FD 7.
+  # permission_filter writes control_responses to FD 7, which claude reads via stdin.
+  exec 7<>"$_verify_fifo"
+  printf '%s\n' "$_prompt_json" >&7
+
   set -m
   {
     _rc=0
-    # shellcheck disable=SC2086
-    printf '%s\n' "$prompt" | claude --print --output-format=stream-json --verbose \
-      --include-partial-messages \
-      $_skip_flag 2>&1 || _rc=$?
+    claude --input-format stream-json --output-format stream-json \
+      --permission-prompt-tool stdio --verbose --include-partial-messages \
+      < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | inject_heartbeats | { process_stream_json "$verify_formatted_log" "$verify_log" \
+  } | permission_filter | inject_heartbeats | { process_stream_json "$verify_formatted_log" "$verify_log" \
       "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
@@ -126,7 +136,9 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  exec 7>&- 2>/dev/null || true
   rm -f "$_sentinel"
+  rm -f "$_verify_fifo"
   # Clear spinner remnants on current line (panel already cleaned by deactivate_panel)
   printf '\r%-12s\r' '' >/dev/stderr
   CURRENT_PIPELINE_PID=""
