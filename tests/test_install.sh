@@ -55,6 +55,11 @@ run_uninstaller() {
   [ -f "$INSTALL_DIR_OVERRIDE/assets/replay-template.html" ]
 }
 
+@test "install: copies examples/statusline-command.sh to INSTALL_DIR/examples" {
+  run_installer
+  [ -f "$INSTALL_DIR_OVERRIDE/examples/statusline-command.sh" ]
+}
+
 @test "install: creates BIN_DIR" {
   run_installer
   [ -d "$BIN_DIR_OVERRIDE" ]

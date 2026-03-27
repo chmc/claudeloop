@@ -60,6 +60,8 @@ jobs:
           cp claudeloop "claudeloop-v${version}/"
           cp lib/*.sh "claudeloop-v${version}/lib/"
           cp assets/replay-template.html "claudeloop-v${version}/assets/"
+          mkdir -p "claudeloop-v${version}/examples"
+          cp examples/* "claudeloop-v${version}/examples/"
           tar -czf "claudeloop-v${version}.tar.gz" "claudeloop-v${version}"
           echo "TARBALL=claudeloop-v${version}.tar.gz" >> "$GITHUB_ENV"
           echo "TAG=$tag" >> "$GITHUB_ENV"
