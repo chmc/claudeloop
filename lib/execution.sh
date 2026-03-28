@@ -191,6 +191,19 @@ rotate_phase_log() {
   fi
 }
 
+# Complete a phase successfully: update status, commit, refactor, write progress
+# Args: $1 - phase number
+_complete_phase() {
+  update_phase_status "$1" "completed"
+  auto_commit_changes "$1" "auto-commit after phase completion"
+  if [ "$REFACTOR_PHASES" = "true" ]; then
+    phase_set REFACTOR_STATUS "$1" "pending"
+  fi
+  write_progress "$PROGRESS_FILE" "$PLAN_FILE"
+  CURRENT_PHASE=""
+  run_refactor_if_needed "$1"
+}
+
 # Evaluate phase result: check exit code, log quality, and determine pass/fail
 # Args: $1 - phase_num, $2 - claude_exit, $3 - attempt, $4 - log_file, $5 - raw_log
 # Returns: 0 on success (phase completed), 1 on failure
@@ -218,22 +231,18 @@ evaluate_phase_result() {
       return 1
     fi
 
+    # Signal file + successful session: no-changes phase, skip verification
+    # Checked before has_write_actions because writing the signal file itself
+    # triggers has_write_actions (matches "name":"Write" in raw JSON)
+    if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
+      log_verbose "execute_phase: phase $_epr_phase has no-changes signal file with successful session — accepting"
+      print_success "Phase $_epr_phase completed (no code changes needed — signal file present)"
+      _complete_phase "$_epr_phase"
+      return 0
+    fi
+
     # Safety: check that Claude made write actions (not just reads)
     if ! has_write_actions "$_epr_raw"; then
-      # Allow no-change completion if signal file exists AND Claude had a real session
-      if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
-        log_verbose "execute_phase: phase $_epr_phase has no-changes signal file with successful session — accepting"
-        print_success "Phase $_epr_phase completed (no code changes needed — signal file present)"
-        update_phase_status "$_epr_phase" "completed"
-        auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
-        if [ "$REFACTOR_PHASES" = "true" ]; then
-          phase_set REFACTOR_STATUS "$_epr_phase" "pending"
-        fi
-        write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-        CURRENT_PHASE=""
-        run_refactor_if_needed "$_epr_phase"
-        return 0
-      fi
       if has_trapped_tool_calls "$_epr_raw"; then
         update_fail_reason "$_epr_phase" "trapped_tool_calls"
         log_verbose "execute_phase: phase $_epr_phase has tool calls trapped in thinking blocks"
@@ -254,30 +263,23 @@ evaluate_phase_result() {
       return 1
     fi
     print_success "Phase $_epr_phase completed successfully"
-    update_phase_status "$_epr_phase" "completed"
-    auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
-    if [ "$REFACTOR_PHASES" = "true" ]; then
-      phase_set REFACTOR_STATUS "$_epr_phase" "pending"
-    fi
-    write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-    CURRENT_PHASE=""
-    run_refactor_if_needed "$_epr_phase"
+    _complete_phase "$_epr_phase"
     return 0
   else
+    # Non-zero exit but signal file + successful session: accept as no-changes completion
+    if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
+      log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but signal file present with successful session — accepting"
+      print_warning "Phase $_epr_phase: exited non-zero but signal file present — treating as completed"
+      _complete_phase "$_epr_phase"
+      return 0
+    fi
     if has_successful_session "$_epr_log" && has_write_actions "$_epr_raw"; then
       log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but successful session detected"
       if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
         return 1
       fi
       print_warning "Phase $_epr_phase: Claude exited with code $_epr_exit but a successful session was detected — treating as completed."
-      update_phase_status "$_epr_phase" "completed"
-      auto_commit_changes "$_epr_phase" "auto-commit after phase completion"
-      if [ "$REFACTOR_PHASES" = "true" ]; then
-        phase_set REFACTOR_STATUS "$_epr_phase" "pending"
-      fi
-      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-      CURRENT_PHASE=""
-      run_refactor_if_needed "$_epr_phase"
+      _complete_phase "$_epr_phase"
       return 0
     fi
     update_fail_reason "$_epr_phase" "no_session"

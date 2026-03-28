@@ -247,6 +247,56 @@ _setup_epr_stubs() {
   [ "$status" -eq 1 ]
 }
 
+@test "evaluate_phase_result: succeeds with signal file + successful session even when Write tool used" {
+  _setup_epr_stubs
+  # Spy: detect if run_adaptive_verification is called
+  run_adaptive_verification() { printf 'called' > "$_tmpdir/rav_spy"; return 0; }
+  local log="$_tmpdir/phase-6.log"
+  local raw="$_tmpdir/phase-6.raw.json"
+  # Log with successful session
+  printf '=== EXECUTION START phase=6 attempt=1 ===\n' > "$log"
+  printf '=== RESPONSE ===\nNo code changes needed.\n' >> "$log"
+  printf '[Session: duration=30.0s turns=10 tokens=3000in/1500out]\n' >> "$log"
+  # Raw log WITH Write tool call (signal file creation triggers has_write_actions)
+  printf '=== EXECUTION START phase=6 attempt=1 ===\n' > "$raw"
+  printf '{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"tool_use","id":"toolu_01","name":"Write","input":{}}}}\n' >> "$raw"
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_01","name":"Write","input":{"file_path":".claudeloop/signals/phase-6.md","content":"No changes needed"}}]}}\n' >> "$raw"
+  # Create signal file
+  mkdir -p .claudeloop/signals
+  printf 'No changes needed.\n' > ".claudeloop/signals/phase-6.md"
+  phase_set ATTEMPTS 6 "1"
+  run evaluate_phase_result 6 0 1 "$log" "$raw"
+  [ "$status" -eq 0 ]
+  # Verify run_adaptive_verification was NOT called (signal file skips verification)
+  [ ! -f "$_tmpdir/rav_spy" ]
+  rm -rf .claudeloop/signals
+}
+
+@test "evaluate_phase_result: succeeds with signal file + successful session on non-zero exit" {
+  _setup_epr_stubs
+  # Spy: detect if run_adaptive_verification is called
+  run_adaptive_verification() { printf 'called' > "$_tmpdir/rav_spy"; return 0; }
+  local log="$_tmpdir/phase-7.log"
+  local raw="$_tmpdir/phase-7.raw.json"
+  # Log with successful session
+  printf '=== EXECUTION START phase=7 attempt=1 ===\n' > "$log"
+  printf '=== RESPONSE ===\nNo code changes needed.\n' >> "$log"
+  printf '[Session: duration=25.0s turns=8 tokens=2000in/1000out]\n' >> "$log"
+  # Raw log with no write actions
+  printf '=== EXECUTION START phase=7 attempt=1 ===\n' > "$raw"
+  printf '{"type":"tool_use","name":"Read","input":{}}\n' >> "$raw"
+  # Create signal file
+  mkdir -p .claudeloop/signals
+  printf 'Phase verified manually.\n' > ".claudeloop/signals/phase-7.md"
+  phase_set ATTEMPTS 7 "1"
+  # Non-zero exit (e.g., Claude crashed after writing signal file)
+  run evaluate_phase_result 7 1 1 "$log" "$raw"
+  [ "$status" -eq 0 ]
+  # Verify run_adaptive_verification was NOT called
+  [ ! -f "$_tmpdir/rav_spy" ]
+  rm -rf .claudeloop/signals
+}
+
 @test "evaluate_phase_result: fails on non-zero exit with turns=1 tokens=0 (API 500 error)" {
   _setup_epr_stubs
   local log="$_tmpdir/phase-4.log"

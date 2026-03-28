@@ -106,7 +106,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
       < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
   } | permission_filter | inject_heartbeats | { process_stream_json "$verify_formatted_log" "$verify_log" \
-      "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0"; : > "$_sentinel"; } &
+      "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${VERIFY_IDLE_TIMEOUT:-120}"; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
   _safe_disable_jobctl

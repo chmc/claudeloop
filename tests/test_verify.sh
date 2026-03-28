@@ -408,6 +408,63 @@ STUB
 }
 
 # =============================================================================
+# VERIFY_IDLE_TIMEOUT
+# =============================================================================
+
+@test "verify_phase: VERIFY_IDLE_TIMEOUT enables idle detection during verification" {
+  VERIFY_PHASES=true
+  VERIFY_IDLE_TIMEOUT=3
+  VERIFY_TIMEOUT=30
+  MAX_PHASE_TIME=0
+  # Unset _SKIP_HEARTBEATS so idle detection via heartbeats can work
+  unset _SKIP_HEARTBEATS
+  # Stub that emits a tool_use + tool_result (clearing tool_active) then goes silent
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+read -r _discard 2>/dev/null || true
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+printf '{"type":"tool_result","tool_use_id":"toolu_01","content":"ok"}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Analyzing..."}}\n'
+# Go silent — should trigger idle timeout, not wait for VERIFY_TIMEOUT
+sleep 60
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+  local start_time end_time elapsed
+  start_time=$(date +%s)
+  run verify_phase "1" ".claudeloop/logs/phase-1.log"
+  end_time=$(date +%s)
+  elapsed=$((end_time - start_time))
+  # Should complete via idle timeout (~3-6s), not hard timeout (30s)
+  [ "$elapsed" -lt 15 ]
+}
+
+@test "verify_phase: VERIFY_IDLE_TIMEOUT=0 disables idle detection" {
+  VERIFY_PHASES=true
+  VERIFY_IDLE_TIMEOUT=0
+  VERIFY_TIMEOUT=3
+  MAX_PHASE_TIME=0
+  # Stub that emits output then goes silent
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+read -r _discard 2>/dev/null || true
+printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+sleep 60
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+  local start_time end_time elapsed
+  start_time=$(date +%s)
+  run verify_phase "1" ".claudeloop/logs/phase-1.log"
+  end_time=$(date +%s)
+  elapsed=$((end_time - start_time))
+  # With idle_timeout=0 (disabled), should fall through to VERIFY_TIMEOUT=3
+  # Should complete in ~3s (hard timeout), proving idle detection was disabled
+  [ "$elapsed" -ge 2 ]
+  [ "$elapsed" -lt 10 ]
+}
+
+# =============================================================================
 # check_verdict helper
 # =============================================================================
 

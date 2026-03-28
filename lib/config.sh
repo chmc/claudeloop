@@ -31,6 +31,7 @@ load_config() {
       MAX_PHASE_TIME)         MAX_PHASE_TIME="$value" ;;
       IDLE_TIMEOUT)           IDLE_TIMEOUT="$value" ;;
       VERIFY_TIMEOUT)        VERIFY_TIMEOUT="$value" ;;
+      VERIFY_IDLE_TIMEOUT)   VERIFY_IDLE_TIMEOUT="$value" ;;
       AI_PARSE)              AI_PARSE="$value" ;;
       GRANULARITY)           GRANULARITY="$value" ;;
       VERIFY_PHASES)         VERIFY_PHASES="$value" ;;
@@ -102,6 +103,7 @@ write_config() {
       printf 'MAX_PHASE_TIME=%s\n'      "$MAX_PHASE_TIME"
       printf 'IDLE_TIMEOUT=%s\n'       "$IDLE_TIMEOUT"
       printf 'VERIFY_TIMEOUT=%s\n'   "$VERIFY_TIMEOUT"
+      printf 'VERIFY_IDLE_TIMEOUT=%s\n' "$VERIFY_IDLE_TIMEOUT"
       printf 'AI_PARSE=%s\n'          "$AI_PARSE"
       printf 'GRANULARITY=%s\n'       "$GRANULARITY"
       printf 'VERIFY_PHASES=%s\n'   "$VERIFY_PHASES"
@@ -125,6 +127,7 @@ write_config() {
   [ -n "$_CLI_MAX_PHASE_TIME" ]       && update_conf_key "$conf_file" MAX_PHASE_TIME "$MAX_PHASE_TIME"
   [ -n "$_CLI_IDLE_TIMEOUT" ]        && update_conf_key "$conf_file" IDLE_TIMEOUT "$IDLE_TIMEOUT"
   [ -n "$_CLI_VERIFY_TIMEOUT" ]     && update_conf_key "$conf_file" VERIFY_TIMEOUT "$VERIFY_TIMEOUT"
+  [ -n "$_CLI_VERIFY_IDLE_TIMEOUT" ] && update_conf_key "$conf_file" VERIFY_IDLE_TIMEOUT "$VERIFY_IDLE_TIMEOUT"
   [ -n "$_CLI_AI_PARSE" ]            && update_conf_key "$conf_file" AI_PARSE "$AI_PARSE"
   [ -n "$_CLI_GRANULARITY" ]         && update_conf_key "$conf_file" GRANULARITY "$GRANULARITY"
   [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"

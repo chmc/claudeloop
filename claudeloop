@@ -23,6 +23,7 @@ _CL_STREAM_TRUNCATE_LEN="${STREAM_TRUNCATE_LEN:-}"
 _CL_MAX_PHASE_TIME="${MAX_PHASE_TIME:-}"
 _CL_IDLE_TIMEOUT="${IDLE_TIMEOUT:-}"
 _CL_VERIFY_TIMEOUT="${VERIFY_TIMEOUT:-}"
+_CL_VERIFY_IDLE_TIMEOUT="${VERIFY_IDLE_TIMEOUT:-}"
 _CL_VERIFY_PHASES="${VERIFY_PHASES:-}"
 _CL_REFACTOR_PHASES="${REFACTOR_PHASES:-}"
 _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
@@ -69,6 +70,7 @@ MONITOR_MODE=false
 MAX_PHASE_TIME=0             # kill claude after N seconds per phase (0=disabled, default)
 IDLE_TIMEOUT=600             # exit stream processor after N seconds of no activity (0=disabled)
 VERIFY_TIMEOUT=300           # kill verify_phase after N seconds (default 300)
+VERIFY_IDLE_TIMEOUT=120      # idle detection in verify stream processor (0=disabled)
 AI_PARSE=true
 GRANULARITY="tasks"
 VERIFY_PHASES=true
@@ -81,7 +83,7 @@ CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline
 # Sentinels: set to 1 when the corresponding arg is explicitly passed via CLI
 _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
-_CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT="" _CLI_VERIFY_TIMEOUT=""
+_CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT="" _CLI_VERIFY_TIMEOUT="" _CLI_VERIFY_IDLE_TIMEOUT=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
 _CLI_VERIFY_PHASES=""
 _CLI_REFACTOR_PHASES=""
@@ -410,6 +412,12 @@ parse_args() {
         if [ $# -lt 2 ]; then echo "Error: --verify-timeout requires an argument" >&2; exit 1; fi
         case "$2" in ''|*[!0-9]*) echo "Error: --verify-timeout requires a number" >&2; exit 1 ;; esac
         VERIFY_TIMEOUT="$2"; _CLI_VERIFY_TIMEOUT=1
+        shift 2
+        ;;
+      --verify-idle-timeout)
+        if [ $# -lt 2 ]; then echo "Error: --verify-idle-timeout requires an argument" >&2; exit 1; fi
+        case "$2" in ''|*[!0-9]*) echo "Error: --verify-idle-timeout requires a number" >&2; exit 1 ;; esac
+        VERIFY_IDLE_TIMEOUT="$2"; _CLI_VERIFY_IDLE_TIMEOUT=1
         shift 2
         ;;
       --simple)
@@ -928,6 +936,7 @@ apply_config_precedence() {
   [ -n "$_CL_MAX_PHASE_TIME" ]         && MAX_PHASE_TIME="$_CL_MAX_PHASE_TIME"
   [ -n "$_CL_IDLE_TIMEOUT" ]           && IDLE_TIMEOUT="$_CL_IDLE_TIMEOUT"
   [ -n "$_CL_VERIFY_TIMEOUT" ]         && VERIFY_TIMEOUT="$_CL_VERIFY_TIMEOUT"
+  [ -n "$_CL_VERIFY_IDLE_TIMEOUT" ]    && VERIFY_IDLE_TIMEOUT="$_CL_VERIFY_IDLE_TIMEOUT"
   [ -n "$_CL_VERIFY_PHASES" ]          && VERIFY_PHASES="$_CL_VERIFY_PHASES"
   [ -n "$_CL_REFACTOR_PHASES" ]        && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
   [ -n "$_CL_REFACTOR_MAX_RETRIES" ]   && REFACTOR_MAX_RETRIES="$_CL_REFACTOR_MAX_RETRIES"
