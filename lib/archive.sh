@@ -10,6 +10,7 @@ clean_claudeloop_dir() {
     [ -e "$_item" ] || continue
     case "$_item" in
       .claudeloop/archive|.claudeloop/lock) continue ;;
+      .claudeloop/live-*.log) continue ;;
     esac
     rm -rf "$_item" 2>/dev/null || true
   done

@@ -305,8 +305,10 @@ PEOF
   sleep 0 &
   _safe_disable_jobctl
 
-  # Verify trap is still set
-  trap_output=$(trap -p INT 2>&1)
+  # Assert via TERM — POSIX resets INT disposition in background subshells
+  # (including parallel bats runs), making trap -p INT unreliable.
+  # TERM is re-armed by the same `trap ... INT TERM` call, so it is a valid proxy.
+  trap_output=$(trap -p TERM 2>&1)
   [[ "$trap_output" == *"handle_interrupt"* ]]
 }
 

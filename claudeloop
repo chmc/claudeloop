@@ -1200,6 +1200,11 @@ main() {
       read -r _ans
       case "$_ans" in [yY]*) ;; *) print_error "Reset aborted"; exit 1 ;; esac
     fi
+    # Rotate live.log before cleaning so the previous run's log is preserved
+    if [ -f ".claudeloop/live.log" ]; then
+      _ts=$(date '+%Y%m%d-%H%M%S')
+      mv ".claudeloop/live.log" ".claudeloop/live-${_ts}.log"
+    fi
     clean_claudeloop_dir
     # Fall back before write_config so correct PLAN_FILE is persisted
     case "$PLAN_FILE" in
