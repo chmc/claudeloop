@@ -17,6 +17,7 @@ setup() {
   . "$CLAUDELOOP_DIR/lib/ui.sh"
   . "$CLAUDELOOP_DIR/lib/retry.sh"
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
+  . "$CLAUDELOOP_DIR/lib/permission_handler.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
   . "$CLAUDELOOP_DIR/lib/execution.sh"
   . "$CLAUDELOOP_DIR/lib/progress.sh"
@@ -770,11 +771,12 @@ STUB
   echo "0" > "$TEST_DIR/call_count"
 
   # Stub that captures the prompt and passes
-  cat > "$TEST_DIR/bin/claude" << STUB
+  export _PROMPT_CAPTURE="$TEST_DIR/verify_prompt"
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt"
+IFS= read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$_PROMPT_CAPTURE"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
-printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -937,12 +939,13 @@ STUB
 # =============================================================================
 
 @test "verify_refactor: prompt includes pre_sha for regression checking" {
-  # Stub that captures the prompt
-  cat > "$TEST_DIR/bin/claude" << STUB
+  # Stub that captures the prompt (quoted heredoc to preserve $-vars inside stub)
+  export _PROMPT_CAPTURE="$TEST_DIR/verify_prompt_captured"
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt_captured"
+IFS= read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$_PROMPT_CAPTURE"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
-printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
@@ -961,11 +964,12 @@ STUB
 }
 
 @test "verify_refactor: prompt mentions regression-based verification" {
-  cat > "$TEST_DIR/bin/claude" << STUB
+  export _PROMPT_CAPTURE="$TEST_DIR/verify_prompt_captured"
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$TEST_DIR/verify_prompt_captured"
+IFS= read -r _line 2>/dev/null || true; printf '%s\n' "$_line" > "$_PROMPT_CAPTURE"
 printf '{"type":"tool_use","name":"Bash","input":{"command":"echo ok"}}\n'
-printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\\nVERIFICATION_PASSED\\n"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"All good.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
