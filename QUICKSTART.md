@@ -79,7 +79,7 @@ claudeloop                # execute
 ```bash
 claudeloop --version           # print installed version
 claudeloop --plan my-plan.md   # use a specific plan file
-claudeloop --reset             # reset progress and start over
+claudeloop --reset             # clear all run state and start fresh
 claudeloop --continue          # resume after Ctrl+C interrupt
 claudeloop --phase 3           # start from a specific phase
 claudeloop --dry-run           # validate without executing
@@ -115,7 +115,7 @@ claudeloop --plan PLAN.md --phase 3 --dangerously-skip-permissions
 # Resume after an interrupt, auto-approving writes
 claudeloop --continue --dangerously-skip-permissions
 
-# Reset progress and re-run from scratch
+# Clear all run state and start fresh
 claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
 
 # AI-decompose a free-form plan and execute

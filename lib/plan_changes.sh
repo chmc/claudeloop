@@ -353,7 +353,7 @@ detect_orphan_logs() {
     printf '[%s]   → Will switch to ai-parsed-plan.md and recover progress from logs.\n' \
       "$(date '+%H:%M:%S')"
   else
-    printf '[%s]   Hint: use --reset to start fresh.\n' "$(date '+%H:%M:%S')"
+    printf '[%s]   Hint: use --reset to clear all state and start fresh.\n' "$(date '+%H:%M:%S')"
   fi
 
   if [ "$YES_MODE" = "true" ]; then

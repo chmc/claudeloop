@@ -232,7 +232,7 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 ```
 --plan <file>        Plan file to execute (default: PLAN.md)
 --progress <file>    Progress file (default: PROGRESS.md)
---reset              Reset progress and start from beginning
+--reset              Clear all run state and start fresh
 --continue           Resume from last checkpoint
 --phase <n>          Start from specific phase number
 --mark-complete <n>  Mark a phase as completed (use when a phase succeeded but was logged as failed)

@@ -301,7 +301,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --plan <file>          Plan file to execute (default: PLAN.md)
   --progress <file>      Progress file (default: PROGRESS.md)
-  --reset                Reset progress and start from beginning
+  --reset                Clear all run state and start fresh
   --continue             Continue from last checkpoint (default)
   --phase <n>            Start from specific phase number
   --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
@@ -1023,11 +1023,7 @@ init_and_recover_progress() {
     recover_progress_from_logs ".claudeloop" "$PROGRESS_FILE" "$PLAN_FILE"
   fi
 
-  # Initialize progress
-  if $RESET_PROGRESS; then
-    rm -f "$PROGRESS_FILE" "$STATE_FILE"
-  fi
-
+  # Initialize progress (files already cleaned by clean_claudeloop_dir if --reset)
   init_progress "$PROGRESS_FILE"
 
   # Detect and reconcile plan changes (no-op on fresh/reset runs)
@@ -1196,10 +1192,34 @@ main() {
     commit_gitignore
   fi
 
+  # --reset: clean all run state for a fresh start
+  if $RESET_PROGRESS && ! $DRY_RUN; then
+    if [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
+      print_warning "Reset will clear all run state (logs, config, progress) except archives."
+      printf 'Continue? (y/N) '
+      read -r _ans
+      case "$_ans" in [yY]*) ;; *) print_error "Reset aborted"; exit 1 ;; esac
+    fi
+    clean_claudeloop_dir
+    log_ts "Run state cleared (--reset)"
+    write_config
+  fi
+
+  # If --reset deleted ai-parsed-plan.md, fall back to original plan
+  if $RESET_PROGRESS; then
+    case "$PLAN_FILE" in
+      .claudeloop/ai-parsed-plan.md)
+        if [ "$AI_PARSE" != "true" ]; then
+          PLAN_FILE="PLAN.md"
+        fi
+        ;;
+    esac
+  fi
+
   init_live_log
 
   # Validate plan and prompt files
-  if [ ! -f "$PLAN_FILE" ]; then
+  if [ ! -f "$PLAN_FILE" ] && ! { $RESET_PROGRESS && [ "$AI_PARSE" = "true" ]; }; then
     print_error "Plan file not found: $PLAN_FILE"
     exit 1
   fi
