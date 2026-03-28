@@ -546,3 +546,33 @@ STUB
   run verify_phase "1" ".claudeloop/logs/phase-1.log"
   [ "$status" -eq 0 ]
 }
+
+# =============================================================================
+# Timer sentinel creation when kill fails
+# =============================================================================
+
+@test "verify_phase: timer creates sentinel even when kill fails" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # The timer subshell must use '; : > "$_sentinel"' (unconditional) not '&& : > "$_sentinel"'
+  # This ensures sentinel is created even when kill fails (process group already dead)
+  local timer_line
+  timer_line=$(grep -n 'sleep.*_verify_timeout.*kill.*sentinel' "$src" | head -1)
+  [ -n "$timer_line" ]
+  # Must NOT use '&& : >' before sentinel — must use '; : >'
+  ! grep -q 'kill.*2>/dev/null && : > "\$_sentinel"' "$src"
+}
+
+# =============================================================================
+# Sentinel poll safety net
+# =============================================================================
+
+@test "verify_phase: sentinel poll has timeout guard" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  grep -q '_sentinel_polls' "$src"
+  grep -q '_sentinel_max' "$src"
+  local sentinel_line break_line
+  sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
+  break_line=$(grep -n '_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
+  [ -n "$break_line" ]
+  [ "$break_line" -gt "$sentinel_line" ]
+}

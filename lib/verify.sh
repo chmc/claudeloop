@@ -121,14 +121,22 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
     _verify_timeout="$MAX_PHASE_TIME"
   fi
   set -m
-  ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
+  ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null; : > "$_sentinel" ) >/dev/null 2>&1 &
   _timer_pid=$!
   _safe_disable_jobctl
 
   # Wait for stream processor to finish (sentinel-based, same as execute_phase)
+  _sentinel_polls=0
+  _sentinel_max=$((_verify_timeout + 60))
+  _sentinel_interval=${_SENTINEL_POLL:-1}
   while [ ! -f "$_sentinel" ]; do
     _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
-    sleep "${_SENTINEL_POLL:-1}"
+    sleep "$_sentinel_interval"
+    _sentinel_polls=$((_sentinel_polls + 1))
+    if awk "BEGIN{exit !(${_sentinel_polls} * ${_sentinel_interval} >= ${_sentinel_max})}" 2>/dev/null; then
+      log_verbose "verify_phase: sentinel poll timeout after ${_sentinel_max}s"
+      break
+    fi
   done
 
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)

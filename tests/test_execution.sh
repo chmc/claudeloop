@@ -375,6 +375,17 @@ _setup_epr_stubs() {
   [ "$break_line" -gt "$sentinel_line" ]
 }
 
+@test "run_claude_pipeline: timer creates sentinel even when kill fails" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # The timer subshell must use '; : > "$_sentinel"' (unconditional) not '&& : > "$_sentinel"'
+  # This ensures sentinel is created even when kill fails (process already dead)
+  local timer_line
+  timer_line=$(grep -n 'sleep.*MAX_PHASE_TIME.*kill.*sentinel' "$src" | head -1)
+  [ -n "$timer_line" ]
+  # Must NOT use '&& : >' before sentinel — must use '; : >'
+  ! grep -q 'kill.*2>/dev/null && : > "\$_sentinel"' "$src"
+}
+
 # --- execute_phase: pre-exec SHA rollback ---
 
 @test "execute_phase: captures pre-exec SHA and rolls back on failure with write actions" {

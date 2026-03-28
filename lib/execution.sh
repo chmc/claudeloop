@@ -103,7 +103,7 @@ run_claude_pipeline() {
     # its `sleep` child, preventing orphaned sleep processes from holding open
     # bats (or other tool) internal file descriptors.
     set -m
-    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null && : > "$_sentinel" ) >/dev/null 2>&1 &
+    ( sleep "$MAX_PHASE_TIME" && kill -TERM -- "-${_pl_pgid}" 2>/dev/null; : > "$_sentinel" ) >/dev/null 2>&1 &
     _timer_pid=$!
     _safe_disable_jobctl
   fi
