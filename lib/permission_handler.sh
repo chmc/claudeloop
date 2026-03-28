@@ -133,7 +133,7 @@ permission_filter() {
         : # Ignore cancel requests (we respond immediately, nothing to cancel)
         ;;
       *)
-        printf '%s\n' "$_pf_line"  # Pass through to downstream
+        printf '%s\n' "$_pf_line" 2>/dev/null || break  # Pass through to downstream
         ;;
     esac
   done

@@ -59,7 +59,7 @@ is_server_error() {
 is_timeout_error() {
   local log_file="$1"
   [ -f "$log_file" ] || return 1
-  grep -qiE "request_timeout|HTTP 408|request timed out" "$log_file"
+  grep -qiE "request_timeout|HTTP 408|request timed out|\[tool timeout after |\[idle timeout after " "$log_file"
 }
 
 # Check if a phase log contains an unanswered permission prompt from Claude

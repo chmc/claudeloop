@@ -1146,6 +1146,24 @@ teardown() { :; }
   [ "$status" -eq 0 ]
 }
 
+@test "is_timeout_error: detects stream processor idle timeout" {
+  printf '[idle timeout after 600s]\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_timeout_error: detects stream processor tool timeout" {
+  printf '[tool timeout after 300s]\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_timeout_error: no false positive on prose about timeouts" {
+  printf 'discussing idle timeout settings\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 1 ]
+}
+
 # --- is_rate_limit_error() (renamed, no longer matches overloaded) ---
 
 @test "is_rate_limit_error: detects 'rate_limit_error'" {

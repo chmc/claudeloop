@@ -67,7 +67,7 @@ STREAM_TRUNCATE_LEN=300
 HOOKS_ENABLED=false
 LIVE_LOG=""
 MONITOR_MODE=false
-MAX_PHASE_TIME=0             # kill claude after N seconds per phase (0=disabled, default)
+MAX_PHASE_TIME=900           # kill claude after N seconds per phase (0=disabled)
 IDLE_TIMEOUT=600             # exit stream processor after N seconds of no activity (0=disabled)
 VERIFY_TIMEOUT=300           # kill verify_phase after N seconds (default 300)
 VERIFY_IDLE_TIMEOUT=120      # idle detection in verify stream processor (0=disabled)
