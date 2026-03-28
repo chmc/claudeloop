@@ -989,7 +989,7 @@ run_ai_parsing() {
         case "$_ans" in [yY]*) ;; *) PLAN_FILE="$ai_plan"; _parse_msg="Using cached plan" ;; esac
       fi
     fi
-    if [ "$PLAN_FILE" != "$ai_plan" ]; then
+    if [ "$PLAN_FILE" != "$ai_plan" ] || [ ! -f "$ai_plan" ]; then
       if ! ai_parse_and_verify "$PLAN_FILE" "$GRANULARITY"; then
         print_error "AI parsing failed"
         exit 1
@@ -1201,19 +1201,18 @@ main() {
       case "$_ans" in [yY]*) ;; *) print_error "Reset aborted"; exit 1 ;; esac
     fi
     clean_claudeloop_dir
-    log_ts "Run state cleared (--reset)"
-    write_config
-  fi
-
-  # If --reset deleted ai-parsed-plan.md, fall back to original plan
-  if $RESET_PROGRESS; then
+    # Fall back before write_config so correct PLAN_FILE is persisted
     case "$PLAN_FILE" in
-      .claudeloop/ai-parsed-plan.md)
-        if [ "$AI_PARSE" != "true" ]; then
-          PLAN_FILE="PLAN.md"
-        fi
-        ;;
+      .claudeloop/ai-parsed-plan.md) PLAN_FILE="PLAN.md" ;;
     esac
+    write_config
+    log_ts "Run state cleared (--reset)"
+    # Offer to exit now (non-interactive/YES_MODE auto-continues)
+    if [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
+      printf 'Start fresh run? (Y/n) '
+      read -r _ans
+      case "$_ans" in [nN]*) log_ts "Exiting after reset"; exit 0 ;; esac
+    fi
   fi
 
   init_live_log

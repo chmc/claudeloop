@@ -272,10 +272,40 @@ CONF
   rm -f "$TEST_DIR/claude_call_count"
 
   # --reset should clean ai-parsed-plan.md, fall back to PLAN.md, and succeed
-  _cl --plan PLAN.md --reset
+  # No --plan override — tests the automatic fallback
+  _cl --reset
   [ "$status" -eq 0 ]
   [ "$(_call_count)" -eq 2 ]
   [ "$(_completed_count)" -eq 2 ]
+  # Config should have PLAN_FILE=PLAN.md after reset
+  grep -q "PLAN_FILE=PLAN.md" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "integration: --reset persists correct PLAN_FILE in config" {
+  # Simulate a previous AI-parsed run where config points to ai-parsed-plan.md
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
+PLAN_FILE=.claudeloop/ai-parsed-plan.md
+CONF
+  cp "$TEST_DIR/PLAN.md" "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
+
+  rm -f "$TEST_DIR/claude_call_count"
+
+  # After reset, config should have PLAN_FILE=PLAN.md (not the deleted ai-parsed-plan.md)
+  _cl --reset
+  [ "$status" -eq 0 ]
+
+  # Verify the config was updated before write_config (not stale)
+  grep -q "PLAN_FILE=PLAN.md" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+
+  # A subsequent run without --reset should also work (config not stale)
+  rm -f "$TEST_DIR/claude_call_count"
+  _cl
+  [ "$status" -eq 0 ]
+  [ "$(_call_count)" -eq 2 ]
 }
 
 # =============================================================================
