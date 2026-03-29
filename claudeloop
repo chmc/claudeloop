@@ -1200,18 +1200,19 @@ main() {
       read -r _ans
       case "$_ans" in [yY]*) ;; *) print_error "Reset aborted"; exit 1 ;; esac
     fi
-    # Rotate live.log before cleaning so the previous run's log is preserved
-    if [ -f ".claudeloop/live.log" ]; then
-      _ts=$(date '+%Y%m%d-%H%M%S')
-      mv ".claudeloop/live.log" ".claudeloop/live-${_ts}.log"
-    fi
     clean_claudeloop_dir
-    # Fall back before write_config so correct PLAN_FILE is persisted
+    # Remove rotated logs (preserved by clean_claudeloop_dir for archive flow)
+    rm -f .claudeloop/live-*.log
+    # Prevent stale LIVE_LOG writes before init_live_log reinitializes
+    LIVE_LOG=""
+    # Fall back from deleted AI-parsed plan
     case "$PLAN_FILE" in
       .claudeloop/ai-parsed-plan.md) PLAN_FILE="PLAN.md" ;;
     esac
-    write_config
     log_ts "Run state cleared (--reset)"
+    # Re-run wizard since conf was just deleted (fresh-start experience)
+    run_setup_wizard
+    write_config
     # Offer to exit now (non-interactive/YES_MODE auto-continues)
     if [ "$YES_MODE" != "true" ] && [ -t 0 ]; then
       printf 'Start fresh run? (Y/n) '

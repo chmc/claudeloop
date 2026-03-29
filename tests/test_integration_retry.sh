@@ -271,8 +271,9 @@ EOF
   [ "$status" -eq 0 ]
   [ -s "$TEST_DIR/.claudeloop/live.log" ]
 
-  # Second run (reset to re-run all phases)
-  _cl --plan PLAN.md --reset
+  # Second run (--phase 1 forces re-execution; init_live_log rotates previous live.log)
+  rm -f "$TEST_DIR/claude_call_count"
+  _cl --plan PLAN.md --phase 1
   [ "$status" -eq 0 ]
 
   # A rotated log file must exist
@@ -285,13 +286,30 @@ EOF
   _cl --plan PLAN.md
   [ "$status" -eq 0 ]
 
-  # Second run: first run's live.log gets archived
-  _cl --plan PLAN.md --reset
+  # Second run (--phase 1 forces re-execution; init_live_log rotates previous live.log)
+  rm -f "$TEST_DIR/claude_call_count"
+  _cl --plan PLAN.md --phase 1
   [ "$status" -eq 0 ]
 
   rotated=$(ls "$TEST_DIR/.claudeloop/live-"*.log 2>/dev/null | head -1)
   [ -n "$rotated" ]
   [ -s "$rotated" ]
+}
+
+@test "live.log rotation: --reset cleans rotated logs" {
+  # First run
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+
+  # Simulate rotated logs from previous runs
+  echo "old" > "$TEST_DIR/.claudeloop/live-20260101-120000.log"
+
+  rm -f "$TEST_DIR/claude_call_count"
+
+  # Reset should clean all rotated logs
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_DIR/.claudeloop/live-20260101-120000.log" ]
 }
 
 @test "create_lock: --force re-reads progress (completed phases not re-run)" {

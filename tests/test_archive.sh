@@ -599,13 +599,15 @@ EOF
 # clean_claudeloop_dir
 # =============================================================================
 
-@test "clean_claudeloop_dir: removes all files except archive/ and lock" {
+@test "clean_claudeloop_dir: removes all files except archive/, lock, and live-*.log" {
   mkdir -p .claudeloop/archive/20260316-120000 .claudeloop/state .claudeloop/logs
   echo "$$" > .claudeloop/lock
   echo "conf" > .claudeloop/.claudeloop.conf
   echo "progress" > .claudeloop/PROGRESS.md
   echo "plan" > .claudeloop/ai-parsed-plan.md
   echo "live" > .claudeloop/live.log
+  echo "rotated1" > .claudeloop/live-20260101-120000.log
+  echo "rotated2" > .claudeloop/live-20260102-120000.log
   echo "reason" > .claudeloop/ai-verify-reason.txt
   echo "stale" > .claudeloop/recorder.json.tmp
 
@@ -614,6 +616,8 @@ EOF
   # Preserved
   [ -d .claudeloop/archive ]
   [ -f .claudeloop/lock ]
+  [ -f .claudeloop/live-20260101-120000.log ]
+  [ -f .claudeloop/live-20260102-120000.log ]
 
   # Removed
   [ ! -f .claudeloop/.claudeloop.conf ]

@@ -308,6 +308,42 @@ CONF
   [ "$(_call_count)" -eq 2 ]
 }
 
+@test "integration: --reset removes rotated live-*.log files" {
+  # First run: creates live.log
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+
+  # Simulate rotated logs from previous runs
+  echo "old log 1" > "$TEST_DIR/.claudeloop/live-20260101-120000.log"
+  echo "old log 2" > "$TEST_DIR/.claudeloop/live-20260102-120000.log"
+
+  rm -f "$TEST_DIR/claude_call_count"
+
+  # Reset should clean rotated logs
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+
+  # Rotated logs should be gone
+  [ ! -f "$TEST_DIR/.claudeloop/live-20260101-120000.log" ]
+  [ ! -f "$TEST_DIR/.claudeloop/live-20260102-120000.log" ]
+}
+
+@test "integration: --reset re-runs wizard (creates fresh .conf)" {
+  # First run creates .conf
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
+
+  rm -f "$TEST_DIR/claude_call_count"
+
+  # Reset should report creating a fresh .conf (wizard + write_config)
+  _cl --plan PLAN.md --reset
+  [ "$status" -eq 0 ]
+  # "Created .claudeloop/.claudeloop.conf" message proves wizard path ran
+  # (write_config prints this only when creating new conf, not updating existing)
+  echo "$output" | grep -q "Created .claudeloop/.claudeloop.conf"
+}
+
 # =============================================================================
 # Scenario 6: --phase N skip — phases before N marked completed, N runs
 # =============================================================================
