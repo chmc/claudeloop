@@ -145,6 +145,7 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - Claude output streams live to the terminal. Logs are saved to `.claudeloop/logs/phase-N.log`
 - Phase runs longer than `MAX_PHASE_TIME` seconds are automatically killed and retried (disabled by default; set `--max-phase-time <s>` to enable)
 - If no stream activity is detected for `IDLE_TIMEOUT` seconds (default: 600), the stream processor exits and the phase is retried. Use `--idle-timeout 0` to disable.
+- If only heartbeats arrive (no real events from Claude) for `DEAD_TIMEOUT` seconds (default: 180), the connection is considered dead and the phase is retried. Use `--dead-timeout 0` to disable.
 - On retry, the previous attempt's output is injected into the prompt so Claude can learn from it
 - `--verify` doubles API calls per phase (one for execution, one for verification)
 - `--refactor` adds up to 40 more API calls per phase (20 attempts × refactoring + verification each); up to 42 total with `--verify`

@@ -1593,6 +1593,99 @@ JSON"
   rm -f "$outfile"
 }
 
+# --- Dead-connection timeout ---
+
+@test "dead-connection timeout: fires when only heartbeats arrive" {
+  local hb='{"type":"heartbeat"}'
+  # Feed 20 heartbeats with no real events; dead_timeout_s=4 (via env override)
+  local input
+  input=$(yes "$hb" | head -20)
+  export _DEAD_TIMEOUT_OVERRIDE=4
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 600 >/dev/null 2>&1
+  unset _DEAD_TIMEOUT_OVERRIDE
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # Should NOT consume all 20 — dead timeout should exit early
+  [ "$lines_consumed" -lt 20 ]
+  # Log should contain dead connection marker
+  grep -q "dead connection timeout" "$_log"
+}
+
+@test "dead-connection timeout: does not fire when real events arrive" {
+  # Mix of real events and heartbeats — dead timeout should NOT fire
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello"}]}}'
+  local hb='{"type":"heartbeat"}'
+  # Ensure real events intersperse heartbeats so dead_hb resets before threshold
+  local input
+  input=$(printf '%s\n%s\n%s\n%s\n%s\n' "$text" "$hb" "$text" "$hb" "$text")
+  export _DEAD_TIMEOUT_OVERRIDE=10
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 600 >/dev/null 2>&1
+  unset _DEAD_TIMEOUT_OVERRIDE
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 5 lines consumed (real events reset the dead timer)
+  [ "$lines_consumed" -eq 5 ]
+  ! grep -q "dead connection timeout" "$_log"
+}
+
+@test "dead-connection timeout: disabled when set to 0" {
+  local hb='{"type":"heartbeat"}'
+  local input
+  input=$(yes "$hb" | head -5)
+  export _DEAD_TIMEOUT_OVERRIDE=0
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 0 >/dev/null 2>&1
+  unset _DEAD_TIMEOUT_OVERRIDE
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 5 consumed (dead timeout disabled)
+  [ "$lines_consumed" -eq 5 ]
+}
+
+# --- Thinking indicator ---
+
+@test "thinking indicator: writes to live.log on first thinking event" {
+  local _live
+  _live=$(mktemp)
+  # Thinking-only assistant event (no text field, no tool_use)
+  local think='{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Let me consider..."}]}}'
+  local hb='{"type":"heartbeat"}'
+  printf '%s\n%s\n%s\n' "$think" "$hb" "$think" \
+    | process_stream_json "$_log" "$_raw" false "$_live" false 600 >/dev/null 2>&1
+  # Live log should contain [thinking...]
+  grep -q '\[thinking\.\.\.\]' "$_live"
+  rm -f "$_live"
+}
+
+@test "thinking indicator: clears when meaningful output arrives" {
+  local _live
+  _live=$(mktemp)
+  local think='{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"hmm"}]}}'
+  local text='{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Hello world"}]}}'
+  local hb='{"type":"heartbeat"}'
+  printf '%s\n%s\n%s\n%s\n' "$think" "$text" "$hb" "$hb" \
+    | process_stream_json "$_log" "$_raw" false "$_live" false 600 >/dev/null 2>&1
+  # Should see [thinking...] then it should stop (no "still thinking" after text)
+  grep -q '\[thinking\.\.\.\]' "$_live"
+  ! grep -q 'still thinking' "$_live"
+  rm -f "$_live"
+}
+
+# --- tool_timeout_s derivation ---
+
+@test "tool_timeout_s: new formula gives 80% of idle_timeout" {
+  # With idle_timeout=600, tool_timeout should be 480 (0.8 * 600)
+  # We verify indirectly: tool_use + heartbeats, tool_timeout should be 80% of idle
+  # Using _TOOL_TIMEOUT_OVERRIDE is the test mechanism, so we verify the formula
+  # by checking source code (structural test matching execution.sh pattern)
+  local src="${BATS_TEST_DIRNAME}/../lib/stream_processor.sh"
+  # The formula should use 0.8 multiplier, not the old < 600 branch
+  grep -q 'idle_timeout_s \* 0.8' "$src"
+  # Should have a floor of 120
+  grep -q 'tool_timeout_s < 120' "$src"
+  # Should cap at idle_timeout_s
+  grep -q 'tool_timeout_s > idle_timeout_s' "$src"
+}
+
 @test "spinner shows Todo count (not Task) when both present" {
   local tc='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task A","description":"d"}}'
   local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"pending"},{"content":"B","status":"pending"}]}}'

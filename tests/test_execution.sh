@@ -477,6 +477,43 @@ _setup_rav_stubs() {
   rm -rf .claudeloop
 }
 
+# --- Sentinel poll diagnostics ---
+
+@test "run_claude_pipeline: sentinel poll has periodic progress output" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # The sentinel loop must contain periodic diagnostic output
+  local sentinel_line diag_line
+  sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
+  # Must contain "pipeline alive" message inside the sentinel loop
+  diag_line=$(grep -n 'pipeline alive' "$src" | head -1 | cut -d: -f1)
+  [ -n "$diag_line" ]
+  [ "$diag_line" -gt "$sentinel_line" ]
+}
+
+@test "run_claude_pipeline: sentinel poll writes to LIVE_LOG" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # Sentinel poll must write to LIVE_LOG for --monitor visibility
+  local sentinel_line
+  sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
+  # Must have LIVE_LOG write inside sentinel loop
+  local live_write
+  live_write=$(grep -n 'LIVE_LOG' "$src" | awk -F: -v sl="$sentinel_line" '$1 > sl { print $1; exit }')
+  [ -n "$live_write" ]
+}
+
+# --- stty -tostop ---
+
+@test "run_claude_pipeline: disables tostop before pipeline start" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # stty -tostop must appear BEFORE set -m (pipeline start)
+  local tostop_line setm_line
+  tostop_line=$(grep -n 'stty -tostop' "$src" | head -1 | cut -d: -f1)
+  setm_line=$(grep -n '^  set -m$' "$src" | head -1 | cut -d: -f1)
+  [ -n "$tostop_line" ]
+  [ -n "$setm_line" ]
+  [ "$tostop_line" -lt "$setm_line" ]
+}
+
 @test "run_adaptive_verification: skip mode fails without write actions" {
   _setup_rav_stubs
   local raw=".claudeloop/logs/phase-1.raw.json"

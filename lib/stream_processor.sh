@@ -53,7 +53,8 @@ process_stream_json() {
       -v simple_mode="$simple_mode" \
       -v idle_timeout_s="$idle_timeout" \
       -v override_term_height="${STREAM_TERM_HEIGHT:-0}" \
-      -v tool_timeout_override="${_TOOL_TIMEOUT_OVERRIDE:-}" '
+      -v tool_timeout_override="${_TOOL_TIMEOUT_OVERRIDE:-}" \
+      -v dead_timeout_override="${_DEAD_TIMEOUT_OVERRIDE:-}" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -429,11 +430,26 @@ process_stream_json() {
     if (tool_timeout_override != "") {
       tool_timeout_s = tool_timeout_override + 0
     } else if (idle_timeout_s + 0 > 0) {
-      tool_timeout_s = (idle_timeout_s < 600) ? 300 : int(idle_timeout_s / 2)
+      tool_timeout_s = int(idle_timeout_s * 0.8)
+      if (tool_timeout_s < 120) tool_timeout_s = 120
+      if (tool_timeout_s > idle_timeout_s) tool_timeout_s = idle_timeout_s
     } else {
       tool_timeout_s = 0
     }
     max_tool_hb = (tool_timeout_s > 0) ? int(tool_timeout_s / 2) : 0
+    # Dead-connection timeout: fires when ONLY heartbeats arrive (no real events)
+    last_real_event_epoch = get_epoch()
+    if (dead_timeout_override != "") {
+      dead_timeout_s = dead_timeout_override + 0
+    } else {
+      dead_timeout_s = 180
+    }
+    dead_hb = 0
+    max_dead_hb = (dead_timeout_s > 0) ? int(dead_timeout_s / 2) : 0
+    # Thinking indicator: periodic "[thinking...]" / "[still thinking]" to live.log
+    thinking_start = 0
+    last_thinking_log = 0
+    thinking_log_interval = 30
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
     fflush()
@@ -456,6 +472,12 @@ process_stream_json() {
 
     etype = extract(line, "type")
 
+    # Track non-heartbeat events for dead-connection detection
+    if (etype != "heartbeat") {
+      last_real_event_epoch = get_epoch()
+      dead_hb = 0
+    }
+
     if (got_result) {
       post_result_events++
       if (post_result_events >= 10) exit
@@ -464,7 +486,7 @@ process_stream_json() {
     if (etype == "assistant") {
       text = extract(line, "text")
       if (text != "") {
-        idle_hb = 0; meaningful_seen = 1
+        idle_hb = 0; meaningful_seen = 1; thinking_start = 0
         clear_line()
         spinner_start = 0
         if (at_line_start) printf "[%s] ", get_time()
@@ -481,7 +503,7 @@ process_stream_json() {
         log_at_line_start = at_line_start
         if (at_line_start) render_sticky()
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
-        idle_hb = 0; meaningful_seen = 1
+        idle_hb = 0; meaningful_seen = 1; thinking_start = 0
         n_tools = split(line, tool_segs, "\"type\":\"tool_use\"")
         for (ti = 2; ti <= n_tools; ti++) {
           seg = tool_segs[ti]
@@ -544,6 +566,21 @@ process_stream_json() {
       } else {
         # Thinking-only assistant event — update spinner but do NOT reset idle timer
         now = get_epoch()
+        # Thinking indicator: periodic "[thinking...]" / "[still thinking]" to live.log
+        if (thinking_start == 0) {
+          thinking_start = now
+          if (live_log != "") {
+            printf "  [%s] [thinking...]\n", get_time() >> live_log
+            fflush(live_log)
+          }
+          last_thinking_log = now
+        }
+        if (live_log != "" && (now - last_thinking_log) >= thinking_log_interval) {
+          _think_elapsed = now - thinking_start
+          printf "  [%s] [still thinking — %dm%ds]\n", get_time(), int(_think_elapsed / 60), _think_elapsed % 60 >> live_log
+          fflush(live_log)
+          last_thinking_log = now
+        }
         if (idle_timeout_s > 0 && tool_active == 0 && (now - last_meaningful_epoch) >= idle_timeout_s) {
           clear_bottom_block()
           printf "\n  [WARNING: idle timeout — %d seconds with no activity]\n", idle_timeout_s > "/dev/stderr"
@@ -579,7 +616,7 @@ process_stream_json() {
       }
 
     } else if (etype == "tool_use") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0
       _su_id = extract(line, "id")
       if (_su_id == "" || !(_su_id in shown_tools)) {
         if (_su_id != "") shown_tools[_su_id] = 1
@@ -633,7 +670,7 @@ process_stream_json() {
       restart_spinner()
 
     } else if (etype == "tool_result") {
-      idle_hb = 0; meaningful_seen = 1; tool_idle_hb = 0
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0; tool_idle_hb = 0
       if (tool_active > 0) tool_active--
       clear_line()
       spinner_start = 0
@@ -663,7 +700,7 @@ process_stream_json() {
       restart_spinner()
 
     } else if (etype == "user") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0
       tool_result = extract(line, "tool_use_result")
       if (tool_result != "") {
         clear_line()
@@ -677,7 +714,7 @@ process_stream_json() {
       }
 
     } else if (etype == "result") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0
       got_result = 1
       clear_line()
       spinner_start = 0
@@ -734,7 +771,7 @@ process_stream_json() {
       if (live_log != "") { printf "[%s] %s\n", get_time(), summary >> live_log; fflush(live_log) }
 
     } else if (etype == "rate_limit_event") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0
       util = extract(line, "utilization")
       if (util != "") {
         pct = int((util + 0) * 100)
@@ -748,7 +785,7 @@ process_stream_json() {
       }
 
     } else if (etype == "system") {
-      idle_hb = 0; meaningful_seen = 1
+      idle_hb = 0; meaningful_seen = 1; thinking_start = 0
       subtype_val = extract(line, "subtype")
       if (subtype_val == "init") {
         model_s = extract(line, "model")
@@ -773,6 +810,32 @@ process_stream_json() {
         if (got_result) {
           post_result_hb++
           if (post_result_hb >= 2) exit
+        }
+        # Dead-connection check: only heartbeats arriving, no real events at all
+        # Dual mechanism: heartbeat count (for piped/test input) + wall-clock (for real-time)
+        if (max_dead_hb > 0 && !got_result) {
+          dead_hb++
+          if (dead_hb >= max_dead_hb) {
+            clear_bottom_block()
+            printf "\n  [WARNING: no data from Claude CLI for %ds — connection may be dead]\n", dead_timeout_s > "/dev/stderr"
+            printf "[dead connection timeout after %ds]\n", dead_timeout_s >> log_file
+            if (live_log != "") printf "[%s] [dead connection timeout after %ds]\n", get_time(), dead_timeout_s >> live_log
+            exit
+          }
+        }
+        if (dead_timeout_s > 0 && !got_result && (now - last_real_event_epoch) >= dead_timeout_s) {
+          clear_bottom_block()
+          printf "\n  [WARNING: no data from Claude CLI for %ds — connection may be dead]\n", dead_timeout_s > "/dev/stderr"
+          printf "[dead connection timeout after %ds]\n", dead_timeout_s >> log_file
+          if (live_log != "") printf "[%s] [dead connection timeout after %ds]\n", get_time(), dead_timeout_s >> live_log
+          exit
+        }
+        # Periodic thinking indicator (also in heartbeat path for when thinking events stop)
+        if (thinking_start > 0 && live_log != "" && (now - last_thinking_log) >= thinking_log_interval) {
+          _think_elapsed = now - thinking_start
+          printf "  [%s] [still thinking — %dm%ds]\n", get_time(), int(_think_elapsed / 60), _think_elapsed % 60 >> live_log
+          fflush(live_log)
+          last_thinking_log = now
         }
         if (max_idle_hb > 0 && tool_active == 0) {
           idle_hb++

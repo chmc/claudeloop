@@ -243,6 +243,7 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
 --max-phase-time <s> Kill claude after N seconds per phase, then retry (default: 0, disabled)
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
+--dead-timeout <s>   Exit if only heartbeats for N seconds (default: 180, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
 --verify             Verify each phase with a fresh read-only Claude instance
 --refactor           Auto-refactor code after each phase
@@ -294,6 +295,7 @@ If you pass CLI flags, those questions are skipped in the wizard. In non-interac
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
 | `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
 | `IDLE_TIMEOUT` | `--idle-timeout` | `600` |
+| `DEAD_TIMEOUT` | `--dead-timeout` | `180` |
 | `VERIFY_TIMEOUT` | `--verify-timeout` | `300` |
 | `AI_PARSE` | `--ai-parse` | `true` |
 | `GRANULARITY` | `--granularity` | `tasks` |

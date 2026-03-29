@@ -72,6 +72,11 @@ run_claude_pipeline() {
   exec 7<>"$_claude_fifo"
   printf '%s\n' "$_prompt_json" >&7
 
+  # Prevent SIGTTOU from stopping background processes that write to the terminal.
+  # Claude CLI's cfmakeraw/setRawMode may set tostop; stty restore (line 57-58)
+  # might not cover it if corrupted after save. Defensive clear before pipeline.
+  stty -tostop 2>/dev/null < /dev/tty || true
+
   # Use job control (set -m) so the background pipeline gets its own process group.
   # This lets the timer (and handle_interrupt) kill the entire pipeline by PGID,
   # not just the last process. Without set -m, kill -TERM $! only kills the last
@@ -114,10 +119,30 @@ run_claude_pipeline() {
   _sentinel_polls=0
   _sentinel_max=${_SENTINEL_MAX_WAIT:-1800}
   _sentinel_interval=${_SENTINEL_POLL:-1}
+  _sp_prev_raw_size=0
   while [ ! -f "$_sentinel" ]; do
     _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
     sleep "$_sentinel_interval"
     _sentinel_polls=$((_sentinel_polls + 1))
+    # Periodic progress — every 30 polls (30s at default interval).
+    # Runs in the foreground shell, immune to pipeline freezes (SIGTTOU, AWK crash).
+    if [ $((_sentinel_polls % 30)) -eq 0 ] && [ -n "${LIVE_LOG:-}" ]; then
+      _sp_elapsed=$((_sentinel_polls * ${_sentinel_interval:-1}))
+      if kill -0 "$CURRENT_PIPELINE_PID" 2>/dev/null; then
+        _sp_raw_size=0
+        [ -f "$_rcp_raw" ] && _sp_raw_size=$(wc -c < "$_rcp_raw" 2>/dev/null | tr -d ' ')
+        if [ "${_sp_raw_size:-0}" -gt "${_sp_prev_raw_size:-0}" ]; then
+          printf "  [%s] [pipeline alive — %ds elapsed, receiving events]\n" "$(date '+%H:%M:%S')" "$_sp_elapsed" >> "$LIVE_LOG"
+        else
+          printf "  [%s] [pipeline alive — %ds elapsed, no events yet]\n" "$(date '+%H:%M:%S')" "$_sp_elapsed" >> "$LIVE_LOG"
+          printf "\r  [%ds elapsed — pipeline alive but no output yet]\n" "$_sp_elapsed" >&2
+        fi
+        _sp_prev_raw_size="${_sp_raw_size:-0}"
+      else
+        printf "  [%s] [WARNING: pipeline process exited — %ds elapsed]\n" "$(date '+%H:%M:%S')" "$_sp_elapsed" >> "$LIVE_LOG"
+        printf "\r  [WARNING: pipeline process exited after %ds]\n" "$_sp_elapsed" >&2
+      fi
+    fi
     # Use awk for float-safe comparison (_sentinel_interval may be 0.1 in tests)
     if awk "BEGIN{exit !(${_sentinel_polls} * ${_sentinel_interval} >= ${_sentinel_max})}" 2>/dev/null; then
       log_verbose "run_claude_pipeline: sentinel poll timeout after ${_sentinel_max}s"

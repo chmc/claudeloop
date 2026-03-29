@@ -1158,6 +1158,12 @@ teardown() { :; }
   [ "$status" -eq 0 ]
 }
 
+@test "is_timeout_error: detects dead connection timeout" {
+  printf '[dead connection timeout after 180s]\n' > "$_log"
+  run is_timeout_error "$_log"
+  [ "$status" -eq 0 ]
+}
+
 @test "is_timeout_error: no false positive on prose about timeouts" {
   printf 'discussing idle timeout settings\n' > "$_log"
   run is_timeout_error "$_log"
