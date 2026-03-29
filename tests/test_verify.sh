@@ -580,10 +580,30 @@ STUB
   # This prevents blocking on a readerless FIFO during kill/wait.
   local fd_close_line kill_line
   fd_close_line=$(grep -n 'exec 7>&-' "$src" | head -1 | cut -d: -f1)
-  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n '_kill_pipeline_escalate "\$CURRENT_PIPELINE_PID"' "$src" | head -1 | cut -d: -f1)
   [ -n "$fd_close_line" ]
   [ -n "$kill_line" ]
   [ "$fd_close_line" -lt "$kill_line" ]
+}
+
+@test "verify_phase: prompt write happens AFTER pipeline launch" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # The printf to FD 7 (prompt write) must come AFTER the pipeline background launch
+  # to prevent FIFO buffer deadlock when prompts exceed 8KB (macOS FIFO buffer limit).
+  local write_line pipeline_bg_line
+  write_line=$(grep -n 'printf.*_prompt_json.*>&7' "$src" | head -1 | cut -d: -f1)
+  # verify.sh pipeline spans two lines; find the & that ends it
+  pipeline_bg_line=$(grep -n '_sentinel.*} &$' "$src" | head -1 | cut -d: -f1)
+  [ -n "$write_line" ]
+  [ -n "$pipeline_bg_line" ]
+  [ "$write_line" -gt "$pipeline_bg_line" ]
+}
+
+@test "verify_phase: inject_heartbeats and process_stream_json close FD 7" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  grep -q 'inject_heartbeats 7>&-' "$src"
+  # verify.sh pipeline spans two lines; 7>&- is on the continuation line
+  grep -q '7>&-;.*_sentinel' "$src"
 }
 
 @test "verify_phase: sentinel poll has timeout guard" {

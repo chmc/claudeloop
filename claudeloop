@@ -231,12 +231,9 @@ handle_interrupt() {
   _restore_isig   # re-enable Ctrl+C in case Claude CLI disabled ISIG
   # Close FIFO write end before kill — prevents blocking on readerless FIFO
   exec 7>&- 2>/dev/null || true
-  # Kill running claude pipeline immediately (don't wait for it to clean up)
+  # Kill running claude pipeline immediately with SIGTERM → SIGKILL escalation (1s timeout)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
-    kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
-    if [ -n "${CURRENT_PIPELINE_PGID:-}" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
-      kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
-    fi
+    _kill_pipeline_escalate "${CURRENT_PIPELINE_PID}" "${CURRENT_PIPELINE_PGID:-}" 1
     CURRENT_PIPELINE_PID=""
     CURRENT_PIPELINE_PGID=""
   fi

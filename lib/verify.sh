@@ -7,6 +7,18 @@
 # Fallback definitions when sourced outside claudeloop (e.g. tests)
 command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
 command -v _safe_disable_jobctl >/dev/null 2>&1 || _safe_disable_jobctl() { set +m; }
+command -v _kill_pipeline_escalate >/dev/null 2>&1 || _kill_pipeline_escalate() {
+  [ -n "${1:-}" ] || return 0
+  local _kpe_pid="$1" _kpe_pgid="${2:-}" _kpe_timeout="${3:-${_KILL_ESCALATE_TIMEOUT:-3}}" _kpe_wait=0
+  if [ -n "$_kpe_pgid" ] && [ "${_kpe_pgid:-0}" -gt 1 ]; then kill -TERM -- "-$_kpe_pgid" 2>/dev/null || true
+  else kill -TERM "$_kpe_pid" 2>/dev/null || true; fi
+  while [ "$_kpe_wait" -lt "$_kpe_timeout" ] && kill -0 "$_kpe_pid" 2>/dev/null; do sleep 1; _kpe_wait=$((_kpe_wait + 1)); done
+  if kill -0 "$_kpe_pid" 2>/dev/null; then
+    if [ -n "$_kpe_pgid" ] && [ "${_kpe_pgid:-0}" -gt 1 ]; then kill -KILL -- "-$_kpe_pgid" 2>/dev/null || true
+    else kill -KILL "$_kpe_pid" 2>/dev/null || true; fi
+  fi
+  wait "$_kpe_pid" 2>/dev/null || true
+}
 
 # verify_phase(phase_num, log_file)
 # Returns 0 if verification passes (or VERIFY_PHASES is disabled), 1 on failure.
@@ -96,7 +108,6 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   # write-only open when no reader exists yet. All pipeline stages inherit FD 7.
   # permission_filter writes control_responses to FD 7, which claude reads via stdin.
   exec 7<>"$_verify_fifo"
-  printf '%s\n' "$_prompt_json" >&7
 
   set -m
   {
@@ -105,11 +116,14 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
       --permission-prompt-tool stdio --verbose --include-partial-messages \
       < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | permission_filter | inject_heartbeats | { process_stream_json "$verify_formatted_log" "$verify_log" \
-      "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${VERIFY_IDLE_TIMEOUT:-120}"; : > "$_sentinel"; } &
+  } | permission_filter | inject_heartbeats 7>&- | { process_stream_json "$verify_formatted_log" "$verify_log" \
+      "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${VERIFY_IDLE_TIMEOUT:-120}" 7>&-; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
   _safe_disable_jobctl
+
+  # Write prompt AFTER pipeline launch to avoid FIFO buffer deadlock (macOS 8KB limit).
+  printf '%s\n' "$_prompt_json" >&7
 
   # Timeout: default 300s for verification (configurable via VERIFY_TIMEOUT)
   local _timer_pid _vp_pid _vp_pgid _verify_timeout
@@ -148,11 +162,8 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   # prevents blocking on a readerless FIFO during cleanup
   exec 7>&- 2>/dev/null || true
 
-  # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
-  if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
-    kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
-  fi
-  wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  # Stream processor done — kill remaining pipeline processes (SIGTERM → SIGKILL escalation).
+  _kill_pipeline_escalate "$CURRENT_PIPELINE_PID" "$CURRENT_PIPELINE_PGID"
   rm -f "$_sentinel"
   rm -f "$_verify_fifo"
   # Clear spinner remnants on current line (panel already cleaned by deactivate_panel)

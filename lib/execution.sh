@@ -31,6 +31,35 @@ update_fail_reason() {
 command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
 command -v _safe_disable_jobctl >/dev/null 2>&1 || _safe_disable_jobctl() { set +m; }
 
+# Kill pipeline with SIGTERM → SIGKILL escalation.
+# Args: $1 - pid, $2 - pgid (optional), $3 - timeout seconds (optional, default 3)
+# Sends SIGTERM to the process group (or PID), polls for exit, escalates to SIGKILL.
+_kill_pipeline_escalate() {
+  [ -n "${1:-}" ] || return 0
+  local _kpe_pid="$1" _kpe_pgid="${2:-}" _kpe_timeout="${3:-${_KILL_ESCALATE_TIMEOUT:-3}}"
+  local _kpe_wait=0
+  # Send SIGTERM
+  if [ -n "$_kpe_pgid" ] && [ "${_kpe_pgid:-0}" -gt 1 ]; then
+    kill -TERM -- "-$_kpe_pgid" 2>/dev/null || true
+  else
+    kill -TERM "$_kpe_pid" 2>/dev/null || true
+  fi
+  # Poll for exit
+  while [ "$_kpe_wait" -lt "$_kpe_timeout" ] && kill -0 "$_kpe_pid" 2>/dev/null; do
+    sleep 1
+    _kpe_wait=$((_kpe_wait + 1))
+  done
+  # Escalate to SIGKILL if still alive
+  if kill -0 "$_kpe_pid" 2>/dev/null; then
+    if [ -n "$_kpe_pgid" ] && [ "${_kpe_pgid:-0}" -gt 1 ]; then
+      kill -KILL -- "-$_kpe_pgid" 2>/dev/null || true
+    else
+      kill -KILL "$_kpe_pid" 2>/dev/null || true
+    fi
+  fi
+  wait "$_kpe_pid" 2>/dev/null || true
+}
+
 # WARNING: Pure cut-paste extraction. Do not refactor internals — contains set -m/+m,
 #          PGID-based cleanup, sentinel polling, and macOS bash 3.2 workarounds.
 run_claude_pipeline() {
@@ -70,7 +99,6 @@ run_claude_pipeline() {
   # write-only open when no reader exists yet. All pipeline stages inherit FD 7.
   # permission_filter writes control_responses to FD 7, which claude reads via stdin.
   exec 7<>"$_claude_fifo"
-  printf '%s\n' "$_prompt_json" >&7
 
   # Prevent SIGTTOU from stopping background processes that write to the terminal.
   # Claude CLI's cfmakeraw/setRawMode may set tostop; stty restore (line 57-58)
@@ -91,11 +119,17 @@ run_claude_pipeline() {
       $_claude_debug_flag \
       < "$_claude_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | permission_filter | inject_heartbeats | { process_stream_json "$_rcp_log" "$_rcp_raw" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}"; : > "$_sentinel"; } &
+  } | permission_filter | inject_heartbeats 7>&- | { process_stream_json "$_rcp_log" "$_rcp_raw" "$HOOKS_ENABLED" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${IDLE_TIMEOUT:-0}" 7>&-; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   # With set -m the pipeline's PGID = PID of the first process (jobs -p shows it)
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
   _safe_disable_jobctl
+
+  # Write prompt AFTER pipeline launch to avoid FIFO buffer deadlock.
+  # macOS FIFO buffer is 8KB; prompts exceeding this block forever if no reader exists.
+  # The child process has the FIFO read-end open (via < "$_claude_fifo"),
+  # so writes drain even for prompts exceeding the 8KB buffer.
+  printf '%s\n' "$_prompt_json" >&7
 
   # Phase timeout: kill entire pipeline PGID after MAX_PHASE_TIME seconds (0 = disabled)
   local _timer_pid _pl_pid _pl_pgid
@@ -162,11 +196,9 @@ run_claude_pipeline() {
   # prevents blocking on a readerless FIFO during cleanup
   exec 7>&- 2>/dev/null || true
 
-  # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
-  if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
-    kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
-  fi
-  wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
+  # Stream processor done — kill remaining pipeline processes (Claude CLI may linger).
+  # Uses SIGTERM → SIGKILL escalation to prevent indefinite wait if Claude ignores SIGTERM.
+  _kill_pipeline_escalate "$CURRENT_PIPELINE_PID" "$CURRENT_PIPELINE_PGID"
   rm -f "$_sentinel"
   rm -f "$_claude_fifo"
   # Clear spinner remnants and show cursor

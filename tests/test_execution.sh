@@ -349,10 +349,10 @@ _setup_epr_stubs() {
 @test "run_claude_pipeline: waits for exit code file when sentinel fires before exit_tmp written" {
   # Verify source code has the wait loop for $_exit_tmp after sentinel detection
   local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
-  # The wait loop should exist between the sentinel loop and the kill command
+  # The wait loop should exist between the sentinel loop and the kill/escalate
   local sentinel_done_line kill_line wait_loop_line
   sentinel_done_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
-  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n '_kill_pipeline_escalate "\$CURRENT_PIPELINE_PID"' "$src" | head -1 | cut -d: -f1)
   wait_loop_line=$(grep -n 'while \[ ! -s "$_exit_tmp" \]' "$src" | head -1 | cut -d: -f1)
   [ -n "$wait_loop_line" ]
   # Wait loop must be after sentinel loop and before kill
@@ -380,7 +380,7 @@ _setup_epr_stubs() {
   # In the post-sentinel cleanup, FD 7 must be closed BEFORE killing the pipeline.
   local fd_close_line kill_line
   fd_close_line=$(grep -n 'exec 7>&-' "$src" | head -1 | cut -d: -f1)
-  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n '_kill_pipeline_escalate "\$CURRENT_PIPELINE_PID"' "$src" | head -1 | cut -d: -f1)
   [ -n "$fd_close_line" ]
   [ -n "$kill_line" ]
   [ "$fd_close_line" -lt "$kill_line" ]
@@ -512,6 +512,56 @@ _setup_rav_stubs() {
   [ -n "$tostop_line" ]
   [ -n "$setm_line" ]
   [ "$tostop_line" -lt "$setm_line" ]
+}
+
+# --- FIFO deadlock prevention ---
+
+@test "run_claude_pipeline: prompt write happens AFTER pipeline launch" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # The printf to FD 7 (prompt write) must come AFTER the pipeline background launch
+  # to prevent FIFO buffer deadlock when prompts exceed 8KB (macOS FIFO buffer limit).
+  local write_line pipeline_bg_line
+  write_line=$(grep -n 'printf.*_prompt_json.*>&7' "$src" | head -1 | cut -d: -f1)
+  pipeline_bg_line=$(grep -n 'process_stream_json.*&$' "$src" | head -1 | cut -d: -f1)
+  [ -n "$write_line" ]
+  [ -n "$pipeline_bg_line" ]
+  [ "$write_line" -gt "$pipeline_bg_line" ]
+}
+
+# --- _kill_pipeline_escalate ---
+
+@test "_kill_pipeline_escalate: SIGKILL sent after timeout when process ignores SIGTERM" {
+  # Spawn a process that traps and ignores SIGTERM
+  ( trap '' TERM; sleep 60 ) &
+  local pid=$!
+  _KILL_ESCALATE_TIMEOUT=1 _kill_pipeline_escalate "$pid" "" "1"
+  # Process must be dead
+  ! kill -0 "$pid" 2>/dev/null
+}
+
+@test "_kill_pipeline_escalate: no-op when PID is empty" {
+  run _kill_pipeline_escalate "" "" "1"
+  [ "$status" -eq 0 ]
+}
+
+@test "_kill_pipeline_escalate: fast exit when process already dead" {
+  ( sleep 0 ) &
+  local pid=$!
+  wait "$pid" 2>/dev/null || true
+  local before=$(date +%s)
+  _kill_pipeline_escalate "$pid" "" "1"
+  local after=$(date +%s)
+  [ $((after - before)) -lt 2 ]
+}
+
+# --- FD 7 closure in pipeline stages ---
+
+@test "run_claude_pipeline: inject_heartbeats and process_stream_json close FD 7" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # inject_heartbeats must have 7>&- to prevent inheriting the FIFO write end
+  grep -q 'inject_heartbeats 7>&-' "$src"
+  # process_stream_json subshell must close FD 7
+  grep -q 'process_stream_json.*7>&-' "$src"
 }
 
 @test "run_adaptive_verification: skip mode fails without write actions" {
