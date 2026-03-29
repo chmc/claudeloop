@@ -375,6 +375,17 @@ _setup_epr_stubs() {
   [ "$break_line" -gt "$sentinel_line" ]
 }
 
+@test "run_claude_pipeline: FD 7 closed before kill in cleanup" {
+  local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
+  # In the post-sentinel cleanup, FD 7 must be closed BEFORE killing the pipeline.
+  local fd_close_line kill_line
+  fd_close_line=$(grep -n 'exec 7>&-' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  [ -n "$fd_close_line" ]
+  [ -n "$kill_line" ]
+  [ "$fd_close_line" -lt "$kill_line" ]
+}
+
 @test "run_claude_pipeline: timer creates sentinel even when kill fails" {
   local src="${BATS_TEST_DIRNAME}/../lib/execution.sh"
   # The timer subshell must use '; : > "$_sentinel"' (unconditional) not '&& : > "$_sentinel"'

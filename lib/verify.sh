@@ -111,15 +111,12 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
   _safe_disable_jobctl
 
-  # Timeout: use MAX_PHASE_TIME if set, otherwise default 300s for verification
+  # Timeout: default 300s for verification (configurable via VERIFY_TIMEOUT)
   local _timer_pid _vp_pid _vp_pgid _verify_timeout
   _timer_pid=""
   _vp_pid="$CURRENT_PIPELINE_PID"
   _vp_pgid="$CURRENT_PIPELINE_PGID"
   _verify_timeout="${VERIFY_TIMEOUT:-300}"
-  if [ "$MAX_PHASE_TIME" -gt 0 ] 2>/dev/null && [ "$_verify_timeout" -eq 300 ]; then
-    _verify_timeout="$MAX_PHASE_TIME"
-  fi
   set -m
   ( sleep "$_verify_timeout" && kill -TERM -- "-${_vp_pgid}" 2>/dev/null; : > "$_sentinel" ) >/dev/null 2>&1 &
   _timer_pid=$!
@@ -139,12 +136,23 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
     fi
   done
 
+  # Diagnostic: detect FD corruption (FD 1 pointing to FIFO instead of terminal)
+  if command -v lsof >/dev/null 2>&1; then
+    _fd1_type=$(lsof -p $$ -a -d 1 -F t 2>/dev/null | grep '^t' | head -1)
+    case "$_fd1_type" in *FIFO*)
+      log_verbose "verify_phase: WARNING — FD 1 corrupted to FIFO (pid=$$)"
+    ;; esac
+  fi
+
+  # Close FIFO write end before kill/wait — reduces FIFO reference count and
+  # prevents blocking on a readerless FIFO during cleanup
+  exec 7>&- 2>/dev/null || true
+
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
-  exec 7>&- 2>/dev/null || true
   rm -f "$_sentinel"
   rm -f "$_verify_fifo"
   # Clear spinner remnants on current line (panel already cleaned by deactivate_panel)

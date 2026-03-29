@@ -386,6 +386,14 @@ STUB
   [ "$elapsed" -lt 10 ]
 }
 
+@test "verify_phase: VERIFY_TIMEOUT not inflated by MAX_PHASE_TIME at defaults" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # _verify_timeout must never be assigned from MAX_PHASE_TIME
+  # (the old code inflated 300→900 when both were at defaults)
+  ! grep -q '_verify_timeout=.*MAX_PHASE_TIME' "$src"
+  ! grep -q '_verify_timeout="\$MAX_PHASE_TIME"' "$src"
+}
+
 @test "verify_phase: VERIFY_TIMEOUT takes priority over MAX_PHASE_TIME" {
   VERIFY_PHASES=true
   VERIFY_TIMEOUT=2
@@ -565,6 +573,18 @@ STUB
 # =============================================================================
 # Sentinel poll safety net
 # =============================================================================
+
+@test "verify_phase: FD 7 closed before kill in cleanup" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # In the post-sentinel cleanup, FD 7 must be closed BEFORE killing the pipeline.
+  # This prevents blocking on a readerless FIFO during kill/wait.
+  local fd_close_line kill_line
+  fd_close_line=$(grep -n 'exec 7>&-' "$src" | head -1 | cut -d: -f1)
+  kill_line=$(grep -n 'kill -TERM -- "-\$CURRENT_PIPELINE_PGID"' "$src" | head -1 | cut -d: -f1)
+  [ -n "$fd_close_line" ]
+  [ -n "$kill_line" ]
+  [ "$fd_close_line" -lt "$kill_line" ]
+}
 
 @test "verify_phase: sentinel poll has timeout guard" {
   local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"

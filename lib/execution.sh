@@ -133,12 +133,15 @@ run_claude_pipeline() {
     _ec_wait=$((_ec_wait + 1))
   done
 
+  # Close FIFO write end before kill/wait — reduces FIFO reference count and
+  # prevents blocking on a readerless FIFO during cleanup
+  exec 7>&- 2>/dev/null || true
+
   # Stream processor done — kill remaining pipeline processes (Claude CLI may linger)
   if [ -n "$CURRENT_PIPELINE_PGID" ] && [ "${CURRENT_PIPELINE_PGID:-0}" -gt 1 ]; then
     kill -TERM -- "-$CURRENT_PIPELINE_PGID" 2>/dev/null || true
   fi
   wait "$CURRENT_PIPELINE_PID" 2>/dev/null || true
-  exec 7>&- 2>/dev/null || true
   rm -f "$_sentinel"
   rm -f "$_claude_fifo"
   # Clear spinner remnants and show cursor

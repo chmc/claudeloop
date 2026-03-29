@@ -227,6 +227,8 @@ _safe_disable_jobctl() {
 handle_interrupt() {
   set +e          # bash 3.2 does not exempt trap handlers from set -e
   _restore_isig   # re-enable Ctrl+C in case Claude CLI disabled ISIG
+  # Close FIFO write end before kill — prevents blocking on readerless FIFO
+  exec 7>&- 2>/dev/null || true
   # Kill running claude pipeline immediately (don't wait for it to clean up)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     kill -TERM "$CURRENT_PIPELINE_PID" 2>/dev/null || true
@@ -236,8 +238,6 @@ handle_interrupt() {
     CURRENT_PIPELINE_PID=""
     CURRENT_PIPELINE_PGID=""
   fi
-  # Close permission FIFO write end (FD 7) if still open
-  exec 7>&- 2>/dev/null || true
   INTERRUPTED=true
   echo ""
   print_warning "Interrupt received (Ctrl+C)"
