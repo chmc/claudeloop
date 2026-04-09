@@ -2861,6 +2861,36 @@ function buildFileMatrix() {
   return { fileMap: fileMap, paths: paths };
 }
 
+function shortenPaths(paths) {
+  var result = { prefix: '', map: {} };
+  if (paths.length === 0) return result;
+
+  // Split all paths into segments
+  var split = paths.map(function(p) { return p.split('/'); });
+
+  // Find common directory prefix (segment-level, never consume filename)
+  var first = split[0];
+  var prefixLen = 0;
+  for (var i = 0; i < first.length - 1; i++) {
+    var seg = first[i];
+    var allMatch = split.every(function(s) { return s[i] === seg; });
+    if (!allMatch) break;
+    prefixLen = i + 1;
+  }
+
+  // Minimum threshold: at least 2 segments to be worth stripping
+  if (prefixLen < 2) {
+    paths.forEach(function(p) { result.map[p] = p; });
+    return result;
+  }
+
+  result.prefix = first.slice(0, prefixLen).join('/') + '/';
+  paths.forEach(function(p) {
+    result.map[p] = p.split('/').slice(prefixLen).join('/');
+  });
+  return result;
+}
+
 function opToLetter(op) {
   if (op === 'Read') return 'R';
   if (op === 'Write') return 'W';
@@ -2877,6 +2907,11 @@ function renderFilesView() {
     html += '<div class="empty-state"><div class="empty-icon">📁</div><div class="empty-text">No file operations recorded.</div></div>';
     document.getElementById('main-panel').innerHTML = html;
     return;
+  }
+
+  var shortened = shortenPaths(matrix.paths);
+  if (shortened.prefix) {
+    html += '<p style="color:var(--text-muted);font-size:11px;font-family:monospace;margin-bottom:12px;">Relative to ' + escapeHtml(shortened.prefix) + '</p>';
   }
 
   // Get phases that have any file activity
@@ -2899,7 +2934,7 @@ function renderFilesView() {
   matrix.paths.forEach(function(path) {
     var entry = matrix.fileMap[path];
     html += '<tr>';
-    html += '<td class="file-cell" title="' + escapeHtml(path) + '">' + escapeHtml(path) + '</td>';
+    html += '<td class="file-cell" title="' + escapeHtml(path) + '">' + escapeHtml(shortened.map[path]) + '</td>';
     activePhases.forEach(function(p) {
       var ops = entry.phases[p.number];
       if (ops) {
