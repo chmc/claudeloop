@@ -242,6 +242,50 @@ run_scenario() {
   echo "$output" | grep -q '"name":"TaskCreate"'
 }
 
+# --- AI parse auto-detection ---
+# Tests that success scenarios auto-detect AI-parse and verification prompts
+# and emit the correct response format (phase headers, PASS, VERIFICATION_PASSED).
+
+# Helper: run fake_claude with a specific prompt (not the generic "test prompt")
+# Note: FAKE_CLAUDE_THINK=0 disables think delays in success_verbose scenario.
+run_with_prompt() {
+  local scenario="$1" prompt="$2"
+  printf '%s' "$scenario" > "$FAKE_CLAUDE_DIR/scenario"
+  FAKE_CLAUDE_THINK=0 printf '%s' "$prompt" | "$FAKE_CLAUDE" --print 2>&1
+}
+
+@test "success scenario: AI-parse prompt emits ## Phase headers" {
+  output=$(run_with_prompt "success" "You are a plan extraction assistant. Extract phases using ## Phase N: Title format.")
+  echo "$output" | grep -q '## Phase [0-9]'
+}
+
+@test "success scenario: normal prompt emits tool_use (unchanged)" {
+  output=$(run_with_prompt "success" "Please fix the bug in main.sh")
+  echo "$output" | grep -q '"name":"Edit"'
+  ! echo "$output" | grep -q '## Phase'
+}
+
+@test "ai_parse scenario: emits ## Phase headers" {
+  output=$(run_scenario "ai_parse")
+  echo "$output" | grep -q '## Phase 1:'
+  echo "$output" | grep -q '## Phase 2:'
+}
+
+@test "ai_parse scenario: no tool_use events" {
+  output=$(run_scenario "ai_parse")
+  ! echo "$output" | grep -q '"type":"tool_use"'
+}
+
+@test "success scenario: AI-verify prompt emits PASS" {
+  output=$(run_with_prompt "success" "Compare the ORIGINAL requirements with the DECOMPOSED plan.")
+  echo "$output" | grep -q 'PASS'
+}
+
+@test "success scenario: phase-verify prompt emits VERIFICATION_PASSED" {
+  output=$(run_with_prompt "success" "Run verification checks on the phase implementation")
+  echo "$output" | grep -q 'VERIFICATION_PASSED'
+}
+
 # --- Golden file conformance ---
 
 @test "conformance: success scenario uses same event types as golden file" {

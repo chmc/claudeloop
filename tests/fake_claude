@@ -14,6 +14,11 @@
 #   args/args_N      - captured CLI args for call N
 #   custom_output    - extra lines for custom scenario
 #   custom_output_N  - per-call custom output
+#
+# Auto-detection: success, success_multi, and success_realistic scenarios
+# auto-detect AI-parse and verification prompts from stdin content.
+# AI-parse prompts (containing "plan extraction assistant") emit phase headers.
+# Verification prompts (containing "verif") emit VERIFICATION_PASSED.
 
 FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
 
@@ -52,10 +57,55 @@ fi
 [ -z "$scenario" ] && scenario=$(cat "$FAKE_CLAUDE_DIR/scenario" 2>/dev/null)
 [ -z "$scenario" ] && scenario="success"
 
+# --- Prompt auto-detection ---
+# Detects claudeloop's AI-parse and verification prompts from captured stdin.
+# Used by success/success_multi/success_realistic to emit appropriate responses
+# instead of the default tool_use output.
+
+is_ai_parse_prompt() {
+  # Matches ai_parse_plan() prompt in lib/ai_parser.sh
+  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+  [ -f "$prompt_file" ] && grep -q 'plan extraction assistant' "$prompt_file"
+}
+
+is_verify_prompt() {
+  # Matches ai_verify_plan() prompt in lib/ai_parser.sh (plan-level verification)
+  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+  [ -f "$prompt_file" ] && grep -q 'DECOMPOSED' "$prompt_file"
+}
+
+is_phase_verify_prompt() {
+  # Matches verify_phase() in lib/verify.sh (per-phase verification)
+  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+  [ -f "$prompt_file" ] && grep -qi 'verification' "$prompt_file"
+}
+
 # --- Scenario functions ---
 # Each emits hardcoded NDJSON matching the real Claude CLI stream-json format.
+# Success scenarios auto-detect AI-parse and verification prompts.
+
+scenario_ai_parse() {
+  # Emits ## Phase headers like a real AI plan extraction response.
+  # Used directly as "ai_parse" scenario or auto-dispatched from success scenarios.
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"## Phase 1: Setup\\nSet up the project structure and dependencies.\\n\\n## Phase 2: Implementation\\nImplement the core feature.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.01,"duration_ms":2000,"num_turns":1,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
+}
+
+scenario_ai_verify_pass() {
+  # Emits "PASS" verdict for ai_verify_plan() plan-level verification.
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PASS\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.005,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":300,"output_tokens":50},"modelUsage":{"fake-claude-v1":{"input_tokens":300,"output_tokens":50}}}\n'
+}
 
 scenario_success() {
+  # Auto-detect prompt type and dispatch to appropriate response
+  if is_ai_parse_prompt; then scenario_ai_parse; return; fi
+  if is_verify_prompt; then scenario_ai_verify_pass; return; fi
+  if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   default_exit=0
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make the requested changes."}]}}\n'
@@ -66,6 +116,9 @@ scenario_success() {
 }
 
 scenario_success_multi() {
+  if is_ai_parse_prompt; then scenario_ai_parse; return; fi
+  if is_verify_prompt; then scenario_ai_verify_pass; return; fi
+  if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   default_exit=0
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will read, edit, and test the code.\\n"}]}}\n'
@@ -80,6 +133,9 @@ scenario_success_multi() {
 }
 
 scenario_success_realistic() {
+  if is_ai_parse_prompt; then scenario_ai_parse; return; fi
+  if is_verify_prompt; then scenario_ai_verify_pass; return; fi
+  if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   # Realistic format with assistant/user wrappers and tool_use_id correlation.
   # Produces raw.json compatible with rec_extract_tool_calls() is_error extraction.
   default_exit=0
