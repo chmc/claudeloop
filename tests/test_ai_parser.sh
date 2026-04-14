@@ -230,7 +230,7 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "ai_verify_plan: returns 1 when AI says FAIL" {
+@test "ai_verify_plan: returns 2 when AI says FAIL" {
   mock_claude "FAIL
 Missing setup phase for database initialization."
 
@@ -243,7 +243,7 @@ Build something with database.
 EOF
 
   run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 2 ]
 }
 
 @test "ai_verify_plan: prompt includes granularity context" {
@@ -777,7 +777,7 @@ Build something with database.
 EOF
 
   run ai_verify_plan "$TEST_DIR/parsed.md" "$TEST_DIR/original.md" "tasks" "$TEST_DIR/.claudeloop"
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 2 ]
   [ -f "$TEST_DIR/.claudeloop/ai-verify-reason.txt" ]
   grep -q "Missing database" "$TEST_DIR/.claudeloop/ai-verify-reason.txt"
 }
@@ -1752,6 +1752,42 @@ EOF
   run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
   [ "$status" -eq 1 ]
   echo "$output" | grep -qi "reparse failed"
+}
+
+@test "ai_parse_and_verify: aborts immediately on hard error from ai_verify_plan (exit 1)" {
+  # Call 1: parse (valid phases). Call 2: verify returns unexpected format → ai_verify_plan exits 1.
+  # ai_parse_and_verify must return 1 immediately without entering retry logic (no call 3).
+  cat > "$TEST_DIR/bin/claude" << 'MOCK'
+#!/bin/sh
+cat /dev/stdin > /dev/null
+COUNTER_FILE="${MOCK_COUNTER_DIR}/call_count"
+count=0
+[ -f "$COUNTER_FILE" ] && count=$(cat "$COUNTER_FILE")
+count=$((count + 1))
+echo "$count" > "$COUNTER_FILE"
+
+case "$count" in
+  1) cat << 'ENDOUT' | text_to_stream_json
+## Phase 1: Setup
+Create project.
+ENDOUT
+    ;;
+  2) printf 'This is not PASS or FAIL — unexpected format\n' | text_to_stream_json ;;
+  *) echo "unexpected call $count" >&2; exit 1 ;;
+esac
+MOCK
+  chmod +x "$TEST_DIR/bin/claude"
+  export MOCK_COUNTER_DIR="$TEST_DIR"
+  export YES_MODE=true
+
+  cat > "$TEST_DIR/plan.md" << 'EOF'
+Build a thing.
+EOF
+
+  run ai_parse_and_verify "$TEST_DIR/plan.md" "tasks" "$TEST_DIR/.claudeloop"
+  [ "$status" -eq 1 ]
+  # Only 2 calls: parse + verify. No reparse call.
+  [ "$(cat "$TEST_DIR/call_count")" = "2" ]
 }
 
 # =============================================================================

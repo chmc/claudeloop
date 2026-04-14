@@ -320,7 +320,7 @@ ${parsed_content}
       print_error "Verification failed: $reason"
       mkdir -p "$cl_dir"
       printf '%s\n' "$reason" > "$cl_dir/ai-verify-reason.txt"
-      return 1
+      return 2
       ;;
     *)
       print_warning "Unexpected verification format (treating as fail): $first_line"
@@ -477,11 +477,18 @@ ai_parse_and_verify() {
 
   while true; do
     # Verify
-    if ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"; then
+    ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"
+    local verify_rc=$?
+    if [ "$verify_rc" -eq 0 ]; then
       _AI_VERIFY_VERDICT=pass
       exec 3<&-
       return 0
+    elif [ "$verify_rc" -eq 1 ]; then
+      # Hard error (unexpected format, API failure) — don't retry
+      exec 3<&-
+      return 1
     fi
+    # verify_rc == 2: FAIL verdict — continue to retry logic below
 
     retry=$((retry + 1))
     if [ "$retry" -gt "$max_retries" ]; then
