@@ -75,6 +75,8 @@ VERIFY_TIMEOUT=300           # kill verify_phase after N seconds (default 300)
 VERIFY_IDLE_TIMEOUT=120      # idle detection in verify stream processor (0=disabled)
 AI_PARSE=true
 GRANULARITY="tasks"
+NO_RETRY=false
+AI_PARSE_FEEDBACK=false
 VERIFY_PHASES=true
 REFACTOR_PHASES=true
 REFACTOR_MAX_RETRIES=20
@@ -87,6 +89,7 @@ _CLI_PLAN_FILE="" _CLI_PROGRESS_FILE="" _CLI_MAX_RETRIES="" _CLI_SIMPLE_MODE=""
 _CLI_PHASE_PROMPT_FILE="" _CLI_QUOTA_RETRY_INTERVAL="" _CLI_SKIP_PERMISSIONS=""
 _CLI_MAX_PHASE_TIME="" _CLI_IDLE_TIMEOUT="" _CLI_VERIFY_TIMEOUT="" _CLI_VERIFY_IDLE_TIMEOUT="" _CLI_DEAD_TIMEOUT=""
 _CLI_AI_PARSE="" _CLI_GRANULARITY=""
+_CLI_NO_RETRY="" _CLI_AI_PARSE_FEEDBACK=""
 _CLI_VERIFY_PHASES=""
 _CLI_REFACTOR_PHASES=""
 _CLI_REFACTOR_MAX_RETRIES=""
@@ -320,6 +323,8 @@ Options:
                          (enabled automatically when running inside Claude Code)
   --ai-parse             Use AI to decompose plan into granular phases
   --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
+  --no-retry             Skip interactive retry loop during AI parse (exit 2 on verify fail)
+  --ai-parse-feedback    Reparse using feedback from previous verification failure
   --verify               Verify each phase with a fresh read-only Claude instance
                          (doubles API calls per phase)
   --refactor             Auto-refactor code after each phase completion
@@ -458,6 +463,14 @@ parse_args() {
         if [ $# -lt 2 ]; then echo "Error: --granularity requires an argument" >&2; exit 1; fi
         GRANULARITY="$2"; _CLI_GRANULARITY=1
         shift 2
+        ;;
+      --no-retry)
+        NO_RETRY=true; _CLI_NO_RETRY=1
+        shift
+        ;;
+      --ai-parse-feedback)
+        AI_PARSE_FEEDBACK=true; _CLI_AI_PARSE_FEEDBACK=1
+        shift
         ;;
       --verify)
         VERIFY_PHASES=true; _CLI_VERIFY_PHASES=1
@@ -966,11 +979,16 @@ apply_config_precedence() {
 init_live_log() {
   if ! $DRY_RUN && [ -z "${LIVE_LOG:-}" ]; then
     LIVE_LOG=".claudeloop/live.log"
-    if [ -f "$LIVE_LOG" ]; then
+    if [ "$AI_PARSE_FEEDBACK" = "true" ]; then
+      # Feedback mode: append to existing log (don't archive)
+      touch "$LIVE_LOG"
+    elif [ -f "$LIVE_LOG" ]; then
       _ts=$(date '+%Y%m%d-%H%M%S')
       mv "$LIVE_LOG" ".claudeloop/live-${_ts}.log"
+      : > "$LIVE_LOG"
+    else
+      : > "$LIVE_LOG"
     fi
-    : > "$LIVE_LOG"
   fi
 }
 
@@ -978,6 +996,20 @@ init_live_log() {
 # Sets: PLAN_FILE, _parse_msg
 run_ai_parsing() {
   _parse_msg="Parsing plan file"
+
+  # --ai-parse-feedback implies AI parsing — no AI_PARSE guard needed
+  # --ai-parse-feedback: reparse with feedback and exit
+  if [ "$AI_PARSE_FEEDBACK" = "true" ]; then
+    ai_parse_feedback "$PLAN_FILE" "$GRANULARITY"
+    exit $?
+  fi
+
+  # --no-retry: single-pass parse+verify and exit
+  if [ "$NO_RETRY" = "true" ] && [ "$AI_PARSE" = "true" ]; then
+    ai_parse_no_retry "$PLAN_FILE" "$GRANULARITY"
+    exit $?
+  fi
+
   # In dry-run, only AI-parse if explicitly requested via --ai-parse CLI flag
   if [ "$AI_PARSE" = "true" ] && { ! $DRY_RUN || [ -n "$_CLI_AI_PARSE" ]; }; then
     local ai_plan=".claudeloop/ai-parsed-plan.md"

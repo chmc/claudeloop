@@ -2232,3 +2232,75 @@ MOCK
   count=$(echo "$output" | grep -c "AI plan verified" || true)
   [ "$count" -eq 1 ]
 }
+
+@test "ai_parse_no_retry: exits 0 on verify pass" {
+  ai_parse_plan() { echo "## Phase 1: Test" > "$3/ai-parsed-plan.md"; return 0; }
+  ai_verify_plan() { return 0; }
+  export -f ai_parse_plan ai_verify_plan
+
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  run ai_parse_no_retry PLAN.md tasks .claudeloop
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_parse_no_retry: exits 2 on verify fail" {
+  ai_parse_plan() { echo "## Phase 1: Test" > "$3/ai-parsed-plan.md"; return 0; }
+  ai_verify_plan() {
+    printf 'Missing requirement' > "$4/ai-verify-reason.txt"
+    return 2
+  }
+  export -f ai_parse_plan ai_verify_plan
+
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  run ai_parse_no_retry PLAN.md tasks .claudeloop
+  [ "$status" -eq 2 ]
+  [ -f .claudeloop/ai-verify-reason.txt ]
+}
+
+@test "ai_parse_no_retry: exits 1 when ai_parse_plan fails" {
+  ai_parse_plan() { return 1; }
+  export -f ai_parse_plan
+
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  run ai_parse_no_retry PLAN.md tasks .claudeloop
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_feedback: reads reason from file and reparses" {
+  ai_reparse_with_feedback() { echo "## Phase 1: Fixed" > "$3/ai-parsed-plan.md"; return 0; }
+  ai_verify_plan() { return 0; }
+  export -f ai_reparse_with_feedback ai_verify_plan
+
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  echo "Missing requirement" > .claudeloop/ai-verify-reason.txt
+  run ai_parse_feedback PLAN.md tasks .claudeloop
+  [ "$status" -eq 0 ]
+}
+
+@test "ai_parse_feedback: exits 1 when feedback file missing" {
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  rm -f .claudeloop/ai-verify-reason.txt
+
+  run ai_parse_feedback PLAN.md tasks .claudeloop
+  [ "$status" -eq 1 ]
+}
+
+@test "ai_parse_feedback: exits 2 when verify fails after reparse" {
+  ai_reparse_with_feedback() { echo "## Phase 1: Fixed" > "$3/ai-parsed-plan.md"; return 0; }
+  ai_verify_plan() {
+    printf 'Still failing' > "$4/ai-verify-reason.txt"
+    return 2
+  }
+  export -f ai_reparse_with_feedback ai_verify_plan
+
+  mkdir -p .claudeloop
+  echo "# Plan" > PLAN.md
+  echo "Missing requirement" > .claudeloop/ai-verify-reason.txt
+  run ai_parse_feedback PLAN.md tasks .claudeloop
+  [ "$status" -eq 2 ]
+}

@@ -554,6 +554,50 @@ ai_parse_and_verify() {
   done
 }
 
+# Single-pass AI parse + verify without interactive retry loop.
+# Used by Oxveil via --no-retry flag.
+# Returns: 0 on pass, 2 on verify fail, 1 on error
+ai_parse_no_retry() {
+  local plan_file="$1"
+  local granularity="${2:-tasks}"
+  local cl_dir="${3:-.claudeloop}"
+
+  if ! ai_parse_plan "$plan_file" "$granularity" "$cl_dir"; then
+    return 1
+  fi
+
+  local ai_plan="$cl_dir/ai-parsed-plan.md"
+  ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"
+  # Returns 0 (pass), 2 (fail), or 1 (error) directly
+}
+
+# Reparse with feedback from previous verification failure, then verify.
+# Used by Oxveil via --ai-parse-feedback flag.
+# Reads feedback from $cl_dir/ai-verify-reason.txt (written by previous --no-retry call).
+# Returns: 0 on pass, 2 on verify fail, 1 on error
+ai_parse_feedback() {
+  local plan_file="$1"
+  local granularity="${2:-tasks}"
+  local cl_dir="${3:-.claudeloop}"
+
+  if [ ! -f "$cl_dir/ai-verify-reason.txt" ]; then
+    print_error "No verification feedback file found at $cl_dir/ai-verify-reason.txt"
+    return 1
+  fi
+
+  # Write separator to live.log
+  if [ -n "${LIVE_LOG:-}" ]; then
+    printf '\n  [%s] ───── Retry with feedback ─────\n' "$(date '+%H:%M:%S')" >> "$LIVE_LOG"
+  fi
+
+  if ! ai_reparse_with_feedback "$plan_file" "$granularity" "$cl_dir"; then
+    return 1
+  fi
+
+  local ai_plan="$cl_dir/ai-parsed-plan.md"
+  ai_verify_plan "$ai_plan" "$plan_file" "$granularity" "$cl_dir"
+}
+
 # Display the AI-generated plan
 # Args: $1 - parsed plan file
 show_ai_plan() {
