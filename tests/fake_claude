@@ -101,6 +101,14 @@ scenario_ai_verify_pass() {
   printf '{"type":"result","total_cost_usd":0.005,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":300,"output_tokens":50},"modelUsage":{"fake-claude-v1":{"input_tokens":300,"output_tokens":50}}}\n'
 }
 
+scenario_ai_verify_fail() {
+  # Emits "FAIL" verdict for ai_verify_plan() plan-level verification.
+  default_exit=0
+  printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
+  printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"FAIL\\nPhase 2 is missing the rate limiting requirement from the original plan. Phase 1 description was summarized instead of preserving original text.\\n"}]}}\n'
+  printf '{"type":"result","total_cost_usd":0.005,"duration_ms":1000,"num_turns":1,"usage":{"input_tokens":300,"output_tokens":80},"modelUsage":{"fake-claude-v1":{"input_tokens":300,"output_tokens":80}}}\n'
+}
+
 scenario_success() {
   # Auto-detect prompt type and dispatch to appropriate response
   if is_ai_parse_prompt; then scenario_ai_parse; return; fi
