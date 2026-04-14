@@ -1262,6 +1262,18 @@ main() {
 
   init_live_log
 
+  # Fall back from deleted AI-parsed plan to PLAN.md (global, not just --reset)
+  if [ ! -f "$PLAN_FILE" ]; then
+    case "$PLAN_FILE" in
+      .claudeloop/ai-parsed-plan.md)
+        if [ -f "PLAN.md" ]; then
+          log_ts "ai-parsed-plan.md missing, falling back to PLAN.md"
+          PLAN_FILE="PLAN.md"
+        fi
+        ;;
+    esac
+  fi
+
   # Validate plan and prompt files
   if [ ! -f "$PLAN_FILE" ] && ! { $RESET_PROGRESS && [ "$AI_PARSE" = "true" ]; }; then
     print_error "Plan file not found: $PLAN_FILE"
