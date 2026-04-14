@@ -29,6 +29,14 @@ printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
 
 mkdir -p "$FAKE_CLAUDE_DIR/prompts" "$FAKE_CLAUDE_DIR/args"
 
+# Handle --version (used by Oxveil's claudeDetection)
+for _arg in "$@"; do
+  if [ "$_arg" = "--version" ]; then
+    echo "fake-claude 0.0.0"
+    exit 0
+  fi
+done
+
 # Detect stream-json input format (bidirectional stdio protocol)
 _stream_json_input=false
 for _arg in "$@"; do
