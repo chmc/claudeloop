@@ -108,7 +108,7 @@ fi
 
 if [ -z "$log" ]; then
   printf 'No commits since %s — nothing to release.\n' "${range_tag:-beginning}"
-  exit 0
+  exit 2
 fi
 
 # ── detect bump type (only when not transitioning from beta) ──────────────────
