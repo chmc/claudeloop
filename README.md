@@ -250,6 +250,8 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
 --ai-parse             Use AI to decompose plan into granular phases
 --granularity <level>  Breakdown depth: phases, tasks, steps (default: tasks)
+--no-retry             Single parse+verify pass; exit 2 on verification failure (no interactive retry)
+--ai-parse-feedback    Reparse using feedback from ai-verify-reason.txt (skip live.log archival)
 --simple             Plain output (no colors)
 --dangerously-skip-permissions  Bypass claude permission prompts (use with caution)
 --phase-prompt <file>  Custom prompt template for phase execution
@@ -399,6 +401,19 @@ The AI parser:
 5. Shows you the plan for confirmation before proceeding
 
 The generated plan is saved to `.claudeloop/ai-parsed-plan.md` and reused on `--continue`.
+
+**Non-interactive / programmatic usage:** External callers (such as editor extensions) can drive the retry loop themselves using two flags:
+
+- `--no-retry` — runs a single parse+verify pass and exits immediately. Exit code 0 means the plan passed verification; exit code 2 means verification failed (reason written to `.claudeloop/ai-verify-reason.txt`); exit code 1 indicates an unexpected error.
+- `--ai-parse-feedback` — reparsing entry point: reads the failure reason from `.claudeloop/ai-verify-reason.txt` and sends it back to the AI without archiving `live.log`, preserving log continuity across multiple programmatic retries.
+
+```bash
+# CI / unattended: one-shot parse, fail fast on verification problems
+claudeloop --plan ideas.md --ai-parse --no-retry
+
+# Programmatic retry after a --no-retry failure
+claudeloop --ai-parse-feedback --granularity tasks
+```
 
 </details>
 

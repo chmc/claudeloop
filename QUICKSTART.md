@@ -98,6 +98,8 @@ claudeloop --verify-timeout 900        # increase verification timeout to 15 min
 claudeloop --refactor                  # auto-refactor code after each phase (up to 20 attempts, preserves work between retries)
 claudeloop --plan ideas.md --ai-parse  # AI-extract a free-form plan into phases
 claudeloop --plan ideas.md --ai-parse --granularity steps  # finer breakdown (with verification feedback loop)
+claudeloop --plan ideas.md --ai-parse --no-retry           # single parse+verify pass; exit 2 on failure (CI/unattended)
+claudeloop --ai-parse-feedback --granularity tasks         # programmatic retry after a --no-retry failure
 ```
 
 ## Full examples
@@ -120,6 +122,12 @@ claudeloop --plan PLAN.md --reset --dangerously-skip-permissions
 
 # AI-decompose a free-form plan and execute
 claudeloop --plan ideas.md --ai-parse --dangerously-skip-permissions
+
+# AI parse in CI: single pass, fail fast on verification problems
+claudeloop --plan ideas.md --ai-parse --no-retry
+
+# Programmatic retry after a --no-retry verification failure
+claudeloop --ai-parse-feedback --granularity tasks
 ```
 
 ## Config file

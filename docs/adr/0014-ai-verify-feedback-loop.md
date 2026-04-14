@@ -46,3 +46,12 @@ Added AI_PARSE and GRANULARITY questions to the interactive first-run wizard, fo
 **Negative:**
 - Retries cost additional API calls (up to 3 extra round-trips)
 - Extraction prompt is more constrained, potentially less creative for truly ambiguous plans
+
+### Non-interactive extension points
+
+Two flags expose the feedback loop to external callers (e.g., editor extensions) that need to drive retries programmatically rather than interactively:
+
+- `--no-retry` — runs a single parse+verify pass via `ai_parse_no_retry()` and exits immediately. Exit codes: 0 = verification passed, 2 = verification failed, 1 = unexpected error. Failure reason is written to `.claudeloop/ai-verify-reason.txt`.
+- `--ai-parse-feedback` — entry point for a programmatic retry pass via `ai_parse_feedback()`. Reads the failure reason from `ai-verify-reason.txt` and sends it back to the AI. Does not archive `live.log` so that consecutive programmatic retries share one continuous log.
+
+Together these flags let an external caller implement its own retry loop: call `--no-retry`, inspect the exit code, and if 2 is returned call `--ai-parse-feedback` with the desired granularity.

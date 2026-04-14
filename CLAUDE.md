@@ -113,7 +113,7 @@ done
 | File | Key functions |
 |------|--------------|
 | `lib/parser.sh` | `parse_plan` → sets all `PHASE_*_N` vars and `PHASE_COUNT` |
-| `lib/ai_parser.sh` | `ai_parse_plan`, `ai_verify_plan`, `ai_reparse_with_feedback`, `ai_parse_and_verify`, `show_ai_plan`, `confirm_ai_plan` |
+| `lib/ai_parser.sh` | `ai_parse_plan`, `ai_verify_plan`, `ai_reparse_with_feedback`, `ai_parse_and_verify`, `show_ai_plan`, `confirm_ai_plan`, `ai_parse_no_retry` (`--no-retry`: single pass, exit 2 on failure), `ai_parse_feedback` (`--ai-parse-feedback`: reparse from ai-verify-reason.txt, no live.log archival) |
 | `lib/dependencies.sh` | `find_next_phase`, `is_phase_runnable`, `detect_dependency_cycles` (DFS, space-separated visited/stack strings) |
 | `lib/phase_state.sh` | `phase_get`, `phase_set`, `get_phase_status`, `reset_phase_for_retry`, `reset_phase_full`, `auto_commit_changes` |
 | `lib/progress.sh` | `init_progress`, `read_progress`, `write_progress`, `update_phase_status` |
