@@ -163,7 +163,7 @@ run_claude_pipeline() {
     # Periodic progress — every 30 polls (30s at default interval).
     # Runs in the foreground shell, immune to pipeline freezes (SIGTTOU, AWK crash).
     if [ $((_sentinel_polls % 30)) -eq 0 ] && [ -n "${LIVE_LOG:-}" ]; then
-      _sp_elapsed=$((_sentinel_polls * ${_sentinel_interval:-1}))
+      _sp_elapsed=$(awk "BEGIN{printf \"%d\", ${_sentinel_polls} * ${_sentinel_interval:-1}}")
       if kill -0 "$CURRENT_PIPELINE_PID" 2>/dev/null; then
         _sp_raw_size=0
         [ -f "$_rcp_raw" ] && _sp_raw_size=$(wc -c < "$_rcp_raw" 2>/dev/null | tr -d ' ')

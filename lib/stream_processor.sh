@@ -12,7 +12,9 @@
 # timeout takes ~2s. read -t is non-POSIX but supported by bash and most sh.
 inject_heartbeats() {
   if [ "${_SKIP_HEARTBEATS:-}" = "1" ]; then
-    cat
+    while IFS= read -t 1 -r _hb_line; do
+      printf '%s\n' "$_hb_line" 2>/dev/null || break
+    done
     # Flush synthetic heartbeats so stream processor can detect post-result exit
     printf '{"type":"heartbeat"}\n{"type":"heartbeat"}\n{"type":"heartbeat"}\n' 2>/dev/null
     return
@@ -432,7 +434,7 @@ process_stream_json() {
     } else if (idle_timeout_s + 0 > 0) {
       tool_timeout_s = int(idle_timeout_s * 0.8)
       if (tool_timeout_s < 120) tool_timeout_s = 120
-      if (tool_timeout_s > idle_timeout_s) tool_timeout_s = idle_timeout_s
+      if (tool_timeout_s > idle_timeout_s && idle_timeout_s >= 120) tool_timeout_s = idle_timeout_s
     } else {
       tool_timeout_s = 0
     }
