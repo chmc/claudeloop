@@ -5,6 +5,8 @@
 
 setup() {
   # Stub log_verbose before sourcing (called at definition-time? no, only at call-time)
+  export _SENTINEL_MAX_WAIT=30
+  export _KILL_ESCALATE_TIMEOUT=1
   log_verbose() { :; }
   log_ts() { :; }
   VERBOSE_MODE=false
@@ -370,7 +372,7 @@ _setup_epr_stubs() {
   # The timeout break must be inside the sentinel while loop
   local sentinel_line break_line
   sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
-  break_line=$(grep -n '_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
+  break_line=$(grep -n '_sentinel_polls.*_sentinel_max_polls\|_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
   [ -n "$break_line" ]
   [ "$break_line" -gt "$sentinel_line" ]
 }

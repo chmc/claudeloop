@@ -10,6 +10,8 @@ setup() {
   export TEST_DIR
   export _SENTINEL_POLL=0.1
   export _SKIP_HEARTBEATS=1
+  export _SENTINEL_MAX_WAIT=30
+  export _KILL_ESCALATE_TIMEOUT=1
 
   # Source libraries in dependency order
   . "$CLAUDELOOP_DIR/lib/parser.sh"

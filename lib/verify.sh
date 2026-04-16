@@ -140,11 +140,13 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   _sentinel_polls=0
   _sentinel_max=$((_verify_timeout + 60))
   _sentinel_interval=${_SENTINEL_POLL:-1}
+  # Pre-compute max polls as integer to avoid awk fork per iteration
+  _sentinel_max_polls=$(awk "BEGIN{printf \"%d\", ${_sentinel_max} / ${_sentinel_interval}}" 2>/dev/null || echo 999999)
   while [ ! -f "$_sentinel" ]; do
     _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
     sleep "$_sentinel_interval"
     _sentinel_polls=$((_sentinel_polls + 1))
-    if awk "BEGIN{exit !(${_sentinel_polls} * ${_sentinel_interval} >= ${_sentinel_max})}" 2>/dev/null; then
+    if [ "$_sentinel_polls" -ge "${_sentinel_max_polls:-999999}" ]; then
       log_verbose "verify_phase: sentinel poll timeout after ${_sentinel_max}s"
       break
     fi

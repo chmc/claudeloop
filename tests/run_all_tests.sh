@@ -61,12 +61,31 @@ if [ -f test_integration_basic.sh ] && [ -f test_integration_retry.sh ] && [ -f 
   SKIP_FILES="test_integration.sh"
 fi
 
-# Collect test files
+# Collect test files — priority order (longest-running first) for optimal scheduling
+PRIORITY_FILES=(
+  test_integration_retry.sh
+  test_integration_state.sh
+  test_wizard_flags.sh
+  test_wizard_features.sh
+  test_wizard_config.sh
+  test_integration_basic.sh
+)
+
 TEST_FILES=()
+# Add priority files first (if they exist)
+for pf in "${PRIORITY_FILES[@]}"; do
+  [ -f "$pf" ] && [ "$pf" != "$SKIP_FILES" ] && TEST_FILES+=("$pf")
+done
+# Add remaining files
 for test_file in test_*.sh; do
   [ -f "$test_file" ] || continue
   [ "$test_file" = "$SKIP_FILES" ] && continue
-  TEST_FILES+=("$test_file")
+  # Skip if already in priority list
+  _skip=false
+  for pf in "${PRIORITY_FILES[@]}"; do
+    [ "$test_file" = "$pf" ] && _skip=true && break
+  done
+  $_skip || TEST_FILES+=("$test_file")
 done
 
 if [ ${#TEST_FILES[@]} -eq 0 ]; then
@@ -99,8 +118,16 @@ run_parallel() {
   local pids=()
   local files=()
 
-  # Launch all test files as background jobs
+  # Throttle to CPU core count to avoid contention (override with MAX_JOBS=N)
+  local max_jobs
+  max_jobs=${MAX_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}
+
+  # Launch test files with throttled concurrency
   for test_file in "${TEST_FILES[@]}"; do
+    # Wait for a slot before launching
+    while [ "$(jobs -r | wc -l)" -ge "$max_jobs" ]; do
+      wait -n 2>/dev/null || sleep 0.2
+    done
     local out_file="$tmp_dir/${test_file}.out"
     local rc_file="$tmp_dir/${test_file}.rc"
     (
@@ -111,7 +138,7 @@ run_parallel() {
     files+=("$test_file")
   done
 
-  echo -e "${BLUE}Launched ${#pids[@]} test files in parallel...${NC}"
+  echo -e "${BLUE}Launched ${#pids[@]} test files (max $max_jobs concurrent)...${NC}"
   echo
 
   # Wait for all jobs

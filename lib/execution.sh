@@ -153,6 +153,8 @@ run_claude_pipeline() {
   _sentinel_polls=0
   _sentinel_max=${_SENTINEL_MAX_WAIT:-1800}
   _sentinel_interval=${_SENTINEL_POLL:-1}
+  # Pre-compute max polls as integer to avoid awk fork per iteration
+  _sentinel_max_polls=$(awk "BEGIN{printf \"%d\", ${_sentinel_max} / ${_sentinel_interval}}" 2>/dev/null || echo 999999)
   _sp_prev_raw_size=0
   while [ ! -f "$_sentinel" ]; do
     _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
@@ -177,8 +179,7 @@ run_claude_pipeline() {
         printf "\r  [WARNING: pipeline process exited after %ds]\n" "$_sp_elapsed" >&2
       fi
     fi
-    # Use awk for float-safe comparison (_sentinel_interval may be 0.1 in tests)
-    if awk "BEGIN{exit !(${_sentinel_polls} * ${_sentinel_interval} >= ${_sentinel_max})}" 2>/dev/null; then
+    if [ "$_sentinel_polls" -ge "${_sentinel_max_polls:-999999}" ]; then
       log_verbose "run_claude_pipeline: sentinel poll timeout after ${_sentinel_max}s"
       break
     fi

@@ -10,6 +10,8 @@ setup() {
   export TEST_DIR
   export _SENTINEL_POLL=0.1
   export _SKIP_HEARTBEATS=1
+  export _SENTINEL_MAX_WAIT=30
+  export _KILL_ESCALATE_TIMEOUT=1
 
   # Source libraries in the right order (verify.sh depends on ui.sh, stream_processor.sh)
   . "$CLAUDELOOP_DIR/lib/parser.sh"
@@ -151,16 +153,16 @@ STUB
   # Replace claude stub with one that captures stdin
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_capture
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > $TEST_DIR/verify_prompt_capture
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"All checks passed.\nVERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
   verify_phase "1" ".claudeloop/logs/phase-1.log"
-  grep -q "Setup project" /tmp/verify_prompt_capture
-  grep -q "Initialize the project structure" /tmp/verify_prompt_capture
-  rm -f /tmp/verify_prompt_capture
+  grep -q "Setup project" $TEST_DIR/verify_prompt_capture
+  grep -q "Initialize the project structure" $TEST_DIR/verify_prompt_capture
+  rm -f $TEST_DIR/verify_prompt_capture
 }
 
 @test "verify_phase: prompt contains execution log tail" {
@@ -170,31 +172,31 @@ STUB
     > ".claudeloop/logs/phase-1.log"
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_capture2
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > $TEST_DIR/verify_prompt_capture2
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
   verify_phase "1" ".claudeloop/logs/phase-1.log"
-  grep -q "UNIQUE_MARKER_12345" /tmp/verify_prompt_capture2
-  rm -f /tmp/verify_prompt_capture2
+  grep -q "UNIQUE_MARKER_12345" $TEST_DIR/verify_prompt_capture2
+  rm -f $TEST_DIR/verify_prompt_capture2
 }
 
 @test "verify_phase: prompt contains verdict instructions" {
   VERIFY_PHASES=true
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
-IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > /tmp/verify_prompt_verdict
+IFS= read -r _line 2>/dev/null; printf '%s\n' "$_line" > $TEST_DIR/verify_prompt_verdict
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 exit 0
 STUB
   chmod +x "$TEST_DIR/bin/claude"
   verify_phase "1" ".claudeloop/logs/phase-1.log"
-  grep -q "VERIFICATION_PASSED" /tmp/verify_prompt_verdict
-  grep -q "VERIFICATION_FAILED" /tmp/verify_prompt_verdict
-  rm -f /tmp/verify_prompt_verdict
+  grep -q "VERIFICATION_PASSED" $TEST_DIR/verify_prompt_verdict
+  grep -q "VERIFICATION_FAILED" $TEST_DIR/verify_prompt_verdict
+  rm -f $TEST_DIR/verify_prompt_verdict
 }
 
 # =============================================================================
@@ -208,7 +210,7 @@ STUB
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 read -r _discard 2>/dev/null || true
-printf '%s\n' "$*" > /tmp/verify_args_capture
+printf '%s\n' "$*" > $TEST_DIR/verify_args_capture
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
 printf '{"type":"content_block_start","content_block":{"type":"text","text":"VERIFICATION_PASSED\n"}}\n'
 exit 0
@@ -216,9 +218,9 @@ STUB
   chmod +x "$TEST_DIR/bin/claude"
   verify_phase "1" ".claudeloop/logs/phase-1.log"
   # Should use stream-json input and permission-prompt-tool stdio
-  grep -q "permission-prompt-tool" /tmp/verify_args_capture
-  grep -q "input-format" /tmp/verify_args_capture
-  rm -f /tmp/verify_args_capture
+  grep -q "permission-prompt-tool" $TEST_DIR/verify_args_capture
+  grep -q "input-format" $TEST_DIR/verify_args_capture
+  rm -f $TEST_DIR/verify_args_capture
 }
 
 # =============================================================================
@@ -612,7 +614,7 @@ STUB
   grep -q '_sentinel_max' "$src"
   local sentinel_line break_line
   sentinel_line=$(grep -n 'while \[ ! -f "$_sentinel" \]' "$src" | head -1 | cut -d: -f1)
-  break_line=$(grep -n '_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
+  break_line=$(grep -n '_sentinel_polls.*_sentinel_max_polls\|_sentinel_polls.*_sentinel_interval.*_sentinel_max' "$src" | head -1 | cut -d: -f1)
   [ -n "$break_line" ]
   [ "$break_line" -gt "$sentinel_line" ]
 }
