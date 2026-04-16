@@ -181,6 +181,16 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
 - Orphan branches without worktree: detected by `list` step 4, cleaned by `/wt rm`.
 - Last worktree removed: leave workspace file intact (still valid, avoids closing VS Code window).
 
+## Behavioral rules (when inside a worktree)
+
+- **Scope awareness**: Worktree is an isolated copy. Changes don't affect the main repo until merged.
+- **Branch convention**: Worktree branches are `wt/<name>`. Do not rename.
+- **Commit normally**: Conventional commits, push with `git push -u origin wt/<name>`.
+- **PR target**: PRs target the base branch the worktree was created from.
+- **CWD isolation (mandatory):** Never `cd` outside the worktree in Bash commands for git write operations (`cherry-pick`, `rebase`, `checkout`, `merge`). These can invalidate the worktree path, permanently breaking all subsequent Bash calls. Use `git -C <path>` for read-only queries if needed.
+- **Landing worktree changes:** Push the branch and create a PR targeting the desired base branch. Never cherry-pick or rebase manually from inside a worktree. `/wt rm` offers integrated "PR then remove".
+- **Broken cwd recovery (mandatory):** If Bash commands fail with "Path does not exist" or similar cwd errors, the worktree directory was removed externally. Do NOT retry Bash commands — they will all fail. Immediately call `ExitWorktree` to restore the session's working directory.
+
 ## Error handling
 
 - On any git command failure not explicitly handled above, report the error and stop.

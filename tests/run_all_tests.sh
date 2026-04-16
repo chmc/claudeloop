@@ -12,6 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Timing: files exceeding this threshold (seconds) are flagged as slow
+SLOW_THRESHOLD="${SLOW_THRESHOLD:-120}"
+
 # Parse flags
 SERIAL=false
 for arg in "$@"; do
@@ -98,17 +101,30 @@ echo
 
 run_serial() {
   local failed=0
+  local timing_data=()
   for test_file in "${TEST_FILES[@]}"; do
     echo -e "${YELLOW}Running $test_file${NC}"
-    if $BATS_CMD "$test_file"; then
-      echo -e "${GREEN}✓ $test_file passed${NC}"
+    SECONDS=0
+    if $BATS_CMD -T "$test_file"; then
+      local duration=$SECONDS
+      local slow_marker=""
+      [ "$duration" -ge "$SLOW_THRESHOLD" ] && slow_marker=" ${YELLOW}⚠ SLOW${NC}"
+      echo -e "${GREEN}✓ $test_file${NC} (${duration}s)${slow_marker}"
       echo
     else
-      echo -e "${RED}✗ $test_file failed${NC}"
+      local duration=$SECONDS
+      local slow_marker=""
+      [ "$duration" -ge "$SLOW_THRESHOLD" ] && slow_marker=" ${YELLOW}⚠ SLOW${NC}"
+      echo -e "${RED}✗ $test_file${NC} (${duration}s)${slow_marker}"
       echo
       failed=$((failed + 1))
     fi
+    timing_data+=("$(printf '%06d %s' "$duration" "$test_file")")
   done
+
+  # Print timing summary
+  _print_timing_summary "${timing_data[@]}"
+
   return $failed
 }
 
@@ -130,9 +146,12 @@ run_parallel() {
     done
     local out_file="$tmp_dir/${test_file}.out"
     local rc_file="$tmp_dir/${test_file}.rc"
+    local time_file="$tmp_dir/${test_file}.time"
     (
-      $BATS_CMD "$test_file" > "$out_file" 2>&1
+      SECONDS=0
+      $BATS_CMD -T "$test_file" > "$out_file" 2>&1
       echo $? > "$rc_file"
+      echo $SECONDS > "$time_file"
     ) &
     pids+=($!)
     files+=("$test_file")
@@ -149,18 +168,25 @@ run_parallel() {
   # Collect results
   local failed=0
   local failed_files=()
+  local timing_data=()
   for test_file in "${files[@]}"; do
     local rc_file="$tmp_dir/${test_file}.rc"
     local out_file="$tmp_dir/${test_file}.out"
+    local time_file="$tmp_dir/${test_file}.time"
     local rc=1
+    local duration=0
     [ -f "$rc_file" ] && rc=$(cat "$rc_file")
+    [ -f "$time_file" ] && duration=$(cat "$time_file")
+    local slow_marker=""
+    [ "$duration" -ge "$SLOW_THRESHOLD" ] && slow_marker=" ${YELLOW}⚠ SLOW${NC}"
     if [ "$rc" -eq 0 ]; then
-      echo -e "${GREEN}✓ $test_file${NC}"
+      echo -e "${GREEN}✓ $test_file${NC} (${duration}s)${slow_marker}"
     else
-      echo -e "${RED}✗ $test_file${NC}"
+      echo -e "${RED}✗ $test_file${NC} (${duration}s)${slow_marker}"
       failed=$((failed + 1))
       failed_files+=("$test_file")
     fi
+    timing_data+=("$(printf '%06d %s' "$duration" "$test_file")")
   done
 
   # Print full output for failures
@@ -175,25 +201,43 @@ run_parallel() {
     done
   fi
 
+  # Print timing summary
+  _print_timing_summary "${timing_data[@]}"
+
   rm -rf "$tmp_dir"
   return $failed
 }
 
+# Print sorted timing summary
+_print_timing_summary() {
+  echo
+  echo "File timing (slowest first):"
+  # Sort entries descending by the zero-padded duration prefix
+  printf '%s\n' "$@" | sort -rn | while IFS=' ' read -r dur file; do
+    dur=$((10#$dur))  # strip leading zeros
+    local marker=""
+    [ "$dur" -ge "$SLOW_THRESHOLD" ] && marker=" ⚠ SLOW"
+    printf "  %4ds  %s%s\n" "$dur" "$file" "$marker"
+  done
+}
+
 # Run tests
+SECONDS=0
 FAILED=0
 if $SERIAL; then
   run_serial || FAILED=$?
 else
   run_parallel || FAILED=$?
 fi
+TOTAL_DURATION=$SECONDS
 
 # Summary
 echo
 echo "======================"
 if [ "$FAILED" -eq 0 ]; then
-  echo -e "${GREEN}All tests passed!${NC}"
+  echo -e "${GREEN}All tests passed!${NC} (${TOTAL_DURATION}s)"
   exit 0
 else
-  echo -e "${RED}$FAILED test file(s) failed${NC}"
+  echo -e "${RED}$FAILED test file(s) failed${NC} (${TOTAL_DURATION}s)"
   exit 1
 fi
