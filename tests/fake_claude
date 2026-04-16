@@ -88,6 +88,13 @@ is_phase_verify_prompt() {
   [ -f "$prompt_file" ] && grep -qi 'verification' "$prompt_file"
 }
 
+# Write a file to CWD so git detects changes after phase execution.
+# Args: $1 - relative file path, $2 - content
+_write_fake_file() {
+  mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$2" > "$1"
+}
+
 # --- Scenario functions ---
 # Each emits hardcoded NDJSON matching the real Claude CLI stream-json format.
 # Success scenarios auto-detect AI-parse and verification prompts.
@@ -123,9 +130,10 @@ scenario_success() {
   if is_verify_prompt; then scenario_ai_verify_pass; return; fi
   if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   default_exit=0
+  _write_fake_file "test.sh" "echo hello"
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make the requested changes."}]}}\n'
-  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_fake_001"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"test.sh","new_string":"echo hello"},"id":"toolu_fake_001"}\n'
   printf '{"type":"tool_result","content":"ok","id":"toolu_fake_001"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Changes applied successfully.\\n"}]}}\n'
   printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
@@ -136,13 +144,14 @@ scenario_success_multi() {
   if is_verify_prompt; then scenario_ai_verify_pass; return; fi
   if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   default_exit=0
+  _write_fake_file "test.sh" "echo new"
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will read, edit, and test the code.\\n"}]}}\n'
-  printf '{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.sh"},"id":"toolu_fake_010"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"test.sh"},"id":"toolu_fake_010"}\n'
   printf '{"type":"tool_result","content":"#!/bin/sh\\necho old","id":"toolu_fake_010"}\n'
-  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo new"},"id":"toolu_fake_011"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"test.sh","new_string":"echo new"},"id":"toolu_fake_011"}\n'
   printf '{"type":"tool_result","content":"ok","id":"toolu_fake_011"}\n'
-  printf '{"type":"tool_use","name":"Bash","input":{"command":"sh /tmp/test.sh"},"id":"toolu_fake_012"}\n'
+  printf '{"type":"tool_use","name":"Bash","input":{"command":"sh test.sh"},"id":"toolu_fake_012"}\n'
   printf '{"type":"tool_result","content":"new","id":"toolu_fake_012"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All changes applied and verified.\\n"}]}}\n'
   printf '{"type":"result","total_cost_usd":0.03,"duration_ms":8000,"num_turns":4,"usage":{"input_tokens":1500,"output_tokens":600},"modelUsage":{"fake-claude-v1":{"input_tokens":1500,"output_tokens":600}}}\n'
@@ -155,6 +164,9 @@ scenario_success_realistic() {
   # Realistic format with assistant/user wrappers and tool_use_id correlation.
   # Produces raw.json compatible with rec_extract_tool_calls() is_error extraction.
   default_exit=0
+  _write_fake_file "src/main.sh" '#!/bin/sh
+main() { validate_input; run_phases; }
+main "$@"'
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_sr01","name":"Read","input":{"file_path":"src/main.sh"}}]}}\n'
   printf '{"type":"user","message":{"content":[{"tool_use_id":"toolu_sr01","type":"tool_result","content":"#!/bin/sh\\nmain() { run_phases; }","is_error":false}]},"timestamp":"2026-01-01T12:00:01.000Z"}\n'
@@ -261,15 +273,27 @@ scenario_slow() {
 
 scenario_rate_limit() {
   default_exit=0
+  _write_fake_file "test.sh" "echo hello"
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"rate_limit_event","utilization":0.85}\n'
-  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_fake_040"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"test.sh","new_string":"echo hello"},"id":"toolu_fake_040"}\n'
   printf '{"type":"tool_result","content":"ok","id":"toolu_fake_040"}\n'
   printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
 }
 
 scenario_success_verbose() {
   default_exit=0
+  _write_fake_file "src/lib/runner.sh" '#!/bin/sh
+run_phases() { for phase in $PHASES; do execute_phase "$phase"; done; }
+execute_phase() { local attempts=0 max_retries=3; run_command "$1"; }'
+  _write_fake_file "src/lib/config.sh" '#!/bin/sh
+load_config() { CONFIG_FILE=".config"; [ -f "$CONFIG_FILE" ] && . "$CONFIG_FILE"; [ -z "$MAX_RETRIES" ] && MAX_RETRIES=10; }'
+  _write_fake_file "src/lib/utils.sh" '#!/bin/sh
+log() { printf "[%s] %s\n" "$(date +%H:%M:%S)" "$1"; }
+die() { log "ERROR: $1"; exit 1; }
+warn() { printf "[WARN] %s\n" "$1" >&2; }'
+  _write_fake_file "src/lib/retry.sh" '#!/bin/sh
+retry() { local attempts=0; while [ "$attempts" -lt "$1" ]; do "$2" && return 0; attempts=$((attempts + 1)); done; return 1; }'
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will analyze the codebase, make changes across multiple files, and run the test suite.\\n"}]}}\n'
   # TodoWrite: initial task plan
@@ -351,10 +375,10 @@ scenario_read_only() {
   default_exit=0
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me read the relevant files.\\n"}]}}\n'
-  printf '{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/test.sh"},"id":"toolu_fake_030"}\n'
+  printf '{"type":"tool_use","name":"Read","input":{"file_path":"test.sh"},"id":"toolu_fake_030"}\n'
   printf '{"type":"tool_result","content":"#!/bin/sh\\necho hello","id":"toolu_fake_030"}\n'
-  printf '{"type":"tool_use","name":"Grep","input":{"pattern":"hello","path":"/tmp"},"id":"toolu_fake_031"}\n'
-  printf '{"type":"tool_result","content":"/tmp/test.sh:echo hello","id":"toolu_fake_031"}\n'
+  printf '{"type":"tool_use","name":"Grep","input":{"pattern":"hello","path":"."},"id":"toolu_fake_031"}\n'
+  printf '{"type":"tool_result","content":"test.sh:echo hello","id":"toolu_fake_031"}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The code looks correct.\\n"}]}}\n'
   printf '{"type":"result","total_cost_usd":0.02,"duration_ms":5000,"num_turns":3,"usage":{"input_tokens":800,"output_tokens":300},"modelUsage":{"fake-claude-v1":{"input_tokens":800,"output_tokens":300}}}\n'
 }
@@ -383,10 +407,11 @@ scenario_timeout_error() {
 scenario_permission_request() {
   # Emits a control_request (permission prompt) then continues with success
   default_exit=0
+  _write_fake_file "test.sh" "echo hello"
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
   printf '{"type":"control_request","request_id":"req_perm_001","request":{"type":"can_use_tool","tool_name":"Write","input":{"file_path":".claude/skills/test.md","content":"test"}}}\n'
   printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will make changes."}]}}\n'
-  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"/tmp/test.sh","new_string":"echo hello"},"id":"toolu_perm_001"}\n'
+  printf '{"type":"tool_use","name":"Edit","input":{"file_path":"test.sh","new_string":"echo hello"},"id":"toolu_perm_001"}\n'
   printf '{"type":"tool_result","content":"ok","id":"toolu_perm_001"}\n'
   printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'
 }

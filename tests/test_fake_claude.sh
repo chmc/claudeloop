@@ -12,10 +12,12 @@ setup() {
   export FAKE_CLAUDE_DIR="$FAKE_DIR"
   # Source retry.sh for detection helpers
   . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
+  # Isolate CWD so fake_claude file writes don't pollute project directory
+  cd "$BATS_TEST_TMPDIR"
 }
 
 teardown() {
-  :
+  cd /
 }
 
 # Helper: run fake_claude with a scenario
@@ -300,4 +302,26 @@ run_with_prompt() {
   while IFS= read -r t; do
     echo "$golden_types" | grep -qF "$t" || { echo "Type $t not in golden file"; return 1; }
   done <<< "$fake_types"
+}
+
+# --- File-writing behavior ---
+
+@test "success scenario: writes file to disk" {
+  run_scenario "success" > /dev/null
+  [ -f "test.sh" ]
+}
+
+@test "success_multi scenario: writes file to disk" {
+  run_scenario "success_multi" > /dev/null
+  [ -f "test.sh" ]
+}
+
+@test "success_realistic scenario: writes file to disk" {
+  run_scenario "success_realistic" > /dev/null
+  [ -f "src/main.sh" ]
+}
+
+@test "failure scenario: does NOT write files" {
+  run_scenario "failure" > /dev/null 2>&1 || true
+  [ ! -f "test.sh" ]
 }
