@@ -977,7 +977,7 @@ apply_config_precedence() {
 
 # Initialize or rotate the live log file
 init_live_log() {
-  if ! $DRY_RUN && [ -z "${LIVE_LOG:-}" ]; then
+  if [ -z "${LIVE_LOG:-}" ] && { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }; then
     LIVE_LOG=".claudeloop/live.log"
     if [ "$AI_PARSE_FEEDBACK" = "true" ]; then
       # Feedback mode: append to existing log (don't archive)

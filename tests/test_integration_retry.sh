@@ -47,6 +47,7 @@ setup() {
   export _SENTINEL_POLL=0.1
   export _EXIT_CODE_WAIT=0
   export _SKIP_HEARTBEATS=1
+
   export _SENTINEL_MAX_WAIT=30
   export _KILL_ESCALATE_TIMEOUT=1
   export _CLAUDELOOP_NO_AUTO_ARCHIVE=1
@@ -83,7 +84,7 @@ CONF
 }
 
 teardown() {
-  :
+  jobs -p 2>/dev/null | xargs kill 2>/dev/null || true
 }
 
 # Helper: run claudeloop from TEST_DIR

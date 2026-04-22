@@ -11,6 +11,8 @@ setup() {
   export CLAUDELOOP="${CLAUDELOOP_DIR}/claudeloop"
   export _SENTINEL_POLL=0.1
   export _SKIP_HEARTBEATS=1
+
+  export _EXIT_CODE_WAIT=0
   export _SENTINEL_MAX_WAIT=30
   export _KILL_ESCALATE_TIMEOUT=1
 
@@ -38,7 +40,7 @@ CONF
 }
 
 teardown() {
-  :
+  jobs -p 2>/dev/null | xargs kill 2>/dev/null || true
 }
 
 @test "--monitor times out with error when no live log exists" {

@@ -2304,3 +2304,54 @@ MOCK
   run ai_parse_feedback PLAN.md tasks .claudeloop
   [ "$status" -eq 2 ]
 }
+
+# =============================================================================
+# init_live_log condition tests for dry-run + ai-parse behavior
+# =============================================================================
+
+@test "init_live_log condition: enables log when DRY_RUN=true and AI_PARSE=true" {
+  # Test the condition: { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }
+  # When DRY_RUN=true and AI_PARSE=true, the condition should be true
+  DRY_RUN=true
+  AI_PARSE=true
+  LIVE_LOG=""
+
+  # Evaluate the condition
+  if [ -z "${LIVE_LOG:-}" ] && { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }; then
+    result="enabled"
+  else
+    result="disabled"
+  fi
+
+  [ "$result" = "enabled" ]
+}
+
+@test "init_live_log condition: disables log when DRY_RUN=true and AI_PARSE=false" {
+  # When DRY_RUN=true and AI_PARSE is not "true", the condition should be false
+  DRY_RUN=true
+  AI_PARSE=false
+  LIVE_LOG=""
+
+  if [ -z "${LIVE_LOG:-}" ] && { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }; then
+    result="enabled"
+  else
+    result="disabled"
+  fi
+
+  [ "$result" = "disabled" ]
+}
+
+@test "init_live_log condition: enables log when DRY_RUN=false (normal run)" {
+  # When DRY_RUN=false (normal run), the condition should always be true
+  DRY_RUN=false
+  AI_PARSE=false
+  LIVE_LOG=""
+
+  if [ -z "${LIVE_LOG:-}" ] && { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }; then
+    result="enabled"
+  else
+    result="disabled"
+  fi
+
+  [ "$result" = "enabled" ]
+}

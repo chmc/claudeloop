@@ -134,9 +134,10 @@ run_parallel() {
   local pids=()
   local files=()
 
-  # Throttle to CPU core count to avoid contention (override with MAX_JOBS=N)
+  # Throttle concurrency (override with MAX_JOBS=N). Default 8: tests are I/O-bound
+  # (git ops, process spawning), not CPU-bound, so exceeding core count is safe.
   local max_jobs
-  max_jobs=${MAX_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)}
+  max_jobs=${MAX_JOBS:-8}
 
   # Launch test files with throttled concurrency
   for test_file in "${TEST_FILES[@]}"; do

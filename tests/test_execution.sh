@@ -15,7 +15,7 @@ setup() {
   _tmpdir="$BATS_TEST_TMPDIR"
 }
 
-teardown() { :; }
+teardown() { jobs -p 2>/dev/null | xargs kill 2>/dev/null || true; }
 
 # --- build_default_prompt() ---
 

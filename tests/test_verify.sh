@@ -10,6 +10,8 @@ setup() {
   export TEST_DIR
   export _SENTINEL_POLL=0.1
   export _SKIP_HEARTBEATS=1
+
+  export _EXIT_CODE_WAIT=0
   export _SENTINEL_MAX_WAIT=30
   export _KILL_ESCALATE_TIMEOUT=1
 
@@ -428,6 +430,7 @@ STUB
   MAX_PHASE_TIME=0
   # Unset _SKIP_HEARTBEATS so idle detection via heartbeats can work
   unset _SKIP_HEARTBEATS
+
   # Stub that emits a tool_use + tool_result (clearing tool_active) then goes silent
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
@@ -454,6 +457,7 @@ STUB
   VERIFY_IDLE_TIMEOUT=0
   VERIFY_TIMEOUT=3
   MAX_PHASE_TIME=0
+
   # Stub that emits output then goes silent
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
