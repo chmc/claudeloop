@@ -453,6 +453,35 @@ Disable auto-archive with `_CLAUDELOOP_NO_AUTO_ARCHIVE=1`.
 
 </details>
 
+<details>
+<summary><strong>Self-Improvement Metrics</strong></summary>
+
+When used with [Oxveil](https://github.com/chmc/oxveil), ClaudeLoop captures per-phase metrics for self-improvement analysis.
+
+**File:** `.claudeloop/lessons.md` (created at session start, updated after each phase)
+
+**Format:**
+
+```markdown
+## Phase 1: Setup project
+- retries: 0
+- duration: 45s
+- exit: success
+
+## Phase 2: Implement core
+- retries: 2
+- duration: 312s
+- exit: error
+```
+
+- **retries** — number of retry attempts (0 = first attempt succeeded)
+- **duration** — wall-clock time for the phase in seconds
+- **exit** — `success` or `error`
+
+The lessons file is included when runs are archived (`--archive`). Oxveil reads this file after session completion to offer self-improvement suggestions.
+
+</details>
+
 ## Documentation
 
 - [Quick Start Guide](QUICKSTART.md)
