@@ -253,29 +253,36 @@ rotate_phase_log() {
 }
 
 # Complete a phase successfully: update status, commit, refactor, write progress
-# Args: $1 - phase number
+# Args: $1 - phase number, $2 - duration in seconds
 _complete_phase() {
-  update_phase_status "$1" "completed"
-  auto_commit_changes "$1" "auto-commit after phase completion"
+  local _cp_phase="$1" _cp_duration="${2:-0}"
+  local _cp_title
+  _cp_title=$(get_phase_title "$_cp_phase")
+  update_phase_status "$_cp_phase" "completed"
+  lessons_write_phase "$_cp_phase" "$_cp_title" "$_cp_duration" "success"
+  auto_commit_changes "$_cp_phase" "auto-commit after phase completion"
   if [ "$REFACTOR_PHASES" = "true" ]; then
-    phase_set REFACTOR_STATUS "$1" "pending"
+    phase_set REFACTOR_STATUS "$_cp_phase" "pending"
   fi
   write_progress "$PROGRESS_FILE" "$PLAN_FILE"
   CURRENT_PHASE=""
-  run_refactor_if_needed "$1"
+  run_refactor_if_needed "$_cp_phase"
 }
 
 # Evaluate phase result: check exit code, log quality, and determine pass/fail
-# Args: $1 - phase_num, $2 - claude_exit, $3 - attempt, $4 - log_file, $5 - raw_log
+# Args: $1 - phase_num, $2 - claude_exit, $3 - attempt, $4 - log_file, $5 - raw_log, $6 - duration
 # Returns: 0 on success (phase completed), 1 on failure
 evaluate_phase_result() {
-  local _epr_phase="$1" _epr_exit="$2" _epr_attempt="$3" _epr_log="$4" _epr_raw="$5"
+  local _epr_phase="$1" _epr_exit="$2" _epr_attempt="$3" _epr_log="$4" _epr_raw="$5" _epr_duration="${6:-0}"
+  local _epr_title
+  _epr_title=$(get_phase_title "$_epr_phase")
 
   # Empty log means Claude produced no output — always a failure
   if is_empty_log "$_epr_log"; then
     update_fail_reason "$_epr_phase" "empty_log"
     print_error "Phase $_epr_phase: Claude produced no output (empty log)."
     update_phase_status "$_epr_phase" "failed"
+    lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
     return 1
@@ -287,6 +294,7 @@ evaluate_phase_result() {
       print_error "Phase $_epr_phase: Claude requested write permissions but none were granted."
       print_error "Re-run with --dangerously-skip-permissions to bypass permission prompts."
       update_phase_status "$_epr_phase" "failed"
+      lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -298,7 +306,7 @@ evaluate_phase_result() {
     if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
       log_verbose "execute_phase: phase $_epr_phase has no-changes signal file with successful session — accepting"
       print_success "Phase $_epr_phase completed (no code changes needed — signal file present)"
-      _complete_phase "$_epr_phase"
+      _complete_phase "$_epr_phase" "$_epr_duration"
       return 0
     fi
 
@@ -314,39 +322,41 @@ evaluate_phase_result() {
         print_warning "Phase $_epr_phase: Claude exited successfully but made no changes — treating as failed"
       fi
       update_phase_status "$_epr_phase" "failed"
+      lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
     fi
 
     log_verbose "execute_phase: phase $_epr_phase succeeded"
-    if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
+    if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log" "$_epr_duration"; then
       return 1
     fi
     print_success "Phase $_epr_phase completed successfully"
-    _complete_phase "$_epr_phase"
+    _complete_phase "$_epr_phase" "$_epr_duration"
     return 0
   else
     # Non-zero exit but signal file + successful session: accept as no-changes completion
     if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
       log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but signal file present with successful session — accepting"
       print_warning "Phase $_epr_phase: exited non-zero but signal file present — treating as completed"
-      _complete_phase "$_epr_phase"
+      _complete_phase "$_epr_phase" "$_epr_duration"
       return 0
     fi
     if has_successful_session "$_epr_log" && has_write_actions "$_epr_raw"; then
       log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but successful session detected"
-      if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log"; then
+      if ! run_adaptive_verification "$_epr_phase" "$_epr_attempt" "$_epr_log" "$_epr_duration"; then
         return 1
       fi
       print_warning "Phase $_epr_phase: Claude exited with code $_epr_exit but a successful session was detected — treating as completed."
-      _complete_phase "$_epr_phase"
+      _complete_phase "$_epr_phase" "$_epr_duration"
       return 0
     fi
     update_fail_reason "$_epr_phase" "no_session"
     log_verbose "execute_phase: phase $_epr_phase failed"
     print_error "Phase $_epr_phase failed"
     update_phase_status "$_epr_phase" "failed"
+    lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
     return 1
@@ -354,17 +364,19 @@ evaluate_phase_result() {
 }
 
 # Run adaptive verification based on retry tier (full/quick/skip)
-# Args: $1 - phase number, $2 - attempt number, $3 - log file path
+# Args: $1 - phase number, $2 - attempt number, $3 - log file path, $4 - duration
 # Returns: 0 if verification passes (or skipped), 1 on failure
 run_adaptive_verification() {
-  local _rav_phase="$1" _rav_attempt="$2" _rav_log="$3"
-  local _vmode
+  local _rav_phase="$1" _rav_attempt="$2" _rav_log="$3" _rav_duration="${4:-0}"
+  local _vmode _rav_title
+  _rav_title=$(get_phase_title "$_rav_phase")
   _vmode=$(verify_mode "$_rav_attempt" "$MAX_RETRIES")
   if [ "$_vmode" = "full" ]; then
     if ! verify_phase "$_rav_phase" "$_rav_log"; then
       update_fail_reason "$_rav_phase" "verification_failed"
       print_error "Phase $_rav_phase: verification failed"
       update_phase_status "$_rav_phase" "failed"
+      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -376,6 +388,7 @@ run_adaptive_verification() {
       update_fail_reason "$_rav_phase" "no_write_actions"
       print_error "Phase $_rav_phase: quick verification failed (no write actions)"
       update_phase_status "$_rav_phase" "failed"
+      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -388,6 +401,7 @@ run_adaptive_verification() {
       update_fail_reason "$_rav_phase" "no_write_actions"
       print_error "Phase $_rav_phase: verification failed (no write actions)"
       update_phase_status "$_rav_phase" "failed"
+      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -480,7 +494,7 @@ ${_git_context}"
 
   # Rotate log and evaluate result
   rotate_phase_log "$log_file" "$phase_num"
-  if ! evaluate_phase_result "$phase_num" "$claude_exit" "$attempt" "$log_file" "$raw_log"; then
+  if ! evaluate_phase_result "$phase_num" "$claude_exit" "$attempt" "$log_file" "$raw_log" "$duration"; then
     # Rollback partial edits on failure if Claude made write actions
     # Only reset tracked files outside .claudeloop/ (infrastructure files are not Claude's edits)
     # Don't use git clean (would remove untracked files like test state)

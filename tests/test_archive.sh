@@ -649,3 +649,22 @@ EOF
   _remaining=$(ls -A .claudeloop/ | grep -v '^archive$' || true)
   [ -z "$_remaining" ]
 }
+
+@test "archive_current_run: moves lessons.md to archive" {
+  _create_run_state
+  cat > .claudeloop/lessons.md << 'EOF'
+
+## Phase 1: Setup
+- retries: 0
+- duration: 45s
+- exit: success
+EOF
+
+  archive_current_run --internal
+
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -f "${archive_dir}lessons.md" ]
+  grep -q "Phase 1: Setup" "${archive_dir}lessons.md"
+  [ ! -f .claudeloop/lessons.md ]
+}

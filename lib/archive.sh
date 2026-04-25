@@ -86,7 +86,7 @@ archive_current_run() {
 
   # Check there is something to archive
   local _has_state=false
-  for _item in .claudeloop/PROGRESS.md .claudeloop/logs .claudeloop/state .claudeloop/signals .claudeloop/live.log; do
+  for _item in .claudeloop/PROGRESS.md .claudeloop/logs .claudeloop/state .claudeloop/signals .claudeloop/live.log .claudeloop/lessons.md; do
     if [ -e "$_item" ]; then
       _has_state=true
       break
@@ -124,6 +124,7 @@ archive_current_run() {
     .claudeloop/logs \
     .claudeloop/signals \
     .claudeloop/live.log \
+    .claudeloop/lessons.md \
     .claudeloop/ai-verify-reason.txt \
     .claudeloop/replay.html \
     .claudeloop/ai-parsed-plan.md; do

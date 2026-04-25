@@ -47,6 +47,7 @@ _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
 . "$SCRIPT_DIR/lib/execution.sh"
 . "$SCRIPT_DIR/lib/archive.sh"
 . "$SCRIPT_DIR/lib/recorder.sh"
+. "$SCRIPT_DIR/lib/lessons.sh"
 
 # Default configuration
 PLAN_FILE="PLAN.md"
@@ -979,6 +980,7 @@ apply_config_precedence() {
 init_live_log() {
   if [ -z "${LIVE_LOG:-}" ] && { ! $DRY_RUN || [ "$AI_PARSE" = "true" ]; }; then
     LIVE_LOG=".claudeloop/live.log"
+    mkdir -p "$(dirname "$LIVE_LOG")"
     if [ "$AI_PARSE_FEEDBACK" = "true" ]; then
       # Feedback mode: append to existing log (don't archive)
       touch "$LIVE_LOG"
@@ -1339,6 +1341,9 @@ main() {
 
   # Resume any interrupted/pending refactors from previous run
   resume_pending_refactors
+
+  # Initialize lessons capture for self-improvement mode
+  lessons_init
 
   # Execute phases
   local exit_code=0
