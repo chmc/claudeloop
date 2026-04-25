@@ -282,7 +282,7 @@ evaluate_phase_result() {
     update_fail_reason "$_epr_phase" "empty_log"
     print_error "Phase $_epr_phase: Claude produced no output (empty log)."
     update_phase_status "$_epr_phase" "failed"
-    lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
+    # lessons_write_phase deferred to final failure (main loop handles max retries)
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
     return 1
@@ -294,7 +294,7 @@ evaluate_phase_result() {
       print_error "Phase $_epr_phase: Claude requested write permissions but none were granted."
       print_error "Re-run with --dangerously-skip-permissions to bypass permission prompts."
       update_phase_status "$_epr_phase" "failed"
-      lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
+      # lessons_write_phase deferred to final failure
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -322,7 +322,7 @@ evaluate_phase_result() {
         print_warning "Phase $_epr_phase: Claude exited successfully but made no changes — treating as failed"
       fi
       update_phase_status "$_epr_phase" "failed"
-      lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
+      # lessons_write_phase deferred to final failure
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -356,7 +356,7 @@ evaluate_phase_result() {
     log_verbose "execute_phase: phase $_epr_phase failed"
     print_error "Phase $_epr_phase failed"
     update_phase_status "$_epr_phase" "failed"
-    lessons_write_phase "$_epr_phase" "$_epr_title" "$_epr_duration" "error"
+    # lessons_write_phase deferred to final failure
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
     CURRENT_PHASE=""
     return 1
@@ -376,7 +376,7 @@ run_adaptive_verification() {
       update_fail_reason "$_rav_phase" "verification_failed"
       print_error "Phase $_rav_phase: verification failed"
       update_phase_status "$_rav_phase" "failed"
-      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
+      # lessons_write_phase deferred to final failure
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -388,7 +388,7 @@ run_adaptive_verification() {
       update_fail_reason "$_rav_phase" "no_write_actions"
       print_error "Phase $_rav_phase: quick verification failed (no write actions)"
       update_phase_status "$_rav_phase" "failed"
-      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
+      # lessons_write_phase deferred to final failure
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1
@@ -401,7 +401,7 @@ run_adaptive_verification() {
       update_fail_reason "$_rav_phase" "no_write_actions"
       print_error "Phase $_rav_phase: verification failed (no write actions)"
       update_phase_status "$_rav_phase" "failed"
-      lessons_write_phase "$_rav_phase" "$_rav_title" "$_rav_duration" "error"
+      # lessons_write_phase deferred to final failure
       write_progress "$PROGRESS_FILE" "$PLAN_FILE"
       CURRENT_PHASE=""
       return 1

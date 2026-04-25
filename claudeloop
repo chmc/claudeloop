@@ -857,6 +857,7 @@ main_loop() {
         continue
       else
         print_error "Phase $next_phase failed after ${MAX_RETRIES} attempts"
+        lessons_write_final_failure "$next_phase"
         return 1
       fi
     fi

@@ -39,3 +39,25 @@ lessons_write_phase() {
 - exit: $_exit
 EOF
 }
+
+# Write final failure lesson for a phase (called when max retries exceeded)
+# Args: $1 - phase number
+#       $2 - total duration across all attempts (optional, defaults to 0)
+lessons_write_final_failure() {
+  local _phase="$1" _duration="${2:-0}"
+  local _title _attempts _retries
+
+  _title=$(get_phase_title "$_phase")
+  _attempts=$(get_phase_attempts "$_phase")
+  case "$_attempts" in ''|*[!0-9]*) _attempts=1 ;; esac
+  _retries=$((_attempts - 1))
+  [ "$_retries" -lt 0 ] && _retries=0
+
+  cat >> "$LESSONS_FILE" << EOF
+
+## Phase $_phase: $_title
+- retries: $_retries
+- duration: ${_duration}s
+- exit: error
+EOF
+}
