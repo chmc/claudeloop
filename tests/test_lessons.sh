@@ -174,3 +174,94 @@ setup() {
 
   grep -q "## Phase 1: Setup: Initialize & Configure" .claudeloop/lessons.md
 }
+
+# =============================================================================
+# lessons_write_phase - fail_reason and summary
+# =============================================================================
+
+@test "lessons_write_phase: includes fail_reason when retries > 0" {
+  lessons_init
+  phase_set ATTEMPTS "1" "3"
+  phase_set FAIL_REASON "1" "verification_failed"
+
+  lessons_write_phase "1" "Build" 180 "success"
+
+  grep -q "fail_reason: verification_failed" .claudeloop/lessons.md
+}
+
+@test "lessons_write_phase: omits fail_reason when retries = 0" {
+  lessons_init
+  phase_set ATTEMPTS "1" "1"
+  phase_set FAIL_REASON "1" "verification_failed"
+
+  lessons_write_phase "1" "Build" 45 "success"
+
+  ! grep -q "fail_reason" .claudeloop/lessons.md
+}
+
+@test "lessons_write_phase: includes summary when provided" {
+  lessons_init
+  phase_set ATTEMPTS "1" "1"
+
+  lessons_write_phase "1" "Setup" 45 "success" "Learned caching improves perf"
+
+  grep -q "summary: Learned caching improves perf" .claudeloop/lessons.md
+}
+
+@test "lessons_write_phase: omits summary when not provided" {
+  lessons_init
+  phase_set ATTEMPTS "1" "1"
+
+  lessons_write_phase "1" "Setup" 45 "success"
+
+  ! grep -q "summary" .claudeloop/lessons.md
+}
+
+# =============================================================================
+# extract_lessons_summary
+# =============================================================================
+
+@test "extract_lessons_summary: extracts quoted summary from log" {
+  mkdir -p .claudeloop/logs
+  echo 'Some output' > .claudeloop/logs/phase-1.log
+  echo 'LESSONS_SUMMARY: "Learned that X improves Y"' >> .claudeloop/logs/phase-1.log
+  echo 'More output' >> .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "Learned that X improves Y" ]
+}
+
+@test "extract_lessons_summary: returns last occurrence when multiple" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: "First learning"' > .claudeloop/logs/phase-1.log
+  echo 'LESSONS_SUMMARY: "Second learning"' >> .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "Second learning" ]
+}
+
+@test "extract_lessons_summary: returns empty when no marker" {
+  mkdir -p .claudeloop/logs
+  echo 'Some output without marker' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ -z "$result" ]
+}
+
+@test "extract_lessons_summary: returns empty for nonexistent file" {
+  result=$(extract_lessons_summary ".claudeloop/logs/nonexistent.log")
+
+  [ -z "$result" ]
+}
+
+@test "extract_lessons_summary: extracts single-quoted summary" {
+  mkdir -p .claudeloop/logs
+  echo "LESSONS_SUMMARY: 'Learned that X improves Y'" > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "Learned that X improves Y" ]
+}

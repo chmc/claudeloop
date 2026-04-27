@@ -467,16 +467,35 @@ When used with [Oxveil](https://github.com/chmc/oxveil), ClaudeLoop captures per
 - retries: 0
 - duration: 45s
 - exit: success
+- summary: Established project structure with TypeScript config
 
 ## Phase 2: Implement core
 - retries: 2
 - duration: 312s
-- exit: error
+- exit: success
+- fail_reason: verification_failed
+- summary: Had to retry due to missing edge case handling in parser
 ```
+
+**Fields:**
 
 - **retries** — number of retry attempts (0 = first attempt succeeded)
 - **duration** — wall-clock time for the phase in seconds
 - **exit** — `success` or `error`
+- **fail_reason** — (optional) why the phase needed retries: `verification_failed`, `trapped_tool_calls`, `empty_log`, `no_session`
+- **summary** — (optional) Claude's one-sentence learning from the phase
+
+**LESSONS_SUMMARY Marker:**
+
+Each phase prompt instructs Claude to end its response with a summary of what was learned:
+
+```
+LESSONS_SUMMARY: "Learned that caching improves performance by 50%"
+```
+
+ClaudeLoop extracts this marker from the phase log and records it in lessons.md. This gives the self-improvement Claude richer context about decisions and pitfalls, not just timing metrics.
+
+**Note:** The summary text cannot contain quote characters (`"` or `'`). The extraction regex uses a simple delimiter match.
 
 The lessons file is included when runs are archived (`--archive`). Oxveil reads this file after session completion to offer self-improvement suggestions.
 

@@ -10,12 +10,18 @@ build_phase_prompt() {
   local title="$3"
   local description="$4"
   local plan_file="$5"
-  local prompt
+  local prompt lessons_suffix
 
   if [ ! -s "$template_file" ]; then
     printf 'Error: phase prompt template produced empty output: %s\n' "$template_file" >&2
     return 1
   fi
+
+  lessons_suffix='
+
+## Lessons Summary
+When you complete this phase, end your final response with:
+LESSONS_SUMMARY: "<one sentence describing what you learned, a key decision you made, or a pitfall you encountered>"'
 
   if grep -qF '{{' "$template_file"; then
     # Substitution mode.
@@ -39,10 +45,11 @@ build_phase_prompt() {
         line = replace_all(line, "{{PLAN_FILE}}",         ENVIRON["PLAN_FILE"])
         print line
       }' "$template_file")
+    prompt="${prompt}${lessons_suffix}"
   else
     # Append mode: attach phase data block after template content.
-    prompt=$(cat "$template_file"; printf '\n---\n## Phase Data\n- Phase Number: %s\n- Phase Title: %s\n- Plan File: %s\n\n### Description\n%s\n' \
-      "$phase_num" "$title" "$plan_file" "$description")
+    prompt=$(cat "$template_file"; printf '\n---\n## Phase Data\n- Phase Number: %s\n- Phase Title: %s\n- Plan File: %s\n\n### Description\n%s\n%s' \
+      "$phase_num" "$title" "$plan_file" "$description" "$lessons_suffix")
   fi
 
   if [ -z "$prompt" ]; then
@@ -91,7 +98,12 @@ Implement the above phase completely. Make sure to:
 1. Read relevant existing code
 2. Implement required changes
 3. Test your implementation thoroughly
-4. Commit your changes when complete"
+4. Commit your changes when complete
+5. End your response with a LESSONS_SUMMARY line (see format below)
+
+## Lessons Summary
+When you complete this phase, end your final response with:
+LESSONS_SUMMARY: \"<one sentence describing what you learned, a key decision you made, or a pitfall you encountered>\""
 }
 
 # Apply retry strategy: archive log, build retry context, optionally replace prompt

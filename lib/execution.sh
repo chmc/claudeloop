@@ -252,14 +252,22 @@ rotate_phase_log() {
   fi
 }
 
+# Get path to phase log file
+# Args: $1 - phase number
+get_phase_log_path() {
+  printf '.claudeloop/logs/phase-%s.log' "$1"
+}
+
 # Complete a phase successfully: update status, commit, refactor, write progress
 # Args: $1 - phase number, $2 - duration in seconds
 _complete_phase() {
   local _cp_phase="$1" _cp_duration="${2:-0}"
-  local _cp_title
+  local _cp_title _cp_log _cp_summary
   _cp_title=$(get_phase_title "$_cp_phase")
+  _cp_log=$(get_phase_log_path "$_cp_phase")
+  _cp_summary=$(extract_lessons_summary "$_cp_log")
   update_phase_status "$_cp_phase" "completed"
-  lessons_write_phase "$_cp_phase" "$_cp_title" "$_cp_duration" "success"
+  lessons_write_phase "$_cp_phase" "$_cp_title" "$_cp_duration" "success" "$_cp_summary"
   auto_commit_changes "$_cp_phase" "auto-commit after phase completion"
   if [ "$REFACTOR_PHASES" = "true" ]; then
     phase_set REFACTOR_STATUS "$_cp_phase" "pending"
