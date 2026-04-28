@@ -199,18 +199,19 @@ run_parallel() {
         completed=$((completed + 1))
         running=$((running - 1))
         last_output=$SECONDS
+        wait "$pid" 2>/dev/null  # Reap zombie
       fi
     done
 
-    # Heartbeat every 10s if no completions
+    # Heartbeat every 10s if no completions (stderr is unbuffered)
     if [ $((SECONDS - last_output)) -ge 10 ]; then
-      printf '.'
+      printf '.' >&2
       last_output=$SECONDS
     fi
 
     [ $completed -lt $total ] && sleep 1
   done
-  echo  # newline after any dots
+  echo >&2  # newline after any dots
 
   # Print full output for failures
   if [ ${#failed_files[@]} -gt 0 ]; then
