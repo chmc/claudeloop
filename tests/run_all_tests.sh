@@ -131,64 +131,86 @@ run_serial() {
 run_parallel() {
   local tmp_dir
   tmp_dir=$(mktemp -d)
-  local pids=()
-  local files=()
 
   # Throttle concurrency (override with MAX_JOBS=N). Default 8: tests are I/O-bound
   # (git ops, process spawning), not CPU-bound, so exceeding core count is safe.
   local max_jobs
   max_jobs=${MAX_JOBS:-8}
 
-  # Launch test files with throttled concurrency
-  for test_file in "${TEST_FILES[@]}"; do
-    # Wait for a slot before launching
-    while [ "$(jobs -r | wc -l)" -ge "$max_jobs" ]; do
-      wait -n 2>/dev/null || sleep 0.2
-    done
-    local out_file="$tmp_dir/${test_file}.out"
-    local rc_file="$tmp_dir/${test_file}.rc"
-    local time_file="$tmp_dir/${test_file}.time"
-    (
-      SECONDS=0
-      $BATS_CMD -T "$test_file" > "$out_file" 2>&1
-      echo $? > "$rc_file"
-      echo $SECONDS > "$time_file"
-    ) &
-    pids+=($!)
-    files+=("$test_file")
-  done
-
-  echo -e "${BLUE}Launched ${#pids[@]} test files (max $max_jobs concurrent)...${NC}"
-  echo
-
-  # Wait for all jobs
-  for pid in "${pids[@]}"; do
-    wait "$pid" 2>/dev/null || true
-  done
-
-  # Collect results
+  # Track state
+  local remaining_files=("${TEST_FILES[@]}")
+  local pids=()
+  local files=()
   local failed=0
   local failed_files=()
   local timing_data=()
-  for test_file in "${files[@]}"; do
-    local rc_file="$tmp_dir/${test_file}.rc"
-    local out_file="$tmp_dir/${test_file}.out"
-    local time_file="$tmp_dir/${test_file}.time"
-    local rc=1
-    local duration=0
-    [ -f "$rc_file" ] && rc=$(cat "$rc_file")
-    [ -f "$time_file" ] && duration=$(cat "$time_file")
-    local slow_marker=""
-    [ "$duration" -ge "$SLOW_THRESHOLD" ] && slow_marker=" ${YELLOW}⚠ SLOW${NC}"
-    if [ "$rc" -eq 0 ]; then
-      echo -e "${GREEN}✓ $test_file${NC} (${duration}s)${slow_marker}"
-    else
-      echo -e "${RED}✗ $test_file${NC} (${duration}s)${slow_marker}"
-      failed=$((failed + 1))
-      failed_files+=("$test_file")
+  local completed=0
+  local total=${#TEST_FILES[@]}
+  local running=0
+  local last_output=$SECONDS
+
+  echo -e "${BLUE}Running $total test files (max $max_jobs concurrent)...${NC}"
+  echo
+
+  # Single loop: launch + monitor
+  while [ $completed -lt $total ]; do
+    # Launch new jobs if slots available
+    while [ $running -lt $max_jobs ] && [ ${#remaining_files[@]} -gt 0 ]; do
+      local test_file="${remaining_files[0]}"
+      remaining_files=("${remaining_files[@]:1}")
+      local out_file="$tmp_dir/${test_file}.out"
+      local rc_file="$tmp_dir/${test_file}.rc"
+      local time_file="$tmp_dir/${test_file}.time"
+      (
+        SECONDS=0
+        $BATS_CMD -T "$test_file" > "$out_file" 2>&1
+        echo $? > "$rc_file"
+        echo $SECONDS > "$time_file"
+      ) &
+      pids+=($!)
+      files+=("$test_file")
+      running=$((running + 1))
+    done
+
+    # Check for completions
+    for i in "${!pids[@]}"; do
+      local pid="${pids[$i]}"
+      [ -z "$pid" ] && continue
+      if ! kill -0 "$pid" 2>/dev/null; then
+        # Job finished - print result immediately
+        local test_file="${files[$i]}"
+        local rc_file="$tmp_dir/${test_file}.rc"
+        local time_file="$tmp_dir/${test_file}.time"
+        local rc=1
+        local duration=0
+        [ -f "$rc_file" ] && rc=$(cat "$rc_file")
+        [ -f "$time_file" ] && duration=$(cat "$time_file")
+        local slow_marker=""
+        [ "$duration" -ge "$SLOW_THRESHOLD" ] && slow_marker=" ${YELLOW}⚠ SLOW${NC}"
+        if [ "$rc" -eq 0 ]; then
+          echo -e "${GREEN}✓ $test_file${NC} (${duration}s)${slow_marker}"
+        else
+          echo -e "${RED}✗ $test_file${NC} (${duration}s)${slow_marker}"
+          failed=$((failed + 1))
+          failed_files+=("$test_file")
+        fi
+        timing_data+=("$(printf '%06d %s' "$duration" "$test_file")")
+        pids[$i]=""
+        completed=$((completed + 1))
+        running=$((running - 1))
+        last_output=$SECONDS
+      fi
+    done
+
+    # Heartbeat every 10s if no completions
+    if [ $((SECONDS - last_output)) -ge 10 ]; then
+      printf '.'
+      last_output=$SECONDS
     fi
-    timing_data+=("$(printf '%06d %s' "$duration" "$test_file")")
+
+    [ $completed -lt $total ] && sleep 1
   done
+  echo  # newline after any dots
 
   # Print full output for failures
   if [ ${#failed_files[@]} -gt 0 ]; then
