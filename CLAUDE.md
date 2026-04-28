@@ -34,6 +34,18 @@ Packaging triad: `.github/workflows/release.yml` + `install.sh` + `tests/test_in
 
 See `/arch` for full reference (data model, libraries, execution flow, field registry).
 
+## Running Tests (CRITICAL)
+
+**NEVER** use redirects or pipes when running the test suite:
+- ❌ `./tests/run_all_tests.sh 2>&1` — WRONG, causes 180s timeout
+- ❌ `./tests/run_all_tests.sh | tail` — WRONG, causes 180s timeout
+- ❌ `./tests/run_all_tests.sh 2>&1 | head` — WRONG, causes 180s timeout
+- ✅ `./tests/run_all_tests.sh` — CORRECT, exactly this, nothing else
+
+Why: Heartbeats go to stderr. Any redirect (`2>&1`) merges them into buffered stdout, hiding progress from Claude Code and triggering "connection dead" warnings.
+
+**For full test suite**: Use Bash tool with `run_in_background: true`. You'll be notified when complete, then read the output file for results. This avoids the 180s timeout entirely.
+
 ## Testing traps
 
 - TDD (mandatory): write failing tests first, verify fail, implement, verify pass, run suite. See `/testing`.
