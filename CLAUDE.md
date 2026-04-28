@@ -12,6 +12,8 @@
 
 ## Planning
 
+- Plan mode = read-only: no external changes (API calls, GitHub mutations, file edits) even if user confirms "y". Exit plan mode first, or document in plan and wait for approval.
+
 Exploration must produce a constraints brief:
 1. Conventions — patterns, error handling, naming. Cite files+lines.
 2. Touch points — every function/variable/file affected. Include signatures+callers.
