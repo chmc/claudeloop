@@ -21,3 +21,10 @@ A `_CLAUDELOOP_NO_AUTO_ARCHIVE=1` env var disables auto-archive for tests that v
 - **Positive:** Auto-archive on completion keeps the working directory clean for the next run.
 - **Negative:** Slightly more disk usage in `.claudeloop/archive/` (mitigated: users can delete old archives).
 - **Negative:** Integration tests need `_CLAUDELOOP_NO_AUTO_ARCHIVE=1` to prevent auto-archive from moving PROGRESS.md.
+
+## Implementation
+
+- **Primary:** `lib/archive.sh`
+- **Tests:** `tests/test_archive.sh`
+- **CLI flags:** `--archive`, `--list-archives`, `--restore <name>`
+- **Key functions:** `archive_current_run`, `list_archives`, `restore_archive`

@@ -32,3 +32,9 @@ The Bash 3.2 compatibility requirement (macOS ships an old Bash due to GPLv3 lic
 - Timing-based approach is less precise than event-driven alternatives
 - Heartbeat interval is a trade-off between responsiveness and noise
 - Platform-specific workarounds (Bash 3.2) add conditional logic
+
+## Implementation
+
+- **Primary:** `lib/ui.sh`
+- **Tests:** `tests/test_ui.sh`
+- **Key functions:** `inject_heartbeats`, `update_spinner`

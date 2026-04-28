@@ -39,3 +39,10 @@ Key design choices:
 - Verification is heuristic — same model family reviewing its own work
 - Large plans (500+ lines) may degrade AI quality or hit context limits
 - No model selection flag — uses default claude model
+
+## Implementation
+
+- **Primary:** `lib/ai_parser.sh`
+- **Depends on:** `lib/parser.sh` (for `phase_to_var`)
+- **Tests:** `tests/test_ai_parser.sh`
+- **CLI flag:** `--ai-parse`, `--granularity`

@@ -39,3 +39,10 @@ Implementation: `lib/verify.sh` contains `verify_phase()`, called from `execute_
 - Doubles API calls per phase when enabled (one for execution, one for verification)
 - Adds latency to each phase completion
 - Verdict keywords are vanishingly unlikely to appear in tool output but theoretically possible (acceptable false positive risk)
+
+## Implementation
+
+- **Primary:** `lib/verify.sh`
+- **Tests:** `tests/test_verify.sh`
+- **CLI flag:** `--verify`
+- **Key functions:** `verify_phase`, `extract_verdict`

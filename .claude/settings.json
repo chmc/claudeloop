@@ -4,5 +4,18 @@
   },
   "env": {
     "DISABLE_AUTOUPDATER": "1"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Glob|Grep|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: STOP. Before exploring, read graphify-out/GRAPH_REPORT.md. For Agent spawns: include graphify context in the subagent prompt or use graphify query/path/explain instead of raw exploration.\"}}' || true"
+          }
+        ]
+      }
+    ]
   }
 }
