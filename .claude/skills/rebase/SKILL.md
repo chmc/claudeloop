@@ -47,15 +47,16 @@ Fast-forwards `main` to match `origin/beta`, then pushes.
 3. **Hard block** if worktree is dirty (`git status --porcelain` is non-empty). Tell user to commit or stash first.
 4. **Safety check**: `git merge-base --is-ancestor origin/main origin/beta`. If false, main has diverged — tell user to run `/rebase sync` first, restore original branch, and stop.
 5. Check if already up-to-date: `git merge-base --is-ancestor origin/beta origin/main`. If yes, inform user and stop.
-6. `git checkout main`
-7. Check for unpushed local commits: `git log origin/main..main --oneline`. If any exist, **warn and confirm** — these commits will be lost by the reset in step 8.
-8. `git reset --hard origin/main` (sync local to remote state)
-9. Show commits being promoted: `git log origin/main..origin/beta --oneline`
-10. `git merge --ff-only origin/beta`
-11. `git push origin main` (plain push — no force needed for fast-forward; detects races)
-12. **On push failure**: "Someone pushed to main between fetch and push. Re-run `/rebase promote`." Restore original branch and stop.
-13. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on main)
-14. **Post-promote reminder**: "Consider running `/release stable` if this is a release-worthy promotion."
+6. Check for unpushed local commits on beta: `git log origin/beta..beta --oneline`. If any exist, **warn and block** — these commits won't be promoted. Tell user to push beta first or run `/rebase sync`.
+7. `git checkout main`
+8. Check for unpushed local commits: `git log origin/main..main --oneline`. If any exist, **warn and confirm** — these commits will be lost by the reset in step 9.
+9. `git reset --hard origin/main` (sync local to remote state)
+10. Show commits being promoted: `git log origin/main..origin/beta --oneline`
+11. `git merge --ff-only origin/beta`
+12. `git push origin main` (plain push — no force needed for fast-forward; detects races)
+13. **On push failure**: "Someone pushed to main between fetch and push. Re-run `/rebase promote`." Restore original branch and stop.
+14. Restore: `git checkout "$ORIGINAL_BRANCH"` (skip if user was already on main)
+15. **Post-promote reminder**: "Consider running `/release stable` if this is a release-worthy promotion."
 
 ## Error handling
 
