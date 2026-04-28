@@ -35,3 +35,10 @@ The progress file (`PROGRESS.md`) serves as the durable checkpoint, written afte
 - Brief window between phase completion and progress write where a kill could lose one phase's status
 - Signal handling in shell is inherently racy — nested signals can cause partial state writes
 - The in-progress phase is reset to pending on interrupt, so its work must be redone even if nearly complete
+
+## Implementation
+
+- **Primary:** `lib/progress.sh`
+- **Tests:** `tests/test_progress.sh`
+- **CLI flag:** `--continue`
+- **Key functions:** `handle_interrupt`, `write_progress`, `read_progress`, `find_next_phase`

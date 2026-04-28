@@ -38,3 +38,10 @@ Sourced after `parser.sh` (needs `phase_to_var`), before all other libraries.
 **Negative:**
 - Extra function call + subshell per access (~200ms overhead for 20 phases × 10 fields) — negligible vs Claude invocation time
 - All test files must source `phase_state.sh` after `parser.sh`
+
+## Implementation
+
+- **Primary:** `lib/phase_state.sh`
+- **Depends on:** `lib/parser.sh` (for `phase_to_var`)
+- **Tests:** `tests/test_phase_state.sh`
+- **Key functions:** `phase_get`, `phase_set`, `reset_phase_for_retry`, `reset_phase_full`

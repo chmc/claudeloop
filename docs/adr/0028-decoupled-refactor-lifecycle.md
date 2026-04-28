@@ -46,3 +46,11 @@ Decouple refactoring from phase completion by treating it as a post-completion s
 - SIGKILL after successful refactor but before `write_progress` causes a rollback + retry on resume (wasteful but safe/idempotent)
 - `--recover-progress` destroys refactor state (acceptable: explicit user action, refactor re-runs on next `--refactor`)
 - Slightly more complex progress file format (two new optional fields per phase)
+
+## Implementation
+
+- **Primary:** `lib/refactor.sh`
+- **Depends on:** `lib/progress.sh`, `lib/phase_state.sh`
+- **Tests:** `tests/test_refactor.sh`
+- **CLI flag:** `--refactor`
+- **Key functions:** `refactor_phase`, `resume_pending_refactors`, `verify_refactor`

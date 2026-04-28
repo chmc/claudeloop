@@ -5,67 +5,16 @@
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   },
-  "plansDirectory": "./.claude/plans",
-  "permissions": {
-    "allow": [
-      "Edit(.claude/plans/**)",
-      "Write(.claude/plans/**)",
-      "Bash(touch *.claude/workflow-state/*)",
-      "Bash(rm *.claude/workflow-state/*)",
-      "Bash(rm -f *.claude/workflow-state/*)",
-      "Bash(mkdir -p *.claude/workflow-state*)",
-      "Bash(echo * > *.claude/workflow-state/*)",
-      "Bash(cat *.claude/workflow-state/*)",
-      "Bash(ls *.claude/workflow-state*)",
-      "Bash(mkdir -p *.claude/plans*)",
-      "Bash(rm *.claude/plans/*)"
-    ]
-  },
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "TaskCreate",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tasks-created.sh"
-        }]
-      }
-    ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/branch-awareness.sh"
-        }]
-      },
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/planning-checklist.sh"
-        }]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/plan-to-tasks.sh"
-        }]
-      },
-      {
-        "matcher": "Edit",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-enforcement.sh"
-        }]
-      },
-      {
-        "matcher": "TaskUpdate",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/completion-bundle.sh"
-        }]
+        "matcher": "Glob|Grep|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f graphify-out/graph.json ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: STOP. Before exploring, read graphify-out/GRAPH_REPORT.md. For Agent spawns: include graphify context in the subagent prompt or use graphify query/path/explain instead of raw exploration.\"}}' || true"
+          }
+        ]
       }
     ]
   }

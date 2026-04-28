@@ -40,3 +40,9 @@ The `detect_dependency_cycles` function runs during `parse_plan` and reports the
 - String-based set membership is O(n) per lookup instead of O(1) for hash-based sets
 - Adequate for expected plan sizes (tens of phases) but would not scale to thousands
 - Space-separated strings can't handle values containing spaces (phase numbers don't, so this is acceptable)
+
+## Implementation
+
+- **Primary:** `lib/dependencies.sh`
+- **Tests:** `tests/test_dependencies.sh`
+- **Key functions:** `detect_dependency_cycles`, `resolve_dependencies`

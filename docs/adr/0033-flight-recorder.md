@@ -39,3 +39,11 @@ The HTML template (`assets/replay-template.html`) uses vanilla JS with named ren
 - JSON extraction adds ~100ms to each `write_progress()` call
 - Template maintenance requires inline CSS/JS (no tooling support)
 - Browser refresh required to see updates (no WebSocket/auto-reload)
+
+## Implementation
+
+- **Primary:** `lib/recorder.sh`
+- **Template:** `assets/replay-template.html`
+- **Spec:** `docs/replay-spec.md`
+- **Tests:** `tests/test_recorder.sh`
+- **Key functions:** `generate_replay`, `extract_phase_data`, `extract_tool_usage`

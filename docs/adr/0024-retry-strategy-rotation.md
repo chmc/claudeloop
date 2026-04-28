@@ -18,3 +18,9 @@ Three-tier retry strategy rotation (standard → stripped → targeted), git sta
 ## Consequences
 - Positive: Better success rates for weaker/non-Claude models; reduced wasted time from verification on hopeless retries; git state saves tool calls on all attempts; focused error context reduces noise
 - Negative: Later retry tiers give less context, which could theoretically hurt strong models on complex tasks (mitigated: strong models rarely reach those tiers)
+
+## Implementation
+
+- **Primary:** `lib/retry.sh`
+- **Tests:** `tests/test_retry.sh`
+- **Key functions:** `get_retry_tier`, `build_retry_prompt`, `calculate_backoff`
