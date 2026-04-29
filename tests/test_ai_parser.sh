@@ -9,10 +9,12 @@ setup() {
   mkdir -p "$TEST_DIR/bin" "$TEST_DIR/.claudeloop"
   export LIVE_LOG=""
   export SIMPLE_MODE=false
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
   . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   . "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
   . "${BATS_TEST_DIRNAME}/../lib/stream_processor.sh"
+  . "${BATS_TEST_DIRNAME}/../lib/provider.sh"
   . "${BATS_TEST_DIRNAME}/../lib/ai_parser.sh"
 
   # Create text_to_stream_json helper: converts plain text to stream-json events
@@ -957,6 +959,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
@@ -1003,6 +1007,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
@@ -1064,6 +1070,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
@@ -1112,6 +1120,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
@@ -1158,6 +1168,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
     '
@@ -1880,6 +1892,8 @@ MOCK
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "e\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
@@ -2070,6 +2084,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'"
       echo "VERDICT=$_AI_VERIFY_VERDICT"
@@ -2116,6 +2132,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
       echo "VERDICT=$_AI_VERIFY_VERDICT"
@@ -2162,6 +2180,8 @@ EOF
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       ai_parse_and_verify "'"$TEST_DIR/plan.md"'" "tasks" "'"$TEST_DIR/.claudeloop"'" < "'"$TEST_DIR/user_input"'"
       echo "REASON=$_AI_VERIFY_REASON"
@@ -2223,6 +2243,8 @@ MOCK
       . "'"$script_dir"'/lib/parser.sh"
       . "'"$script_dir"'/lib/phase_state.sh"
       . "'"$script_dir"'/lib/stream_processor.sh"
+      SCRIPT_DIR="'"$script_dir"'"
+      . "'"$script_dir"'/lib/provider.sh"
       . "'"$script_dir"'/lib/ai_parser.sh"
       printf "e\n" | confirm_ai_plan "'"$TEST_DIR/parsed.md"'"
     '
