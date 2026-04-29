@@ -9,7 +9,11 @@ setup() {
   TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
 
+  # SCRIPT_DIR needed by provider.sh
+  SCRIPT_DIR="$CLAUDELOOP_DIR"
+
   # Source libraries in dependency order
+  . "$CLAUDELOOP_DIR/lib/provider.sh"
   . "$CLAUDELOOP_DIR/lib/parser.sh"
   . "$CLAUDELOOP_DIR/lib/phase_state.sh"
   . "$CLAUDELOOP_DIR/lib/progress.sh"
