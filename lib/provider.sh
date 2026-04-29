@@ -38,3 +38,8 @@ provider_verdict_pass_keyword() {
 provider_verdict_fail_keyword() {
   _claude_verdict_fail_keyword
 }
+
+# Returns permission protocol: "stdio" (Claude FD7), "http" (OpenCode API), "none"
+provider_permission_protocol() {
+  _claude_permission_protocol
+}
