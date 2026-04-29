@@ -1230,3 +1230,49 @@ teardown() { :; }
   run escalate_strategy "standard" "permission_denied" 5
   [ "$output" = "targeted" ]
 }
+
+# --- graphify-first ordering helpers ---
+
+@test "has_graphify_context_violation: returns 0 when explore occurs before graph context" {
+  cat > "$_log" << 'EOF'
+{"type":"tool_use","name":"Glob","input":{"pattern":"lib/**/*.sh"}}
+{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
+EOF
+  run has_graphify_context_violation "$_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "has_graphify_context_violation: returns 1 when graph context occurs before explore" {
+  cat > "$_log" << 'EOF'
+{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
+{"type":"tool_use","name":"Grep","input":{"pattern":"phase"}}
+EOF
+  run has_graphify_context_violation "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "has_graphify_context_violation: returns 1 when there is no exploration" {
+  cat > "$_log" << 'EOF'
+{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
+{"type":"tool_use","name":"Read","input":{"file_path":"lib/retry.sh"}}
+EOF
+  run has_graphify_context_violation "$_log"
+  [ "$status" -eq 1 ]
+}
+
+@test "graphify_context_seq: detects graphify query command as context" {
+  cat > "$_log" << 'EOF'
+{"type":"tool_use","name":"Bash","input":{"command":"graphify query \"where is provider\""}}
+{"type":"tool_use","name":"Task","input":{"description":"scan"}}
+EOF
+  run graphify_context_seq "$_log"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "fail_reason_hint: graphify_missing_context returns graph-first guidance" {
+  run fail_reason_hint "graphify_missing_context"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  echo "$output" | grep -qi "graphify\|GRAPH_REPORT\|read"
+}

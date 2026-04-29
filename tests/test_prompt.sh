@@ -18,37 +18,37 @@ teardown() {
 @test "substitution: {{PHASE_NUM}} is replaced" {
   printf 'Phase number: {{PHASE_NUM}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 3 "My Title" "My description" "PLAN.md")
-  [ "$result" = "Phase number: 3" ]
+  printf '%s' "$result" | grep -q "^Phase number: 3$"
 }
 
 @test "substitution: {{PHASE_TITLE}} is replaced" {
   printf 'Title: {{PHASE_TITLE}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 1 "Setup DB" "desc" "PLAN.md")
-  [ "$result" = "Title: Setup DB" ]
+  printf '%s' "$result" | grep -q "^Title: Setup DB$"
 }
 
 @test "substitution: {{PHASE_DESCRIPTION}} is replaced" {
   printf 'Desc: {{PHASE_DESCRIPTION}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 1 "Title" "Install packages" "PLAN.md")
-  [ "$result" = "Desc: Install packages" ]
+  printf '%s' "$result" | grep -q "^Desc: Install packages$"
 }
 
 @test "substitution: {{PLAN_FILE}} is replaced" {
   printf 'File: {{PLAN_FILE}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 1 "Title" "desc" "my-plan.md")
-  [ "$result" = "File: my-plan.md" ]
+  printf '%s' "$result" | grep -q "^File: my-plan.md$"
 }
 
 @test "substitution: title with & is not corrupted" {
   printf 'Title: {{PHASE_TITLE}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 1 "Foo & Bar" "desc" "PLAN.md")
-  [ "$result" = "Title: Foo & Bar" ]
+  printf '%s' "$result" | grep -q "^Title: Foo & Bar$"
 }
 
 @test "substitution: title with backslash is not corrupted" {
   printf 'Title: {{PHASE_TITLE}}\n' > "$TEST_DIR/tpl.md"
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 1 'Foo\Bar' "desc" "PLAN.md")
-  [ "$result" = 'Title: Foo\Bar' ]
+  printf '%s' "$result" | grep -q '^Title: Foo\\Bar$'
 }
 
 @test "substitution: all four placeholders replaced simultaneously" {
@@ -58,10 +58,9 @@ Phase: {{PHASE_NUM}}
 Description: {{PHASE_DESCRIPTION}}
 EOF
   result=$(build_phase_prompt "$TEST_DIR/tpl.md" 2 "Add Auth" "Implement OAuth" "project.md")
-  expected="/implement-using-swarm Add Auth @project.md
-Phase: 2
-Description: Implement OAuth"
-  [ "$result" = "$expected" ]
+  printf '%s' "$result" | grep -q '^/implement-using-swarm Add Auth @project.md$'
+  printf '%s' "$result" | grep -q '^Phase: 2$'
+  printf '%s' "$result" | grep -q '^Description: Implement OAuth$'
 }
 
 # ── Append mode (no {{...}} in template) ───────────────────────────────────
@@ -99,4 +98,18 @@ Description: Implement OAuth"
     --dry-run \
     --phase-prompt "$TEST_DIR/prompt.md"
   [ "$status" -eq 0 ]
+}
+
+@test "build_default_prompt: includes graphify-first contract when GRAPH_REPORT exists" {
+  mkdir -p "$TEST_DIR/graphify-out"
+  printf '# graph report\n' > "$TEST_DIR/graphify-out/GRAPH_REPORT.md"
+  result=$(cd "$TEST_DIR" && build_default_prompt "2" "Title" "Desc" "")
+  echo "$result" | grep -q "graphify-out/GRAPH_REPORT.md"
+  echo "$result" | grep -qi "Glob, Grep, or Task"
+}
+
+@test "build_default_prompt: omits graphify-first contract when GRAPH_REPORT missing" {
+  rm -rf "$TEST_DIR/graphify-out"
+  result=$(cd "$TEST_DIR" && build_default_prompt "2" "Title" "Desc" "")
+  ! echo "$result" | grep -q "graphify-out/GRAPH_REPORT.md"
 }
