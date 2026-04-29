@@ -20,3 +20,8 @@ _claude_verdict_pass_keyword() {
 _claude_verdict_fail_keyword() {
   printf '%s' 'VERIFICATION_FAILED'
 }
+
+# Returns permission protocol: "stdio" (FD7/FIFO), "http", or "none"
+_claude_permission_protocol() {
+  printf '%s' 'stdio'
+}
