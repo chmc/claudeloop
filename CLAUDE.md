@@ -35,17 +35,34 @@ Packaging triad: `.github/workflows/release.yml` + `install.sh` + `tests/test_in
 
 See `/arch` for full reference (data model, libraries, execution flow, field registry).
 
-## Running Tests (CRITICAL)
+## Running Tests
 
-**NEVER** use redirects or pipes when running the test suite:
-- ❌ `./tests/run_all_tests.sh 2>&1` — WRONG, causes 180s timeout
-- ❌ `./tests/run_all_tests.sh | tail` — WRONG, causes 180s timeout
-- ❌ `./tests/run_all_tests.sh 2>&1 | head` — WRONG, causes 180s timeout
-- ✅ `./tests/run_all_tests.sh` — CORRECT, exactly this, nothing else
+**Full test suite** (5-15 minutes): Use explicit timeout.
+```
+Bash({
+  command: "./tests/run_all_tests.sh",
+  timeout: 900000,
+  description: "Full test suite"
+})
+```
 
-Why: Heartbeats go to stderr. Any redirect (`2>&1`) merges them into buffered stdout, hiding progress from Claude Code and triggering "connection dead" warnings.
+**Quick verification** (<2 minutes):
+```sh
+./tests/smoke.sh              # Smoke tests (~30s)
+bats tests/test_<name>.sh     # Single test file
+```
 
-**For full test suite**: Use Bash tool with `run_in_background: true`. Do NOT poll the output file - you will be automatically notified when complete. Continue other work while waiting, then read output file once notified.
+**Tag-based testing** (focused verification):
+```sh
+bats --filter-tags provider tests/
+bats --filter-tags integration tests/
+```
+
+### What NOT to do
+- ❌ `run_in_background: true` — causes retry cascade in claudeloop
+- ❌ `./tests/run_all_tests.sh 2>&1` — buffering hides heartbeats
+- ❌ `./tests/run_all_tests.sh | tail` — buffering hides progress
+- ❌ Default Bash (no timeout) — 120s default too short for full suite
 
 ## Testing traps
 
