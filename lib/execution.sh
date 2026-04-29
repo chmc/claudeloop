@@ -187,9 +187,8 @@ run_claude_pipeline() {
   {
     _rc=0
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
-    # shellcheck disable=SC2086
-    claude --input-format stream-json --output-format stream-json \
-      --permission-prompt-tool stdio --verbose --include-partial-messages \
+    # shellcheck disable=SC2046,SC2086
+    $(provider_cli) $(provider_exec_args) \
       $_claude_debug_flag \
       < "$_claude_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
