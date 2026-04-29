@@ -17,6 +17,16 @@ Each lib has a corresponding `tests/test_<lib>.sh`.
 
 When modifying existing behavior, update affected tests before changing implementation code.
 
+## Test source dependencies (mandatory)
+
+When adding a dependency to `lib/*.sh`, grep for test files that source that library:
+
+```sh
+grep -l "source.*lib/changed_file.sh" tests/*.sh
+```
+
+Update each test file's `setup()` to also source any new dependencies that `lib/changed_file.sh` now requires.
+
 ## Reproduce before fixing (mandatory)
 
 When fixing a bug, reproduce it first using existing test infrastructure (fake CLI, bats fixtures, `--replay`). If the infrastructure can't reproduce the scenario, extend it. Code tracing alone is insufficient — verify the fix works end-to-end.

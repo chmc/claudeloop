@@ -503,7 +503,7 @@ process_stream_json() {
         fflush()
         at_line_start = (substr(text, length(text), 1) == "\n")
         log_at_line_start = at_line_start
-        if (at_line_start) render_sticky()
+        if (at_line_start) { render_sticky(); restart_spinner() }
       } else if (index(line, "\"type\":\"tool_use\"") > 0) {
         idle_hb = 0; meaningful_seen = 1; thinking_start = 0
         n_tools = split(line, tool_segs, "\"type\":\"tool_use\"")
