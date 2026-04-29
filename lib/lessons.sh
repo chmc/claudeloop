@@ -27,6 +27,23 @@ extract_lessons_summary() {
     sed 's/^LESSONS_SUMMARY: *["'"'"']\(.*\)["'"'"']$/\1/'
 }
 
+# Validate that a lessons summary is meaningful (not placeholder text)
+# Args: $1 - summary text
+# Returns: 0 if valid, 1 if placeholder/empty
+validate_lessons_summary() {
+  local _summary="$1"
+
+  # Reject empty
+  [ -z "$_summary" ] && return 1
+
+  # Reject angle-bracket placeholders (e.g., "<one sentence...>")
+  case "$_summary" in
+    *"<"*">"*) return 1 ;;
+  esac
+
+  return 0
+}
+
 # Write phase metrics to lessons file
 # Args: $1 - phase number
 #       $2 - phase title
@@ -65,9 +82,13 @@ EOF
     printf -- '- fail_reason: %s\n' "$_fail_reason" >> "$LESSONS_FILE"
   fi
 
-  # Add summary line if present
+  # Add summary line if present and valid
   if [ -n "$_summary" ]; then
-    printf -- '- summary: %s\n' "$_summary" >> "$LESSONS_FILE"
+    if validate_lessons_summary "$_summary"; then
+      printf -- '- summary: %s\n' "$_summary" >> "$LESSONS_FILE"
+    else
+      printf -- '- summary: (no valid summary provided)\n' >> "$LESSONS_FILE"
+    fi
   fi
 }
 

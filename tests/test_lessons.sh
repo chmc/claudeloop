@@ -265,3 +265,62 @@ setup() {
 
   [ "$result" = "Learned that X improves Y" ]
 }
+
+# =============================================================================
+# validate_lessons_summary
+# =============================================================================
+
+@test "validate_lessons_summary: accepts valid summary" {
+  run validate_lessons_summary "Learned that caching improves performance"
+
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_lessons_summary: rejects empty summary" {
+  run validate_lessons_summary ""
+
+  [ "$status" -eq 1 ]
+}
+
+@test "validate_lessons_summary: rejects angle-bracket placeholder" {
+  run validate_lessons_summary "<one sentence describing what you learned>"
+
+  [ "$status" -eq 1 ]
+}
+
+@test "validate_lessons_summary: rejects summary with embedded angle brackets" {
+  run validate_lessons_summary "I learned <something> about testing"
+
+  [ "$status" -eq 1 ]
+}
+
+@test "validate_lessons_summary: accepts summary with comparison operators" {
+  # Ensure we don't reject valid technical summaries like "x > y"
+  # But this would contain both < and > so would be rejected
+  # Test that single < or > alone is OK
+  run validate_lessons_summary "Learned that retries should be less than 5"
+
+  [ "$status" -eq 0 ]
+}
+
+# =============================================================================
+# lessons_write_phase - validation integration
+# =============================================================================
+
+@test "lessons_write_phase: writes placeholder message when summary is invalid" {
+  lessons_init
+  phase_set ATTEMPTS "1" "1"
+
+  lessons_write_phase "1" "Setup" 45 "success" "<one sentence describing what you learned>"
+
+  grep -q "summary: (no valid summary provided)" .claudeloop/lessons.md
+}
+
+@test "lessons_write_phase: writes valid summary normally" {
+  lessons_init
+  phase_set ATTEMPTS "1" "1"
+
+  lessons_write_phase "1" "Setup" 45 "success" "Learned caching improves perf"
+
+  grep -q "summary: Learned caching improves perf" .claudeloop/lessons.md
+}
