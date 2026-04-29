@@ -28,3 +28,13 @@ provider_print_args() {
 provider_write_tool_pattern() {
   _claude_write_tool_pattern
 }
+
+# Return keyword for verification pass verdict
+provider_verdict_pass_keyword() {
+  _claude_verdict_pass_keyword
+}
+
+# Return keyword for verification fail verdict
+provider_verdict_fail_keyword() {
+  _claude_verdict_fail_keyword
+}
