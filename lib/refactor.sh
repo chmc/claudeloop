@@ -97,8 +97,8 @@ You are checking for REGRESSIONS, not absolute correctness.
 
 ## Verdict (MANDATORY)
 Your FINAL line of output MUST be exactly one of:
-  VERIFICATION_PASSED
-  VERIFICATION_FAILED
+  $(provider_verdict_pass_keyword)
+  $(provider_verdict_fail_keyword)
 WARNING: Omitting the verdict causes automatic failure. Do not end without outputting one."
 
   local _vr_formatted=".claudeloop/logs/phase-$_vr_phase.refactor-verify.log"

@@ -474,9 +474,9 @@ rec_verify_verdict() {
     return 0
   fi
 
-  if grep -q 'VERIFICATION_PASSED' "$verify_log"; then
+  if grep -q "$(provider_verdict_pass_keyword)" "$verify_log"; then
     echo '"passed"'
-  elif grep -q 'VERIFICATION_FAILED' "$verify_log"; then
+  elif grep -q "$(provider_verdict_fail_keyword)" "$verify_log"; then
     echo '"failed"'
   else
     echo "null"

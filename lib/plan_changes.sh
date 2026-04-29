@@ -469,7 +469,7 @@ recover_progress_from_logs() {
       # Check verify.log if it exists
       local verify_log="$logs_dir/phase-${_phase}.verify.log"
       if [ -f "$verify_log" ]; then
-        if grep -q 'VERIFICATION_PASSED' "$verify_log"; then
+        if grep -q "$(provider_verdict_pass_keyword)" "$verify_log"; then
           phase_set STATUS "$_phase" "completed"
         else
           phase_set STATUS "$_phase" "failed"

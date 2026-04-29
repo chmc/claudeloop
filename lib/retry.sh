@@ -434,7 +434,7 @@ extract_verify_error() {
 
   # Search for VERIFICATION_FAILED marker
   local marker_line
-  marker_line=$(grep -n 'VERIFICATION_FAILED' "$log_file" 2>/dev/null | head -1 | cut -d: -f1)
+  marker_line=$(grep -n "$(provider_verdict_fail_keyword)" "$log_file" 2>/dev/null | head -1 | cut -d: -f1)
 
   if [ -n "$marker_line" ]; then
     local start=$((marker_line - max_lines / 2))
