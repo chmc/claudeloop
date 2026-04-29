@@ -21,7 +21,7 @@ build_phase_prompt() {
 
 ## Lessons Summary
 When you complete this phase, end your final response with:
-LESSONS_SUMMARY: "<one sentence describing what you learned, a key decision you made, or a pitfall you encountered>"'
+LESSONS_SUMMARY: "<one sentence that helps future work on THIS codebase: a pattern, gotcha, architectural decision, or workflow insight specific to this project>"'
 
   if grep -qF '{{' "$template_file"; then
     # Substitution mode.
@@ -112,7 +112,7 @@ Implement the above phase completely. Make sure to:
 
 ## Lessons Summary
 When you complete this phase, end your final response with:
-LESSONS_SUMMARY: \"<one sentence describing what you learned, a key decision you made, or a pitfall you encountered>\""
+LESSONS_SUMMARY: \"<one sentence that helps future work on THIS codebase: a pattern, gotcha, architectural decision, or workflow insight specific to this project>\""
 }
 
 # Apply retry strategy: archive log, build retry context, optionally replace prompt

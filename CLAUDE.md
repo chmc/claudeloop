@@ -25,6 +25,11 @@ Plans: justify every decision from constraints. List files to modify with functi
 
 Multi-angle review (mandatory): always launch 2-3 Plan agents with different critique perspectives. Never skip. Verify causal claims by tracing actual code paths — don't just confirm code exists.
 
+Pre-implementation check (per phase):
+1. `git log --oneline -10` — check for prior commits implementing this work
+2. If already implemented: verify + fill test coverage gaps
+3. When adding library dependencies: update test files that source those libraries
+
 ## Architecture (TL;DR)
 
 Phase data in flat numbered variables via eval. `phase_to_var "2.5"` → `"2_5"`. Prefer `phase_get`/`phase_set` (`lib/phase_state.sh`).
