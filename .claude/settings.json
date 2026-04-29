@@ -6,13 +6,24 @@
     "DISABLE_AUTOUPDATER": "1"
   },
   "hooks": {
-    "PreToolUse": [
+    "PostToolUse": [
       {
-        "matcher": "Glob|Grep|Task|Agent",
+        "matcher": "Read",
         "hooks": [
           {
             "type": "command",
-            "command": "[ -f graphify-out/GRAPH_REPORT.md ] && echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: STOP. Before exploring, read graphify-out/GRAPH_REPORT.md. For Task spawns: include graphify context in the subagent prompt or use graphify query/path/explain instead of raw exploration.\"}}' || true"
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | jq -e '.file_path | endswith(\"GRAPH_REPORT.md\")' >/dev/null 2>&1 && [ -f graphify-out/GRAPH_REPORT.md ]; then mkdir -p .claude && stat -f %m graphify-out/GRAPH_REPORT.md > .claude/.graphify_read 2>/dev/null || stat -c %Y graphify-out/GRAPH_REPORT.md > .claude/.graphify_read; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -f .claude/.graphify_skip ] && exit 0; if echo \"$CLAUDE_TOOL_INPUT\" | jq -e '.subagent_type == \"Explore\"' >/dev/null 2>&1; then if [ ! -f .claude/.graphify_read ]; then echo '{\"decision\":\"block\",\"reason\":\"Read graphify-out/GRAPH_REPORT.md first. Use: Read tool on that file.\"}'; elif [ -f graphify-out/GRAPH_REPORT.md ]; then current=$(stat -f %m graphify-out/GRAPH_REPORT.md 2>/dev/null || stat -c %Y graphify-out/GRAPH_REPORT.md); read_at=$(cat .claude/.graphify_read); [ \"$current\" != \"$read_at\" ] && echo '{\"decision\":\"block\",\"reason\":\"GRAPH_REPORT.md changed since last read. Re-read it.\"}'; fi; fi"
           }
         ]
       }
