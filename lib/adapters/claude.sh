@@ -8,3 +8,7 @@ _claude_exec_args() {
 _claude_print_args() {
   printf '%s' '--print --output-format=stream-json --verbose --include-partial-messages'
 }
+
+_claude_write_tool_pattern() {
+  printf '%s' 'Edit|Write|NotebookEdit|Agent'
+}

@@ -29,3 +29,9 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$output" = "--print --output-format=stream-json --verbose --include-partial-messages" ]
 }
+
+@test "provider_write_tool_pattern: returns pipe-separated tool names" {
+  run provider_write_tool_pattern
+  [ "$status" -eq 0 ]
+  [ "$output" = "Edit|Write|NotebookEdit|Agent" ]
+}
