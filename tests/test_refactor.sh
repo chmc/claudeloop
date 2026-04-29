@@ -6,6 +6,7 @@
 CLAUDELOOP_DIR="${BATS_TEST_DIRNAME}/.."
 
 setup() {
+  SCRIPT_DIR="$CLAUDELOOP_DIR"
   TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
   export _SENTINEL_POLL=0.1
@@ -22,6 +23,7 @@ setup() {
   . "$CLAUDELOOP_DIR/lib/retry.sh"
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
   . "$CLAUDELOOP_DIR/lib/permission_handler.sh"
+  . "$CLAUDELOOP_DIR/lib/provider.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
   . "$CLAUDELOOP_DIR/lib/execution.sh"
   . "$CLAUDELOOP_DIR/lib/progress.sh"
