@@ -112,8 +112,8 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   set -m
   {
     _rc=0
-    claude --input-format stream-json --output-format stream-json \
-      --permission-prompt-tool stdio --verbose --include-partial-messages \
+    # shellcheck disable=SC2046
+    $(provider_cli) $(provider_exec_args) \
       < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
   } | permission_filter | inject_heartbeats 7>&- | { process_stream_json "$verify_formatted_log" "$verify_log" \

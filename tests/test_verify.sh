@@ -16,11 +16,14 @@ setup() {
   export _KILL_ESCALATE_TIMEOUT=1
 
   # Source libraries in the right order (verify.sh depends on ui.sh, stream_processor.sh)
+  SCRIPT_DIR="$CLAUDELOOP_DIR"
+  export SCRIPT_DIR
   . "$CLAUDELOOP_DIR/lib/parser.sh"
   . "$CLAUDELOOP_DIR/lib/phase_state.sh"
   . "$CLAUDELOOP_DIR/lib/ui.sh"
   . "$CLAUDELOOP_DIR/lib/stream_processor.sh"
   . "$CLAUDELOOP_DIR/lib/permission_handler.sh"
+  . "$CLAUDELOOP_DIR/lib/provider.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
 
   # Set up minimal phase data
