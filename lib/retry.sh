@@ -148,10 +148,16 @@ has_successful_session() {
 has_write_actions() {
   local raw_log="$1"
   [ -f "$raw_log" ] || return 1
-  awk '
+  local _tools
+  _tools=$(provider_write_tool_pattern)
+  awk -v tools="$_tools" '
+    BEGIN { n = split(tools, t, "|") }
     /^=== EXECUTION START /{found=0; next}
-    /"name":"Edit"/ || /"name":"Write"/ || /"name":"NotebookEdit"/ {found=1}
-    /"name":"Agent"/ {found=1}
+    {
+      for (i = 1; i <= n; i++) {
+        if (index($0, "\"name\":\"" t[i] "\"") > 0) { found=1; break }
+      }
+    }
     END{exit (found ? 0 : 1)}
   ' "$raw_log"
 }
