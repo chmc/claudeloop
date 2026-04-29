@@ -1,10 +1,8 @@
 #!/bin/sh
 # Provider abstraction layer
 
-SCRIPT_DIR_PROVIDER="${SCRIPT_DIR_PROVIDER:-$(cd "$(dirname "$0")" && pwd)}"
-
-# Source active adapter
-. "$SCRIPT_DIR_PROVIDER/adapters/claude.sh"
+# Source active adapter (SCRIPT_DIR is set by main claudeloop script)
+. "$SCRIPT_DIR/lib/adapters/claude.sh"
 
 # Detection - returns provider name
 provider_detect() {
