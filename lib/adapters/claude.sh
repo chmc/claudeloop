@@ -12,3 +12,11 @@ _claude_print_args() {
 _claude_write_tool_pattern() {
   printf '%s' 'Edit|Write|NotebookEdit|Agent'
 }
+
+_claude_verdict_pass_keyword() {
+  printf '%s' 'VERIFICATION_PASSED'
+}
+
+_claude_verdict_fail_keyword() {
+  printf '%s' 'VERIFICATION_FAILED'
+}

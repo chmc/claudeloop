@@ -35,3 +35,15 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$output" = "Edit|Write|NotebookEdit|Agent" ]
 }
+
+@test "provider_verdict_pass_keyword: returns VERIFICATION_PASSED" {
+  run provider_verdict_pass_keyword
+  [ "$status" -eq 0 ]
+  [ "$output" = "VERIFICATION_PASSED" ]
+}
+
+@test "provider_verdict_fail_keyword: returns VERIFICATION_FAILED" {
+  run provider_verdict_fail_keyword
+  [ "$status" -eq 0 ]
+  [ "$output" = "VERIFICATION_FAILED" ]
+}
