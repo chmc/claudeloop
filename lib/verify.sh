@@ -2,7 +2,8 @@
 
 # Phase Verification Library
 # Runs a read-only Claude instance to verify phase completion.
-# Verdict-based: requires explicit VERIFICATION_PASSED keyword + tool_use JSON events.
+# Verdict-based: requires explicit pass verdict keyword + tool_use JSON events.
+# Uses provider abstraction for verdict keywords (provider_verdict_pass/fail_keyword).
 
 # Fallback definitions when sourced outside claudeloop (e.g. tests)
 command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
@@ -71,8 +72,8 @@ If no test suite exists, focus on reviewing the git diff for correctness and obv
 ## Verdict (MANDATORY — you MUST output one)
 
 After completing ALL steps, your FINAL line of output MUST be exactly one of:
-  VERIFICATION_PASSED
-  VERIFICATION_FAILED
+  $(provider_verdict_pass_keyword)
+  $(provider_verdict_fail_keyword)
 WARNING: Omitting the verdict causes automatic failure. Do not end without it."
 
   # Prepare verify log files
@@ -212,9 +213,9 @@ check_verdict() {
     fi
   fi
 
-  # Verdict check 1: VERIFICATION_FAILED takes priority (even if PASSED also appears)
-  if grep -q 'VERIFICATION_FAILED' "$_cv_log" 2>/dev/null; then
-    print_error "$_cv_label failed for phase $_cv_phase: VERIFICATION_FAILED"
+  # Verdict check 1: FAILED takes priority (even if PASSED also appears)
+  if grep -q "$(provider_verdict_fail_keyword)" "$_cv_log" 2>/dev/null; then
+    print_error "$_cv_label failed for phase $_cv_phase: $(provider_verdict_fail_keyword)"
     return 1
   fi
 
@@ -224,9 +225,9 @@ check_verdict() {
     return 1
   fi
 
-  # Verdict check 3: explicit VERIFICATION_PASSED verdict required
-  if ! grep -q 'VERIFICATION_PASSED' "$_cv_log" 2>/dev/null; then
-    print_error "$_cv_label failed for phase $_cv_phase: no VERIFICATION_PASSED verdict"
+  # Verdict check 3: explicit PASSED verdict required
+  if ! grep -q "$(provider_verdict_pass_keyword)" "$_cv_log" 2>/dev/null; then
+    print_error "$_cv_label failed for phase $_cv_phase: no $(provider_verdict_pass_keyword) verdict"
     return 1
   fi
 
