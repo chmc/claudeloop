@@ -35,7 +35,8 @@ run_claude_print() {
     exec 0</dev/null           # close stdin in subshell (claude reads from temp file)
     exec 3<&- 2>/dev/null      # prevent inheriting caller's saved-stdin fd
     _rc=0
-    claude --print --output-format=stream-json --verbose --include-partial-messages \
+    # shellcheck disable=SC2046
+    $(provider_cli) $(provider_print_args) \
       < "$tmp_prompt" 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
   } | inject_heartbeats | process_stream_json "$tmp_log" "$tmp_raw" "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "0" >&2 &
