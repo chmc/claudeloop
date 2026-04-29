@@ -2,7 +2,7 @@
 # bats file_tags=provider
 
 setup() {
-  SCRIPT_DIR_PROVIDER="${BATS_TEST_DIRNAME}/../lib"
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
   . "${BATS_TEST_DIRNAME}/../lib/provider.sh"
 }
 

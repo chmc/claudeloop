@@ -45,7 +45,7 @@ See `/arch` for full reference (data model, libraries, execution flow, field reg
 
 Why: Heartbeats go to stderr. Any redirect (`2>&1`) merges them into buffered stdout, hiding progress from Claude Code and triggering "connection dead" warnings.
 
-**For full test suite**: Use Bash tool with `run_in_background: true`. You'll be notified when complete, then read the output file for results. This avoids the 180s timeout entirely.
+**For full test suite**: Use Bash tool with `run_in_background: true`. Do NOT poll the output file - you will be automatically notified when complete. Continue other work while waiting, then read output file once notified.
 
 ## Testing traps
 
