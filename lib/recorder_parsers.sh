@@ -24,7 +24,7 @@ rec_extract_session() {
   fi
 
   # Extract fields via sed
-  local model cost duration turns input_tokens output_tokens cache_read cache_write
+  local model cost duration turns input_tokens output_tokens cache_read cache_write permission_denials
   model=$(printf '%s' "$session_line" | sed -n 's/.*model=\([^ ]*\).*/\1/p')
   cost=$(printf '%s' "$session_line" | sed -n 's/.*cost=\$\([0-9.]*\).*/\1/p')
   duration=$(printf '%s' "$session_line" | sed -n 's/.*duration=\([0-9.]*\)s.*/\1/p')
@@ -45,8 +45,12 @@ rec_extract_session() {
   [ -z "$cache_read" ] && cache_read=0
   [ -z "$cache_write" ] && cache_write=0
 
-  printf '{"model":"%s","cost_usd":%s,"duration_s":%s,"turns":%s,"input_tokens":%s,"output_tokens":%s,"cache_read":%s,"cache_write":%s}' \
-    "$model" "$cost" "$duration" "$turns" "$input_tokens" "$output_tokens" "$cache_read" "$cache_write"
+  # Permission denials are optional
+  permission_denials=$(printf '%s' "$session_line" | sed -n 's/.*denials=\([0-9]*\).*/\1/p')
+  [ -z "$permission_denials" ] && permission_denials=0
+
+  printf '{"model":"%s","cost_usd":%s,"duration_s":%s,"turns":%s,"input_tokens":%s,"output_tokens":%s,"cache_read":%s,"cache_write":%s,"permission_denials":%s}' \
+    "$model" "$cost" "$duration" "$turns" "$input_tokens" "$output_tokens" "$cache_read" "$cache_write" "$permission_denials"
 }
 
 # Extract execution start/end metadata from a log file.
@@ -220,6 +224,77 @@ rec_extract_files() {
         delete sorted_ops
       }
       printf "]"
+    }
+  ' "$raw_file"
+}
+
+# Extract graphify-first ordering metrics from a raw JSON tool log.
+# Args: $1 - raw JSON file path
+# Prints: JSON object with graph_context_seq, first_explore_seq, explored_before_graph_context
+rec_extract_graphify_metrics() {
+  local raw_file="$1"
+
+  if [ ! -f "$raw_file" ] || [ ! -s "$raw_file" ]; then
+    echo '{"graph_context_seq":0,"first_explore_seq":0,"explored_before_graph_context":false}'
+    return 0
+  fi
+
+  awk '
+    function extract(s, key,    tag, i, c, esc, val) {
+      tag = "\"" key "\":"
+      i = index(s, tag)
+      if (i == 0) return ""
+      i += length(tag)
+      c = substr(s, i, 1)
+      if (c == "\"") {
+        i++
+        val = ""
+        esc = 0
+        while (i <= length(s)) {
+          c = substr(s, i, 1)
+          if (esc) {
+            val = val c
+            esc = 0
+          } else if (c == "\\") {
+            esc = 1
+          } else if (c == "\"") {
+            break
+          } else {
+            val = val c
+          }
+          i++
+        }
+        return val
+      }
+      return ""
+    }
+
+    BEGIN { seq = 0; gseq = 0; eseq = 0 }
+
+    /"type":"tool_use"/ {
+      if (index($0, "\"type\":\"stream_event\"") > 0) next
+      n = split($0, segs, "\"type\":\"tool_use\"")
+      for (si = 2; si <= n; si++) {
+        seq++
+        name = extract(segs[si], "name")
+
+        if (gseq == 0) {
+          if (name == "Read") {
+            path = extract(segs[si], "file_path")
+            if (path ~ /graphify-out\/GRAPH_REPORT\.md/) gseq = seq
+          } else if (name == "Bash") {
+            cmd = extract(segs[si], "command")
+            if (cmd ~ /(^|[ ;])graphify[ ]+(query|path|explain)([ ;]|$)/) gseq = seq
+          }
+        }
+
+        if (eseq == 0 && (name == "Glob" || name == "Grep" || name == "Task")) eseq = seq
+      }
+    }
+
+    END {
+      violated = (eseq > 0 && (gseq == 0 || eseq < gseq)) ? "true" : "false"
+      printf "{\"graph_context_seq\":%d,\"first_explore_seq\":%d,\"explored_before_graph_context\":%s}", gseq, eseq, violated
     }
   ' "$raw_file"
 }

@@ -156,6 +156,103 @@ has_write_actions() {
   ' "$raw_log"
 }
 
+# Extract graphify ordering metrics from raw tool-use log for current attempt.
+# Args: $1 - raw JSON log file (.raw.json)
+# Prints: "<graph_context_seq> <first_explore_seq> <explored_before_graph_context>"
+#         where missing seq values are 0 and explored_before... is 0|1
+graphify_order_metrics() {
+  local raw_log="$1"
+  [ -f "$raw_log" ] || { printf '0 0 0\n'; return 0; }
+  awk '
+    function extract(s, key,    tag, i, c, esc, val) {
+      tag = "\"" key "\":"
+      i = index(s, tag)
+      if (i == 0) return ""
+      i += length(tag)
+      c = substr(s, i, 1)
+      if (c == "\"") {
+        i++
+        val = ""
+        esc = 0
+        while (i <= length(s)) {
+          c = substr(s, i, 1)
+          if (esc) {
+            val = val c
+            esc = 0
+          } else if (c == "\\") {
+            esc = 1
+          } else if (c == "\"") {
+            break
+          } else {
+            val = val c
+          }
+          i++
+        }
+        return val
+      }
+      return ""
+    }
+
+    BEGIN { seq = 0; gseq = 0; eseq = 0 }
+
+    /^=== EXECUTION START / { seq = 0; gseq = 0; eseq = 0; next }
+
+    /"type":"tool_use"/ {
+      if (index($0, "\"type\":\"stream_event\"") > 0) next
+      n = split($0, segs, "\"type\":\"tool_use\"")
+      for (si = 2; si <= n; si++) {
+        seq++
+        name = extract(segs[si], "name")
+
+        if (gseq == 0) {
+          if (name == "Read") {
+            path = extract(segs[si], "file_path")
+            if (path ~ /graphify-out\/GRAPH_REPORT\.md/) gseq = seq
+          } else if (name == "Bash") {
+            cmd = extract(segs[si], "command")
+            if (cmd ~ /(^|[ ;])graphify[ ]+(query|path|explain)([ ;]|$)/) gseq = seq
+          }
+        }
+
+        if (eseq == 0 && (name == "Glob" || name == "Grep" || name == "Task")) eseq = seq
+      }
+    }
+
+    END {
+      violated = (eseq > 0 && (gseq == 0 || eseq < gseq)) ? 1 : 0
+      printf "%d %d %d\n", gseq, eseq, violated
+    }
+  ' "$raw_log"
+}
+
+# Return first graphify context sequence number in raw tool log (0 when absent).
+# Args: $1 - raw JSON log file
+graphify_context_seq() {
+  local _m
+  _m=$(graphify_order_metrics "$1")
+  set -- $_m
+  printf '%s\n' "${1:-0}"
+}
+
+# Return first exploration sequence number in raw tool log (0 when absent).
+# Args: $1 - raw JSON log file
+graphify_first_explore_seq() {
+  local _m
+  _m=$(graphify_order_metrics "$1")
+  set -- $_m
+  printf '%s\n' "${2:-0}"
+}
+
+# True when exploration starts before graphify context is established.
+# Args: $1 - raw JSON log file
+# Returns: 0 when violated, 1 otherwise.
+has_graphify_context_violation() {
+  local _m
+  _m=$(graphify_order_metrics "$1")
+  set -- $_m
+  [ "${3:-0}" = "1" ]
+}
+
 # Check if a no-changes signal file exists for a phase
 # Written by Claude when a phase requires no code changes (verification-only)
 # Args: $1 - phase number
@@ -212,6 +309,8 @@ fail_reason_hint() {
       echo "Your previous changes failed verification. See the verification section below for details." ;;
     permission_denied)
       echo "Permission was denied for a file operation. Skip the denied file or use a different approach." ;;
+    graphify_missing_context)
+      echo "Graphify context is required. Read graphify-out/GRAPH_REPORT.md (or run graphify query/path/explain) before using Glob, Grep, or Task." ;;
     *) ;;
   esac
 }
@@ -355,7 +454,7 @@ build_retry_context() {
 
   # Model-behavior failures have no useful error context — skip extraction
   local _skip_ctx=false
-  case "$reason" in trapped_tool_calls|no_write_actions|empty_log) _skip_ctx=true ;; esac
+  case "$reason" in trapped_tool_calls|no_write_actions|empty_log|graphify_missing_context) _skip_ctx=true ;; esac
 
   case "$strategy" in
     standard)

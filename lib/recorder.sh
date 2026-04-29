@@ -414,6 +414,15 @@ assemble_recorder_json() {
       files=$(safe_json_array "$(rec_extract_files "$raw_file")")
       local tool_calls
       tool_calls=$(safe_json_array "$(rec_extract_tool_calls "$raw_file")")
+      local graphify_metrics
+      graphify_metrics=$(safe_json_object "$(rec_extract_graphify_metrics "$raw_file")" '{"graph_context_seq":0,"first_explore_seq":0,"explored_before_graph_context":false}')
+      local graph_context_seq first_explore_seq explored_before_graph_context
+      graph_context_seq=$(printf '%s' "$graphify_metrics" | sed -n 's/.*"graph_context_seq":\([0-9][0-9]*\).*/\1/p')
+      first_explore_seq=$(printf '%s' "$graphify_metrics" | sed -n 's/.*"first_explore_seq":\([0-9][0-9]*\).*/\1/p')
+      explored_before_graph_context=$(printf '%s' "$graphify_metrics" | sed -n 's/.*"explored_before_graph_context":\(true\|false\).*/\1/p')
+      [ -z "$graph_context_seq" ] && graph_context_seq=0
+      [ -z "$first_explore_seq" ] && first_explore_seq=0
+      [ -z "$explored_before_graph_context" ] && explored_before_graph_context=false
 
       git_commits=$(safe_json_array "$(rec_extract_git_commits "$pn")")
 
@@ -453,8 +462,10 @@ assemble_recorder_json() {
         a_is_success="true"
       fi
 
-      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"is_success":%s,"session":%s,"tools":%s,"files":%s,"tool_calls":%s,"git_commits":%s,"prompt_text":%s}' \
-        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$a_is_success" "$session" "$tools" "$files" "$tool_calls" "$git_commits" "$prompt_json"
+      printf '{"number":%s,"started_at":%s,"ended_at":%s,"exit_code":%s,"duration_s":%s,"strategy":"%s","fail_reason":%s,"is_success":%s,"session":%s,"tools":%s,"files":%s,"tool_calls":%s,"graph_context_seq":%s,"first_explore_seq":%s,"explored_before_graph_context":%s,"git_commits":%s,"prompt_text":%s}' \
+        "$attempt_num" "$a_started" "$a_ended" "$a_exit" "$a_duration" "$a_strategy" "$a_fail_json" "$a_is_success" "$session" "$tools" "$files" "$tool_calls" \
+        "$graph_context_seq" "$first_explore_seq" "$explored_before_graph_context" \
+        "$git_commits" "$prompt_json"
 
       attempt_num=$((attempt_num + 1))
     done
