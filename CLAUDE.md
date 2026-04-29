@@ -13,7 +13,7 @@
 
 ## Planning
 
-- Plan mode = read-only: no external changes (API calls, GitHub mutations, file edits) even if user confirms "y". Exit plan mode first, or document in plan and wait for approval.
+- **Plan mode = read-only**: no external changes (API calls, GitHub mutations, file edits) even if user confirms "y". **You MUST call ExitPlanMode before making any edits.** Document changes in plan and wait for approval.
 
 Exploration must produce a constraints brief:
 1. Conventions — patterns, error handling, naming. Cite files+lines.
