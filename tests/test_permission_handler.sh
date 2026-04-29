@@ -6,6 +6,7 @@
 # For permission_filter tests, we set PERMISSION_RESPONSE_FD and use FD 7.
 
 setup() {
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
   source "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   source "${BATS_TEST_DIRNAME}/../lib/permission_handler.sh"
   VERBOSE_MODE=false
