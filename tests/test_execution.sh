@@ -13,6 +13,7 @@ setup() {
   source "${BATS_TEST_DIRNAME}/../lib/prompt.sh"
   source "${BATS_TEST_DIRNAME}/../lib/execution.sh"
   _tmpdir="$BATS_TEST_TMPDIR"
+  cd "$_tmpdir"
 }
 
 teardown() { jobs -p 2>/dev/null | xargs kill 2>/dev/null || true; }
@@ -208,7 +209,6 @@ _setup_epr_stubs() {
   phase_set ATTEMPTS 1 "1"
   run evaluate_phase_result 1 0 1 "$log" "$raw"
   [ "$status" -eq 0 ]
-  rm -rf .claudeloop/signals
 }
 
 @test "evaluate_phase_result: fails with signal file but no successful session" {
@@ -228,7 +228,6 @@ _setup_epr_stubs() {
   phase_set ATTEMPTS 2 "1"
   run evaluate_phase_result 2 0 1 "$log" "$raw"
   [ "$status" -eq 1 ]
-  rm -rf .claudeloop/signals
 }
 
 @test "evaluate_phase_result: still fails without write actions or signal file" {
@@ -271,7 +270,6 @@ _setup_epr_stubs() {
   [ "$status" -eq 0 ]
   # Verify run_adaptive_verification was NOT called (signal file skips verification)
   [ ! -f "$_tmpdir/rav_spy" ]
-  rm -rf .claudeloop/signals
 }
 
 @test "evaluate_phase_result: succeeds with signal file + successful session on non-zero exit" {
@@ -296,7 +294,6 @@ _setup_epr_stubs() {
   [ "$status" -eq 0 ]
   # Verify run_adaptive_verification was NOT called
   [ ! -f "$_tmpdir/rav_spy" ]
-  rm -rf .claudeloop/signals
 }
 
 @test "evaluate_phase_result: fails on non-zero exit with turns=1 tokens=0 (API 500 error)" {
@@ -465,7 +462,6 @@ _setup_rav_stubs() {
   # attempt=6 with MAX_RETRIES=15 → third=(15+2)/3=5, quick range is 6..10
   run run_adaptive_verification 1 6 "$_tmpdir/phase-1.log"
   [ "$status" -eq 1 ]
-  rm -rf .claudeloop
 }
 
 @test "run_adaptive_verification: quick mode passes with write actions" {
@@ -476,7 +472,6 @@ _setup_rav_stubs() {
   # attempt=6 with MAX_RETRIES=15 → quick mode
   run run_adaptive_verification 1 6 "$_tmpdir/phase-1.log"
   [ "$status" -eq 0 ]
-  rm -rf .claudeloop
 }
 
 # --- Sentinel poll diagnostics ---
@@ -574,7 +569,6 @@ _setup_rav_stubs() {
   # attempt=12 with MAX_RETRIES=15 → third=5, skip range is >10
   run run_adaptive_verification 1 12 "$_tmpdir/phase-1.log"
   [ "$status" -eq 1 ]
-  rm -rf .claudeloop
 }
 
 # --- _kill_tree: recursive process tree killing ---
