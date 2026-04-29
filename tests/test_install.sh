@@ -50,6 +50,13 @@ run_uninstaller() {
   [ "$lib_count" -gt 0 ]
 }
 
+@test "install: copies lib/adapters/*.sh to INSTALL_DIR/lib/adapters" {
+  run_installer
+  [ -d "$INSTALL_DIR_OVERRIDE/lib/adapters" ]
+  adapter_count=$(ls "$INSTALL_DIR_OVERRIDE/lib/adapters/"*.sh 2>/dev/null | wc -l | tr -d ' ')
+  [ "$adapter_count" -gt 0 ]
+}
+
 @test "install: copies assets/replay-template.html to INSTALL_DIR/assets" {
   run_installer
   [ -f "$INSTALL_DIR_OVERRIDE/assets/replay-template.html" ]
