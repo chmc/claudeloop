@@ -1641,6 +1641,24 @@ JSON"
   [ "$lines_consumed" -eq 5 ]
 }
 
+@test "dead-connection timeout: does not fire when tool is active" {
+  # tool_use event starts a tool (sets tool_active > 0)
+  local tool_use='{"type":"tool_use","id":"tu_123","name":"Bash","input":{"command":"sleep 300"}}'
+  local hb='{"type":"heartbeat"}'
+  # Send tool_use, then 20 heartbeats (enough to normally trigger dead timeout at 4s)
+  local input
+  input=$(printf '%s\n' "$tool_use"; yes "$hb" | head -20)
+  export _DEAD_TIMEOUT_OVERRIDE=4
+  echo "$input" | process_stream_json "$_log" "$_raw" false "" false 600 >/dev/null 2>&1
+  unset _DEAD_TIMEOUT_OVERRIDE
+  local lines_consumed
+  lines_consumed=$(wc -l < "$_raw" | tr -d ' ')
+  # All 21 lines should be consumed (tool active suppresses dead timeout)
+  [ "$lines_consumed" -eq 21 ]
+  # Dead timeout should NOT appear in log
+  ! grep -q "dead connection timeout" "$_log"
+}
+
 # --- Thinking indicator ---
 
 @test "thinking indicator: writes to live.log on first thinking event" {
