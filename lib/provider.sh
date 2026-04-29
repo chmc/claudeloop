@@ -23,3 +23,8 @@ provider_exec_args() {
 provider_print_args() {
   _claude_print_args
 }
+
+# Return regex pattern for write-action tools
+provider_write_tool_pattern() {
+  _claude_write_tool_pattern
+}
