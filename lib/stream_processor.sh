@@ -815,7 +815,8 @@ process_stream_json() {
         }
         # Dead-connection check: only heartbeats arriving, no real events at all
         # Dual mechanism: heartbeat count (for piped/test input) + wall-clock (for real-time)
-        if (max_dead_hb > 0 && !got_result) {
+        # Suppressed when tool_active > 0 (tool_timeout handles stuck tools instead)
+        if (max_dead_hb > 0 && !got_result && tool_active == 0) {
           dead_hb++
           if (dead_hb >= max_dead_hb) {
             clear_bottom_block()
@@ -825,7 +826,7 @@ process_stream_json() {
             exit
           }
         }
-        if (dead_timeout_s > 0 && !got_result && (now - last_real_event_epoch) >= dead_timeout_s) {
+        if (dead_timeout_s > 0 && !got_result && tool_active == 0 && (now - last_real_event_epoch) >= dead_timeout_s) {
           clear_bottom_block()
           printf "\n  [WARNING: no data from Claude CLI for %ds — connection may be dead]\n", dead_timeout_s > "/dev/stderr"
           printf "[dead connection timeout after %ds]\n", dead_timeout_s >> log_file
