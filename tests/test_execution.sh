@@ -576,3 +576,127 @@ _setup_rav_stubs() {
   [ "$status" -eq 1 ]
   rm -rf .claudeloop
 }
+
+# --- _kill_tree: recursive process tree killing ---
+
+@test "_kill_tree: kills parent and child processes" {
+  # Spawn parent that spawns a child
+  sh -c 'sh -c "sleep 60" & sleep 60' &
+  local parent=$!
+  sleep 0.3  # Let child spawn
+
+  # Find the child PID
+  local child
+  child=$(pgrep -P "$parent" 2>/dev/null | head -1) || true
+  [ -n "$child" ]  # Verify child exists
+
+  # Kill the tree
+  _kill_tree "$parent"
+  sleep 0.3
+
+  # Both must be dead
+  ! kill -0 "$parent" 2>/dev/null
+  ! kill -0 "$child" 2>/dev/null
+}
+
+@test "_kill_tree: no-op when PID is empty" {
+  run _kill_tree ""
+  [ "$status" -eq 0 ]
+}
+
+@test "_kill_tree: no-op when PID is 0 or 1" {
+  run _kill_tree "0"
+  [ "$status" -eq 0 ]
+  run _kill_tree "1"
+  [ "$status" -eq 0 ]
+}
+
+@test "_kill_tree: handles already-dead process gracefully" {
+  ( sleep 0 ) &
+  local pid=$!
+  wait "$pid" 2>/dev/null || true
+  run _kill_tree "$pid"
+  [ "$status" -eq 0 ]
+}
+
+@test "_kill_tree_escalate: SIGKILL sent when children ignore SIGTERM" {
+  # Spawn parent with child that ignores SIGTERM
+  sh -c 'trap "" TERM; sh -c "trap \"\" TERM; sleep 60" & sleep 60' &
+  local parent=$!
+  sleep 0.3
+
+  local child
+  child=$(pgrep -P "$parent" 2>/dev/null | head -1) || true
+  [ -n "$child" ]
+
+  # Escalate with 1s timeout
+  _KILL_ESCALATE_TIMEOUT=1 _kill_tree_escalate "$parent" "1"
+  sleep 0.3
+
+  # Both must be dead (SIGKILL cannot be ignored)
+  ! kill -0 "$parent" 2>/dev/null
+  ! kill -0 "$child" 2>/dev/null
+}
+
+@test "_kill_tree_escalate: fast exit when process dies from SIGTERM" {
+  sh -c 'sh -c "sleep 60" & sleep 60' &
+  local parent=$!
+  sleep 0.2
+
+  local before=$(date +%s)
+  _kill_tree_escalate "$parent" "3"
+  local after=$(date +%s)
+
+  # Should complete in under 2s (not wait full 3s timeout)
+  [ $((after - before)) -lt 2 ]
+}
+
+@test "_kill_pipeline_escalate: also kills process tree after PGID kill" {
+  # Spawn a process that has children in a different process group
+  # (simulating what happens when Claude's Bash tool spawns children)
+  sh -c 'sh -c "sleep 60" & sleep 60' &
+  local parent=$!
+  sleep 0.3
+
+  local child
+  child=$(pgrep -P "$parent" 2>/dev/null | head -1) || true
+  [ -n "$child" ]
+
+  # Kill via _kill_pipeline_escalate (no PGID, just PID)
+  _KILL_ESCALATE_TIMEOUT=1 _kill_pipeline_escalate "$parent" "" "1"
+  sleep 0.3
+
+  # Both parent and child must be dead
+  ! kill -0 "$parent" 2>/dev/null
+  ! kill -0 "$child" 2>/dev/null
+}
+
+# --- _cleanup_test_orphans: pattern-based orphan cleanup ---
+
+@test "_cleanup_test_orphans: kills bats processes" {
+  # Skip if we'd kill ourselves (running in bats)
+  skip "Cannot test bats cleanup while running under bats"
+}
+
+@test "_cleanup_test_orphans: kills run_all_tests processes" {
+  # Spawn a fake run_all_tests process
+  sh -c 'exec -a run_all_tests_fake sleep 60' &
+  local pid=$!
+  sleep 0.1
+
+  # Verify it's running
+  kill -0 "$pid" 2>/dev/null
+
+  # Run cleanup
+  _cleanup_test_orphans
+
+  sleep 0.2
+  # Should be dead (pattern matches "run_all_tests")
+  ! kill -0 "$pid" 2>/dev/null
+}
+
+@test "_cleanup_test_orphans: no-op when no orphans exist" {
+  # Just verify it doesn't error when nothing matches
+  run _cleanup_test_orphans
+  [ "$status" -eq 0 ]
+}

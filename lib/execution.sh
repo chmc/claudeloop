@@ -31,18 +31,90 @@ update_fail_reason() {
 command -v _restore_isig >/dev/null 2>&1 || _restore_isig() { stty isig 2>/dev/null < /dev/tty || true; }
 command -v _safe_disable_jobctl >/dev/null 2>&1 || _safe_disable_jobctl() { set +m; }
 
+# Recursively kill a process and all its descendants (children, grandchildren, etc.)
+# Uses pgrep -P which is portable (Linux, macOS, BSD)
+# Args: $1 - pid
+_kill_tree() {
+  local _kt_pid="${1:-0}"
+  [ "$_kt_pid" -gt 1 ] 2>/dev/null || return 0
+
+  # Find children before killing parent (parent death may orphan them to init)
+  local _kt_children=""
+  _kt_children=$(pgrep -P "$_kt_pid" 2>/dev/null) || true
+
+  # Recursively kill children first (bottom-up)
+  local _kt_child
+  for _kt_child in $_kt_children; do
+    _kill_tree "$_kt_child"
+  done
+
+  # Then kill this process
+  kill -TERM "$_kt_pid" 2>/dev/null || true
+}
+
+# Force-kill a process tree with SIGKILL (cannot be ignored)
+# Args: $1 - pid
+_kill_tree_force() {
+  local _ktf_pid="${1:-0}"
+  [ "$_ktf_pid" -gt 1 ] 2>/dev/null || return 0
+
+  local _ktf_children=""
+  _ktf_children=$(pgrep -P "$_ktf_pid" 2>/dev/null) || true
+
+  local _ktf_child
+  for _ktf_child in $_ktf_children; do
+    _kill_tree_force "$_ktf_child"
+  done
+
+  kill -KILL "$_ktf_pid" 2>/dev/null || true
+}
+
+# Kill process tree with SIGTERM → SIGKILL escalation
+# Args: $1 - pid, $2 - timeout seconds (optional, default 3)
+_kill_tree_escalate() {
+  local _kte_pid="${1:-0}"
+  local _kte_timeout="${2:-${_KILL_ESCALATE_TIMEOUT:-3}}"
+  [ "$_kte_pid" -gt 1 ] 2>/dev/null || return 0
+
+  # SIGTERM to entire tree
+  _kill_tree "$_kte_pid"
+
+  # Poll for root process exit
+  local _kte_tries=0
+  while [ "$_kte_tries" -lt "$_kte_timeout" ] && kill -0 "$_kte_pid" 2>/dev/null; do
+    sleep 1
+    _kte_tries=$((_kte_tries + 1))
+  done
+
+  # Escalate: SIGKILL to entire tree if still alive
+  if kill -0 "$_kte_pid" 2>/dev/null; then
+    _kill_tree_force "$_kte_pid"
+  fi
+}
+
+# Clean up orphaned test processes before retry (defense in depth)
+# Kills known test runner patterns that might have escaped normal cleanup
+_cleanup_test_orphans() {
+  # Kill processes matching test runner patterns
+  # Use specific patterns to avoid false positives
+  pkill -f "run_all_tests" 2>/dev/null || true
+  # Note: Don't pkill bats here — we might be running under bats
+  # The tree kill in _kill_pipeline_escalate handles most orphans
+}
+
 # Kill pipeline with SIGTERM → SIGKILL escalation.
 # Args: $1 - pid, $2 - pgid (optional), $3 - timeout seconds (optional, default 3)
 # Sends SIGTERM to the process group (or PID), polls for exit, escalates to SIGKILL.
+# Also kills process tree to catch children in different process groups.
 _kill_pipeline_escalate() {
   [ -n "${1:-}" ] || return 0
   local _kpe_pid="$1" _kpe_pgid="${2:-}" _kpe_timeout="${3:-${_KILL_ESCALATE_TIMEOUT:-3}}"
   local _kpe_wait=0
-  # Send SIGTERM
+  # First: SIGTERM the process tree (children must die before parent orphans them)
+  _kill_tree "$_kpe_pid"
+  # Then: SIGTERM the process group (if provided, catches processes in same PGID)
   if [ -n "$_kpe_pgid" ] && [ "${_kpe_pgid:-0}" -gt 1 ]; then
     kill -TERM -- "-$_kpe_pgid" 2>/dev/null || true
-  else
-    kill -TERM "$_kpe_pid" 2>/dev/null || true
   fi
   # Poll for exit
   while [ "$_kpe_wait" -lt "$_kpe_timeout" ] && kill -0 "$_kpe_pid" 2>/dev/null; do
@@ -56,6 +128,8 @@ _kill_pipeline_escalate() {
     else
       kill -KILL "$_kpe_pid" 2>/dev/null || true
     fi
+    # Also SIGKILL the process tree
+    _kill_tree_force "$_kpe_pid"
   fi
   wait "$_kpe_pid" 2>/dev/null || true
 }

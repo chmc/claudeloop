@@ -59,9 +59,13 @@ get_phase_consec_fail() {
 }
 
 # Reset phase for retry: decrement attempts, clear last attempt time, set pending.
+# Also cleans up orphaned test processes before retry (defense in depth).
 # Does NOT call write_progress — callers control timing.
 # Args: $1 - phase number
 reset_phase_for_retry() {
+  # Clean up any orphaned test processes from previous attempt
+  # Guard: _cleanup_test_orphans is in execution.sh, may not be loaded in tests
+  command -v _cleanup_test_orphans >/dev/null 2>&1 && _cleanup_test_orphans
   local _phase_num="$1"
   local _attempts
   _attempts=$(get_phase_attempts "$_phase_num")
