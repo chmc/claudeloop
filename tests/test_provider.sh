@@ -47,3 +47,9 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$output" = "VERIFICATION_FAILED" ]
 }
+
+@test "provider_permission_protocol: returns stdio for Claude" {
+  run provider_permission_protocol
+  [ "$status" -eq 0 ]
+  [ "$output" = "stdio" ]
+}
