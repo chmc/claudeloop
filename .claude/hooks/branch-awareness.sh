@@ -8,9 +8,6 @@ set -eu
 STATE_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude/workflow-state"
 CONFIRMED_FILE="$STATE_DIR/branch-confirmed"
 
-# Read JSON input from stdin
-INPUT=$(cat)
-
 # Check if already confirmed
 if [ -f "$CONFIRMED_FILE" ]; then
     # Already confirmed, allow

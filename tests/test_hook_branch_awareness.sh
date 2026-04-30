@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
+# bats file_tags=hook
 
 setup() {
-    TEST_DIR="$(mktemp -d)"
+    TEST_DIR="$BATS_TEST_TMPDIR"
     export CLAUDE_PROJECT_DIR="$TEST_DIR"
     mkdir -p "$TEST_DIR/.claude/workflow-state"
     mkdir -p "$TEST_DIR/.claude/hooks"
@@ -14,10 +15,6 @@ setup() {
     cd "$TEST_DIR"
     git init -q
     git checkout -q -b test-branch
-}
-
-teardown() {
-    rm -rf "$TEST_DIR"
 }
 
 @test "branch-awareness: denies first edit without confirmation" {
