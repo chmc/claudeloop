@@ -458,14 +458,19 @@ STUB
 @test "verify_phase: VERIFY_IDLE_TIMEOUT=0 disables idle detection" {
   VERIFY_PHASES=true
   VERIFY_IDLE_TIMEOUT=0
-  VERIFY_TIMEOUT=3
+  VERIFY_TIMEOUT=5
   MAX_PHASE_TIME=0
+  # Must enable heartbeats for this test — otherwise inject_heartbeats exits after 1s
+  unset _SKIP_HEARTBEATS
 
-  # Stub that emits output then goes silent
+  # Stub that emits tool_use + tool_result (clearing tool_active) then goes silent
+  # This mirrors the idle-enabled test but with idle detection disabled
   cat > "$TEST_DIR/bin/claude" << 'STUB'
 #!/bin/sh
 read -r _discard 2>/dev/null || true
 printf '{"type":"tool_use","name":"Bash","input":{"command":"git diff"}}\n'
+printf '{"type":"tool_result","tool_use_id":"toolu_01","content":"ok"}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Analyzing..."}}\n'
 sleep 60
 exit 0
 STUB
@@ -475,10 +480,10 @@ STUB
   run verify_phase "1" ".claudeloop/logs/phase-1.log"
   end_time=$(date +%s)
   elapsed=$((end_time - start_time))
-  # With idle_timeout=0 (disabled), should fall through to VERIFY_TIMEOUT=3
-  # Should complete in ~3s (hard timeout), proving idle detection was disabled
-  [ "$elapsed" -ge 2 ]
-  [ "$elapsed" -lt 10 ]
+  # With idle_timeout=0 (disabled), should fall through to VERIFY_TIMEOUT=5
+  # Should complete in ~5s (hard timeout), NOT via idle timeout (~3s)
+  [ "$elapsed" -ge 4 ]
+  [ "$elapsed" -lt 15 ]
 }
 
 # =============================================================================
