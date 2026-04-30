@@ -8,6 +8,8 @@
   "plansDirectory": "./.claude/plans",
   "permissions": {
     "allow": [
+      "Edit(.claude/plans/**)",
+      "Write(.claude/plans/**)",
       "Bash(touch *.claude/workflow-state/*)",
       "Bash(rm *.claude/workflow-state/*)",
       "Bash(rm -f *.claude/workflow-state/*)",
@@ -16,7 +18,7 @@
       "Bash(cat *.claude/workflow-state/*)",
       "Bash(ls *.claude/workflow-state*)",
       "Bash(mkdir -p *.claude/plans*)",
-      "Bash(cp */.claude/plans/*.md *.claude/plans/)"
+      "Bash(rm *.claude/plans/*)"
     ]
   },
   "hooks": {
