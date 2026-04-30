@@ -5,7 +5,19 @@
 . "$SCRIPT_DIR/lib/adapters/claude.sh"
 
 # Detection - returns provider name
+# Respects PROVIDER env/config variable if set
 provider_detect() {
+  if [ -n "$PROVIDER" ]; then
+    case "$PROVIDER" in
+      claude) printf 'claude\n' ;;
+      *)
+        printf 'Error: provider "%s" not yet supported\n' "$PROVIDER" >&2
+        return 1
+        ;;
+    esac
+    return 0
+  fi
+  # Auto-detect (currently only Claude)
   printf 'claude\n'
 }
 

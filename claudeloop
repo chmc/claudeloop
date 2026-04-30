@@ -28,6 +28,7 @@ _CL_DEAD_TIMEOUT="${DEAD_TIMEOUT:-}"
 _CL_VERIFY_PHASES="${VERIFY_PHASES:-}"
 _CL_REFACTOR_PHASES="${REFACTOR_PHASES:-}"
 _CL_REFACTOR_MAX_RETRIES="${REFACTOR_MAX_RETRIES:-}"
+_CL_PROVIDER="${PROVIDER:-}"
 
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
@@ -83,6 +84,7 @@ AI_PARSE_FEEDBACK=false
 VERIFY_PHASES=true
 REFACTOR_PHASES=true
 REFACTOR_MAX_RETRIES=20
+PROVIDER=""                  # AI provider (claude, opencode; default: auto-detect)
 _REFACTORING_PHASE=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
@@ -96,6 +98,7 @@ _CLI_NO_RETRY="" _CLI_AI_PARSE_FEEDBACK=""
 _CLI_VERIFY_PHASES=""
 _CLI_REFACTOR_PHASES=""
 _CLI_REFACTOR_MAX_RETRIES=""
+_CLI_PROVIDER=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"
@@ -340,7 +343,9 @@ validate_environment() {
   fi
 
   # Detect provider
-  _provider=$(provider_detect)
+  if ! _provider=$(provider_detect); then
+    exit 1
+  fi
   log_verbose "Provider: $_provider"
 
   # Check if provider CLI is available
@@ -731,6 +736,7 @@ apply_config_precedence() {
   [ -n "$_CL_VERIFY_PHASES" ]          && VERIFY_PHASES="$_CL_VERIFY_PHASES"
   [ -n "$_CL_REFACTOR_PHASES" ]        && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
   [ -n "$_CL_REFACTOR_MAX_RETRIES" ]   && REFACTOR_MAX_RETRIES="$_CL_REFACTOR_MAX_RETRIES"
+  [ -n "$_CL_PROVIDER" ]               && PROVIDER="$_CL_PROVIDER"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"
@@ -982,6 +988,11 @@ main() {
       exit 1
     fi
     exit 0
+  fi
+
+  # Early provider validation (validate even in dry-run)
+  if ! _provider=$(provider_detect); then
+    exit 1
   fi
 
   # Early environment validation (git must exist before gitignore work)
