@@ -353,3 +353,14 @@ PASS/FAIL — <one-line summary>
 ## Browsing past sessions
 
 Before starting, optionally scan recent sessions in `.verification-sessions/` to check for recurring issues or compare with past results.
+
+## Post-Verification
+
+After verification passes, set the visual verification state:
+
+```bash
+mkdir -p .claude/workflow-state
+touch .claude/workflow-state/visual-verified
+```
+
+This satisfies Gate 11 of the enforced workflow.
