@@ -12,8 +12,8 @@ EDIT_ORDER_FILE="$STATE_DIR/edit-order"
 # Read stdin JSON
 input=$(cat)
 
-# Extract tool_name
-tool_name=$(echo "$input" | jq -r '.tool_name // empty')
+# Extract tool_name (handle multiline strings gracefully)
+tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null) || tool_name=""
 
 # Only check TaskUpdate tool
 if [ "$tool_name" != "TaskUpdate" ]; then
@@ -21,7 +21,7 @@ if [ "$tool_name" != "TaskUpdate" ]; then
 fi
 
 # Extract status from tool_input
-status=$(echo "$input" | jq -r '.tool_input.status // empty')
+status=$(printf '%s' "$input" | jq -r '.tool_input.status // empty' 2>/dev/null) || status=""
 
 # Only check status: completed
 if [ "$status" != "completed" ]; then

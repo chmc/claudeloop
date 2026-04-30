@@ -31,3 +31,6 @@ exp_result.md
 # Workflow state (session-specific)
 .claude/workflow-state/*
 !.claude/workflow-state/.gitkeep
+
+# Plan files (session-specific)
+.claude/plans/
