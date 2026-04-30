@@ -5,6 +5,7 @@
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   },
+  "plansDirectory": "./.claude/plans",
   "permissions": {
     "allow": [
       "Bash(touch *.claude/workflow-state/*)",
@@ -20,13 +21,6 @@
   },
   "hooks": {
     "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [{
-          "type": "command",
-          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/sync-plan-to-project.sh"
-        }]
-      },
       {
         "matcher": "TaskCreate",
         "hooks": [{

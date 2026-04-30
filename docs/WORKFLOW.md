@@ -64,9 +64,9 @@ Located in `.claude/workflow-state/` (gitignored):
 
 ## Plan File Handling
 
-### Auto-sync
+### plansDirectory Setting
 
-Claude Code writes plans to `~/.claude/plans/` (global), but enforcement hooks look in `.claude/plans/` (project-local). The `sync-plan-to-project.sh` PostToolUse hook automatically copies plans to the project directory after each Write/Edit.
+The `plansDirectory` setting in `.claude/settings.json` configures Claude Code to write plans directly to `.claude/plans/` (project-local) instead of `~/.claude/plans/` (global). This ensures plans are where the enforcement hooks expect them.
 
 ### Plan File Exemption
 
