@@ -381,18 +381,6 @@ evaluate_phase_result() {
       return 1
     fi
 
-    # Hard graphify-first gate: when GRAPH_REPORT exists, exploration tools
-    # (Glob/Grep/Task) must not be used before graphify context is established.
-    if [ -f "graphify-out/GRAPH_REPORT.md" ] && command -v has_graphify_context_violation >/dev/null 2>&1 && has_graphify_context_violation "$_epr_raw"; then
-      update_fail_reason "$_epr_phase" "graphify_missing_context"
-      log_verbose "execute_phase: phase $_epr_phase failed graphify-first gate"
-      print_warning "Phase $_epr_phase: exploration started before graphify context — treating as failed"
-      update_phase_status "$_epr_phase" "failed"
-      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-      CURRENT_PHASE=""
-      return 1
-    fi
-
     # Signal file + successful session: no-changes phase, skip verification
     # Checked before has_write_actions because writing the signal file itself
     # triggers has_write_actions (matches "name":"Write" in raw JSON)
@@ -429,16 +417,6 @@ evaluate_phase_result() {
     _complete_phase "$_epr_phase" "$_epr_duration"
     return 0
   else
-    if [ -f "graphify-out/GRAPH_REPORT.md" ] && command -v has_graphify_context_violation >/dev/null 2>&1 && has_graphify_context_violation "$_epr_raw"; then
-      update_fail_reason "$_epr_phase" "graphify_missing_context"
-      log_verbose "execute_phase: phase $_epr_phase failed graphify-first gate (non-zero exit path)"
-      print_warning "Phase $_epr_phase: exploration started before graphify context — treating as failed"
-      update_phase_status "$_epr_phase" "failed"
-      write_progress "$PROGRESS_FILE" "$PLAN_FILE"
-      CURRENT_PHASE=""
-      return 1
-    fi
-
     # Non-zero exit but signal file + successful session: accept as no-changes completion
     if has_signal_file "$_epr_phase" && has_successful_session "$_epr_log"; then
       log_verbose "execute_phase: phase $_epr_phase exited non-zero ($_epr_exit) but signal file present with successful session — accepting"

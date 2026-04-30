@@ -78,12 +78,6 @@ capture_git_context() {
 # Returns: prompt string on stdout
 build_default_prompt() {
   local _bdp_phase="$1" _bdp_title="$2" _bdp_desc="$3" _bdp_git="$4"
-  local _bdp_graphify_contract=""
-
-  if [ -f "graphify-out/GRAPH_REPORT.md" ]; then
-    _bdp_graphify_contract="
-- Graphify-first rule is active: read graphify-out/GRAPH_REPORT.md (or run graphify query/path/explain) before using Glob, Grep, or Task"
-  fi
 
   printf '%s' "You are executing Phase $_bdp_phase of a multi-phase plan.
 
@@ -96,11 +90,9 @@ $_bdp_desc
 - Previous phases have been completed and committed to git
 - Even if prior work for this phase exists in git, you MUST complete every subtask listed in the description above — do not assume the phase is done
 - Review recent git history and existing code before implementing
-- Use graphify context before exploration tools when available
 - When done, ensure all changes are tested and working
 - Commit your changes when complete
 - If the phase requires no code changes (already implemented, verification-only), write a brief summary of your findings to .claudeloop/signals/phase-${_bdp_phase}.md explaining why no changes were needed
-${_bdp_graphify_contract}
 ${_bdp_git}
 ## Task
 Implement the above phase completely. Make sure to:

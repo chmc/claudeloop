@@ -313,58 +313,6 @@ _setup_epr_stubs() {
   [ "$status" -eq 1 ]
 }
 
-@test "evaluate_phase_result: fails when graphify context is missing before exploration" {
-  _setup_epr_stubs
-  local log="$_tmpdir/phase-8.log"
-  local raw="$_tmpdir/phase-8.raw.json"
-  run_adaptive_verification() { printf 'called' > "$_tmpdir/rav_graphify_fail"; return 0; }
-
-  mkdir -p graphify-out
-  printf '# report\n' > graphify-out/GRAPH_REPORT.md
-
-  printf '=== EXECUTION START phase=8 attempt=1 ===\n' > "$log"
-  printf '=== RESPONSE ===\nDone\n' >> "$log"
-  printf '[Session: duration=20.0s turns=5 tokens=2000in/1000out]\n' >> "$log"
-
-  cat > "$raw" << 'EOF'
-{"type":"tool_use","name":"Glob","input":{"pattern":"lib/**/*.sh"}}
-{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
-{"type":"tool_use","name":"Edit","input":{"file_path":"lib/execution.sh","old_string":"a","new_string":"b"}}
-EOF
-
-  phase_set ATTEMPTS 8 "1"
-  if evaluate_phase_result 8 0 1 "$log" "$raw"; then
-    false
-  fi
-  [ "$(get_phase_fail_reason 8)" = "graphify_missing_context" ]
-  [ ! -f "$_tmpdir/rav_graphify_fail" ]
-}
-
-@test "evaluate_phase_result: succeeds when graphify context comes before exploration" {
-  _setup_epr_stubs
-  local log="$_tmpdir/phase-9.log"
-  local raw="$_tmpdir/phase-9.raw.json"
-  run_adaptive_verification() { printf 'called' > "$_tmpdir/rav_graphify_pass"; return 0; }
-
-  mkdir -p graphify-out
-  printf '# report\n' > graphify-out/GRAPH_REPORT.md
-
-  printf '=== EXECUTION START phase=9 attempt=1 ===\n' > "$log"
-  printf '=== RESPONSE ===\nDone\n' >> "$log"
-  printf '[Session: duration=20.0s turns=5 tokens=2000in/1000out]\n' >> "$log"
-
-  cat > "$raw" << 'EOF'
-{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
-{"type":"tool_use","name":"Task","input":{"description":"scan code"}}
-{"type":"tool_use","name":"Write","input":{"file_path":"lib/execution.sh","content":"x"}}
-EOF
-
-  phase_set ATTEMPTS 9 "1"
-  run evaluate_phase_result 9 0 1 "$log" "$raw"
-  [ "$status" -eq 0 ]
-  [ -f "$_tmpdir/rav_graphify_pass" ]
-}
-
 # --- update_fail_reason() ---
 
 @test "update_fail_reason: same reason increments consec" {
