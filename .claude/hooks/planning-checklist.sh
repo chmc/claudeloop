@@ -265,8 +265,13 @@ EOF
 # Touch plan-exited state file
 touch "$STATE_DIR/plan-exited"
 
-# Clean up tasks-created for fresh workflow cycle
+# Clean up state for fresh workflow cycle
 rm -f "$STATE_DIR/tasks-created"
+rm -f "$STATE_DIR/edit-order"
+rm -f "$STATE_DIR/simplify-complete"
+rm -f "$STATE_DIR/review-complete"
+rm -f "$STATE_DIR/visual-verified"
+rm -f "$STATE_DIR/visual-skip-reason"
 
 # Allow (exit 0 with no output)
 exit 0
