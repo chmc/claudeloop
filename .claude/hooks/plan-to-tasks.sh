@@ -9,7 +9,7 @@ STATE_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude/workflow-state"
 
 # Read input to get file being edited
 input=$(cat)
-file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
+file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || file_path=""
 
 # Skip for plan files (allow editing plans anytime)
 case "$file_path" in

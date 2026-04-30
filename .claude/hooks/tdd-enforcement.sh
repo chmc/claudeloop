@@ -11,8 +11,8 @@ EDIT_ORDER_FILE="$STATE_DIR/edit-order"
 # Read stdin JSON
 input=$(cat)
 
-# Extract tool_name
-tool_name=$(echo "$input" | jq -r '.tool_name // empty')
+# Extract tool_name (handle multiline strings gracefully)
+tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty' 2>/dev/null) || tool_name=""
 
 # Only check Edit tool
 if [ "$tool_name" != "Edit" ]; then
@@ -20,7 +20,7 @@ if [ "$tool_name" != "Edit" ]; then
 fi
 
 # Extract file_path
-file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
+file_path=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty' 2>/dev/null) || file_path=""
 
 if [ -z "$file_path" ]; then
     exit 0
