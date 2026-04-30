@@ -112,3 +112,41 @@ EOF
     jq -e '.tests == true' "$TEST_DIR/.claude/workflow-state/plan-requirements.json"
     jq -e '.adr == false' "$TEST_DIR/.claude/workflow-state/plan-requirements.json"
 }
+
+@test "planning-checklist: denies plan with empty section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Architecture Impact (empty)")'
+}
