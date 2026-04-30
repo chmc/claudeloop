@@ -7,6 +7,17 @@ set -eu
 
 STATE_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude/workflow-state"
 
+# Read input to get file being edited
+input=$(cat)
+file_path=$(echo "$input" | jq -r '.tool_input.file_path // empty')
+
+# Skip for plan files (allow editing plans anytime)
+case "$file_path" in
+    */plans/*.md|"$HOME/.claude/plans/"*.md)
+        exit 0
+        ;;
+esac
+
 # If no plan-exited state, we're not in post-plan phase
 if [ ! -f "$STATE_DIR/plan-exited" ]; then
     exit 0

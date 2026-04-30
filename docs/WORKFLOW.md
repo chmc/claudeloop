@@ -55,12 +55,22 @@ Located in `.claude/workflow-state/` (gitignored):
 | `branch-confirmed` | Branch acknowledged | User confirmation |
 | `plan-exited` | ExitPlanMode called | Gate 2 |
 | `plan-requirements.json` | Which sections need updates | Gate 2 |
-| `tasks-created` | Tasks exist from plan | After TaskCreate |
+| `tasks-created` | Tasks exist from plan | `tasks-created.sh` (PostToolUse on TaskCreate) |
 | `edit-order` | Tracks file edit sequence | Gates 1, 4 |
 | `simplify-complete` | /simplify was run | /simplify skill |
 | `review-complete` | Code review done | Code review |
 | `visual-verified` | Visual verification done | /verify skill |
 | `visual-skip-reason` | Skip justification | Manual |
+
+## Plan File Handling
+
+### Auto-sync
+
+Claude Code writes plans to `~/.claude/plans/` (global), but enforcement hooks look in `.claude/plans/` (project-local). The `sync-plan-to-project.sh` PostToolUse hook automatically copies plans to the project directory after each Write/Edit.
+
+### Plan File Exemption
+
+Plan files (`*/plans/*.md`) are exempt from the task requirement (Gate 3). You can edit plans at any time without creating tasks first.
 
 ## Modifying the Workflow
 

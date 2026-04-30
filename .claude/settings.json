@@ -5,7 +5,36 @@
   "env": {
     "DISABLE_AUTOUPDATER": "1"
   },
+  "permissions": {
+    "allow": [
+      "Bash(touch *.claude/workflow-state/*)",
+      "Bash(rm *.claude/workflow-state/*)",
+      "Bash(rm -f *.claude/workflow-state/*)",
+      "Bash(mkdir -p *.claude/workflow-state*)",
+      "Bash(echo * > *.claude/workflow-state/*)",
+      "Bash(cat *.claude/workflow-state/*)",
+      "Bash(ls *.claude/workflow-state*)",
+      "Bash(mkdir -p *.claude/plans*)",
+      "Bash(cp */.claude/plans/*.md *.claude/plans/)"
+    ]
+  },
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/sync-plan-to-project.sh"
+        }]
+      },
+      {
+        "matcher": "TaskCreate",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tasks-created.sh"
+        }]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",
