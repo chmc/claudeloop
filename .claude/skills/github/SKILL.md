@@ -86,3 +86,12 @@ mutation {
 ```
 
 Note: Sub-issues still appear in the main issues list (expected GitHub behavior). Use GitHub Projects with "group by parent" for hierarchical views.
+
+## Issue Closure
+
+Task tied to issue → plan ends with:
+1. **Close**: `Closes #N` in commit (auto-close) or `gh issue close N` (direct push)
+2. **Update related**: if sub-issue or linked → update parent/related issues appropriately
+3. **Gate**: only after implementation verified
+
+Check for related issues: `gh issue view N --json body,title`
