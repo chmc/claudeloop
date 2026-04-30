@@ -99,17 +99,3 @@ EOF
     --phase-prompt "$TEST_DIR/prompt.md"
   [ "$status" -eq 0 ]
 }
-
-@test "build_default_prompt: includes graphify-first contract when GRAPH_REPORT exists" {
-  mkdir -p "$TEST_DIR/graphify-out"
-  printf '# graph report\n' > "$TEST_DIR/graphify-out/GRAPH_REPORT.md"
-  result=$(cd "$TEST_DIR" && build_default_prompt "2" "Title" "Desc" "")
-  echo "$result" | grep -q "graphify-out/GRAPH_REPORT.md"
-  echo "$result" | grep -qi "Glob, Grep, or Task"
-}
-
-@test "build_default_prompt: omits graphify-first contract when GRAPH_REPORT missing" {
-  rm -rf "$TEST_DIR/graphify-out"
-  result=$(cd "$TEST_DIR" && build_default_prompt "2" "Title" "Desc" "")
-  ! echo "$result" | grep -q "graphify-out/GRAPH_REPORT.md"
-}

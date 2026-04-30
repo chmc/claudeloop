@@ -1289,18 +1289,6 @@ EOF
   echo "$result" | python3 -c "import json,sys; json.loads(sys.stdin.read())"
 }
 
-@test "rec_extract_graphify_metrics: detects ordering and violation" {
-  local raw_file="$TEST_DIR/graphify-order.raw.json"
-  cat > "$raw_file" << 'EOF'
-{"type":"tool_use","name":"Task","input":{"description":"search"}}
-{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
-EOF
-  result=$(rec_extract_graphify_metrics "$raw_file")
-  echo "$result" | grep -q '"graph_context_seq":2'
-  echo "$result" | grep -q '"first_explore_seq":1'
-  echo "$result" | grep -q '"explored_before_graph_context":true'
-}
-
 # =============================================================================
 # Integration: tool_calls in assemble_recorder_json
 # =============================================================================
@@ -1389,19 +1377,6 @@ EOF
   run_dir=$(_create_fixtures)
   result=$(assemble_recorder_json "$run_dir")
   echo "$result" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); assert d['version']==1; assert len(d['phases'])>0"
-}
-
-@test "assemble_recorder_json: includes graphify ordering telemetry per attempt" {
-  run_dir=$(_create_fixtures)
-  cat > "$run_dir/logs/phase-1.attempt-1.raw.json" << 'EOF'
-{"type":"tool_use","name":"Read","input":{"file_path":"graphify-out/GRAPH_REPORT.md"}}
-{"type":"tool_use","name":"Glob","input":{"pattern":"lib/**/*.sh"}}
-{"type":"tool_use","name":"Edit","input":{"file_path":"src/a.sh","old_string":"a","new_string":"b"}}
-EOF
-  result=$(assemble_recorder_json "$run_dir")
-  echo "$result" | grep -q '"graph_context_seq":1'
-  echo "$result" | grep -q '"first_explore_seq":2'
-  echo "$result" | grep -q '"explored_before_graph_context":false'
 }
 
 @test "rec_extract_run_overview: valid JSON when aggregate sessions return empty" {

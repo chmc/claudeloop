@@ -3,7 +3,6 @@
 ## Rules
 
 - Branch awareness: `git branch --show-current` before any work. Flag stable vs beta, ask before changes.
-- **Graphify-first (enforced):** Read `graphify-out/GRAPH_REPORT.md` BEFORE launching Explore agents. Hook blocks until report is read. Escape: `touch .claude/.graphify_skip` to bypass for current session.
 - Skill-first routing: always invoke matching skill, never perform equivalent manually. Compound requests decompose into skill invocations.
 - Completion gate (mandatory): run `/verify` before reporting done. Skip for docs/test-only changes.
 - Autonomous verification (mandatory): never ask user to test. Do it yourself.
@@ -103,7 +102,6 @@ shellcheck -s sh lib/retry.sh         # lint (SC3043 OK)
 - `/wt create|rm|list` — git worktrees
 - `/testing` — invoke BEFORE writing/modifying tests (TDD workflow, pipeline setup, debugging)
 - `/arch` — invoke BEFORE modifying packaging, progress parsers, or execution flow
-- `/graphify` — regenerate knowledge graph (run after significant codebase changes)
 
 ## Worktree
 

@@ -27,6 +27,3 @@ exp_result.md
 
 # Verification session audit logs
 .verification-sessions/
-
-# Graphify output (generated knowledge graph)
-graphify-out/
