@@ -53,3 +53,29 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$output" = "stdio" ]
 }
+
+# Tests for PROVIDER config support (Issue #34)
+
+@test "provider_detect: respects PROVIDER=claude" {
+  PROVIDER=claude run provider_detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "claude" ]
+}
+
+@test "provider_detect: fails for unsupported provider" {
+  PROVIDER=opencode run provider_detect
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not yet supported"* ]]
+}
+
+@test "provider_detect: fails for unknown provider" {
+  PROVIDER=unknown run provider_detect
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not yet supported"* ]]
+}
+
+@test "provider_detect: empty PROVIDER defaults to claude" {
+  PROVIDER="" run provider_detect
+  [ "$status" -eq 0 ]
+  [ "$output" = "claude" ]
+}

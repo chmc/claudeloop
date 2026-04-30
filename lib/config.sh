@@ -38,6 +38,7 @@ load_config() {
       VERIFY_PHASES)         VERIFY_PHASES="$value" ;;
       REFACTOR_PHASES)       REFACTOR_PHASES="$value" ;;
       REFACTOR_MAX_RETRIES) REFACTOR_MAX_RETRIES="$value" ;;
+      PROVIDER)              PROVIDER="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -111,6 +112,7 @@ write_config() {
       printf 'VERIFY_PHASES=%s\n'   "$VERIFY_PHASES"
       printf 'REFACTOR_PHASES=%s\n' "$REFACTOR_PHASES"
       printf 'REFACTOR_MAX_RETRIES=%s\n' "$REFACTOR_MAX_RETRIES"
+      printf 'PROVIDER=%s\n'              "$PROVIDER"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -136,6 +138,7 @@ write_config() {
   [ -n "$_CLI_VERIFY_PHASES" ]       && update_conf_key "$conf_file" VERIFY_PHASES "$VERIFY_PHASES"
   [ -n "$_CLI_REFACTOR_PHASES" ]     && update_conf_key "$conf_file" REFACTOR_PHASES "$REFACTOR_PHASES"
   [ -n "$_CLI_REFACTOR_MAX_RETRIES" ] && update_conf_key "$conf_file" REFACTOR_MAX_RETRIES "$REFACTOR_MAX_RETRIES"
+  [ -n "$_CLI_PROVIDER" ]            && update_conf_key "$conf_file" PROVIDER "$PROVIDER"
   return 0
 }
 

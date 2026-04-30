@@ -91,6 +91,7 @@ claudeloop --archive           # archive current run state and exit
 claudeloop --list-archives     # list past archived runs
 claudeloop --restore 20260316-143022  # restore an archived run
 claudeloop --monitor           # watch live output from a second terminal
+claudeloop --provider claude   # explicit provider selection (default)
 claudeloop --max-phase-time 1800  # kill and retry phases that run longer than 30 min
 claudeloop --idle-timeout 300    # exit stream processor after 5 min of no activity (default: 600)
 claudeloop --verify                    # verify each phase with a fresh Claude instance
