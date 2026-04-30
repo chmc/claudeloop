@@ -30,6 +30,10 @@ Pre-implementation check (per phase):
 2. If already implemented: verify + fill test coverage gaps
 3. When adding library dependencies: update test files that source those libraries
 
+Issue workflow: task references GitHub issue → final plan phase:
+1. Close issue: `gh issue close N` after verification passes. Commit with `Closes #N` for auto-close.
+2. Update related: if sub-issue or linked to other issues → update parent/related issues appropriately.
+
 ## Architecture (TL;DR)
 
 Phase data in flat numbered variables via eval. `phase_to_var "2.5"` → `"2_5"`. Prefer `phase_get`/`phase_set` (`lib/phase_state.sh`).
