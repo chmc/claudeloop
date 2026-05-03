@@ -62,10 +62,10 @@ setup() {
   [ "$output" = "claude" ]
 }
 
-@test "provider_detect: fails for unsupported provider" {
+@test "provider_detect: returns opencode when PROVIDER=opencode" {
   PROVIDER=opencode run provider_detect
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"not yet supported"* ]]
+  [ "$status" -eq 0 ]
+  [ "$output" = "opencode" ]
 }
 
 @test "provider_detect: fails for unknown provider" {
@@ -78,4 +78,52 @@ setup() {
   PROVIDER="" run provider_detect
   [ "$status" -eq 0 ]
   [ "$output" = "claude" ]
+}
+
+# Tests for OpenCode provider (Issue #35)
+
+setup_opencode() {
+  PROVIDER=opencode
+  . "${BATS_TEST_DIRNAME}/../lib/provider.sh"
+}
+
+@test "provider_cli: returns opencode when PROVIDER=opencode" {
+  setup_opencode
+  run provider_cli
+  [ "$status" -eq 0 ]
+  [ "$output" = "opencode" ]
+}
+
+@test "provider_exec_args: returns OpenCode flags when PROVIDER=opencode" {
+  setup_opencode
+  run provider_exec_args
+  [ "$status" -eq 0 ]
+  [ "$output" = "--format json --stream" ]
+}
+
+@test "provider_print_args: returns OpenCode flags when PROVIDER=opencode" {
+  setup_opencode
+  run provider_print_args
+  [ "$status" -eq 0 ]
+  [ "$output" = "--format json" ]
+}
+
+@test "provider_permission_protocol: returns http for OpenCode" {
+  setup_opencode
+  run provider_permission_protocol
+  [ "$status" -eq 0 ]
+  [ "$output" = "http" ]
+}
+
+@test "provider_normalize_events: passes through for Claude" {
+  output=$(echo "test line" | provider_normalize_events)
+  [ "$output" = "test line" ]
+}
+
+@test "provider_normalize_events: normalizes OpenCode events" {
+  setup_opencode
+  input='{"type":"session.created","model":"gpt-4"}'
+  output=$(echo "$input" | provider_normalize_events)
+  [[ "$output" == *'"type":"system"'* ]]
+  [[ "$output" == *'"subtype":"init"'* ]]
 }
