@@ -20,11 +20,28 @@ extract_lessons_summary() {
   local _log_file="$1"
   [ -f "$_log_file" ] || return 0
 
-  # Match LESSONS_SUMMARY: "..." or LESSONS_SUMMARY: '...' (last occurrence wins)
-  # Use grep + sed for POSIX compatibility
-  grep -o 'LESSONS_SUMMARY: *["'"'"'][^"'"'"']*["'"'"']' "$_log_file" 2>/dev/null | \
-    tail -1 | \
-    sed 's/^LESSONS_SUMMARY: *["'"'"']\(.*\)["'"'"']$/\1/'
+  local _line _summary
+
+  # Prefer unquoted (AI's actual output) over quoted (likely prompt template echo)
+  # Unquoted: LESSONS_SUMMARY: followed by non-quote character
+  _line=$(grep 'LESSONS_SUMMARY: [^"'"'"']' "$_log_file" 2>/dev/null | tail -1)
+
+  # Fall back to quoted if no unquoted found
+  if [ -z "$_line" ]; then
+    _line=$(grep 'LESSONS_SUMMARY: ["'"'"']' "$_log_file" 2>/dev/null | tail -1)
+  fi
+  [ -z "$_line" ] && return 0
+
+  # Strip prefix (everything up to and including "LESSONS_SUMMARY: ")
+  _summary="${_line#*LESSONS_SUMMARY: }"
+
+  # Strip outer quotes if present (handles "..." or '...')
+  case "$_summary" in
+    \"*\") _summary="${_summary#\"}"; _summary="${_summary%\"}" ;;
+    \'*\') _summary="${_summary#\'}"; _summary="${_summary%\'}" ;;
+  esac
+
+  printf '%s\n' "$_summary"
 }
 
 # Validate that a lessons summary is meaningful (not placeholder text)

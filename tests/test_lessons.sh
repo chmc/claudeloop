@@ -266,6 +266,47 @@ setup() {
   [ "$result" = "Learned that X improves Y" ]
 }
 
+@test "extract_lessons_summary: extracts unquoted summary" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: OpenCode permission events use nested structures' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "OpenCode permission events use nested structures" ]
+}
+
+@test "extract_lessons_summary: prefers unquoted over quoted (prompt template)" {
+  mkdir -p .claudeloop/logs
+  # Prompt template (quoted) appears first, AI output (unquoted) second
+  cat > .claudeloop/logs/phase-1.log << 'EOF'
+LESSONS_SUMMARY: "<one sentence placeholder>"
+Some other output
+LESSONS_SUMMARY: Real lesson from AI
+EOF
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "Real lesson from AI" ]
+}
+
+@test "extract_lessons_summary: handles embedded quotes in content" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: The "foo" pattern works well' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = 'The "foo" pattern works well' ]
+}
+
+@test "extract_lessons_summary: handles colons in summary" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: Key insight: always validate inputs' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ "$result" = "Key insight: always validate inputs" ]
+}
+
 # =============================================================================
 # validate_lessons_summary
 # =============================================================================
