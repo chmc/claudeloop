@@ -117,3 +117,118 @@ teardown() { :; }
   source "${BATS_TEST_DIRNAME}/../lib/adapters/permission_opencode.sh"
   [ "$OPENCODE_HTTP_PORT" = "9999" ]
 }
+
+# --- _opencode_send_permission_response() HTTP tests ---
+
+@test "_opencode_send_permission_response: sends correct HTTP body with always response" {
+  OPENCODE_HTTP_HOST="localhost"
+  OPENCODE_HTTP_PORT="9999"
+
+  # Capture curl arguments
+  curl() {
+    printf '%s\n' "$@" > "$_tmpdir/curl_args"
+  }
+  export -f curl
+
+  _opencode_send_permission_response "sess123" "perm456" "always"
+  wait  # Wait for background process
+
+  # Verify the URL format
+  grep -q "http://localhost:9999/session/sess123/permissions/perm456" "$_tmpdir/curl_args"
+  # Verify JSON body
+  grep -q '{"response":"always"}' "$_tmpdir/curl_args"
+}
+
+@test "_opencode_send_permission_response: sends correct HTTP body with once response" {
+  OPENCODE_HTTP_HOST="localhost"
+  OPENCODE_HTTP_PORT="8080"
+
+  curl() {
+    printf '%s\n' "$@" > "$_tmpdir/curl_args"
+  }
+  export -f curl
+
+  _opencode_send_permission_response "mysession" "myperm" "once"
+  wait
+
+  grep -q '{"response":"once"}' "$_tmpdir/curl_args"
+}
+
+@test "_opencode_send_permission_response: sends correct HTTP body with reject response" {
+  OPENCODE_HTTP_HOST="localhost"
+  OPENCODE_HTTP_PORT="8080"
+
+  curl() {
+    printf '%s\n' "$@" > "$_tmpdir/curl_args"
+  }
+  export -f curl
+
+  _opencode_send_permission_response "sess" "perm" "reject"
+  wait
+
+  grep -q '{"response":"reject"}' "$_tmpdir/curl_args"
+}
+
+@test "_opencode_send_permission_response: logs warning on HTTP failure but does not block" {
+  OPENCODE_HTTP_HOST="localhost"
+  OPENCODE_HTTP_PORT="8080"
+  VERBOSE_MODE=true
+
+  # Mock curl to fail
+  curl() {
+    return 1
+  }
+  export -f curl
+
+  # Should not block - function returns immediately, background logs warning
+  result=$(_opencode_send_permission_response "sess" "perm" "always" 2>"$_tmpdir/stderr")
+  wait
+
+  # Function returns without error (curl runs in background)
+  [ -z "$result" ]
+}
+
+# --- _opencode_handle_permission() response mapping tests ---
+
+@test "_opencode_handle_permission: allow decision maps to always HTTP response" {
+  SKIP_PERMISSIONS=true  # Forces allow decision
+
+  # Capture what response type is sent
+  _opencode_send_permission_response() {
+    echo "$3" > "$_tmpdir/response_type"
+  }
+
+  local json='{"type":"permission.updated","id":"perm1","sessionID":"sess1","type":"file.write","title":"test"}'
+  _opencode_handle_permission "$json"
+
+  [ "$(cat "$_tmpdir/response_type")" = "always" ]
+}
+
+@test "_opencode_handle_permission: missing permissionID returns error" {
+  SKIP_PERMISSIONS=true
+  OPENCODE_SESSION_ID="fallback-session"
+
+  # Stub the send function
+  _opencode_send_permission_response() { :; }
+
+  local json='{"type":"permission.updated","sessionID":"sess1"}'
+  run _opencode_handle_permission "$json"
+
+  [ "$status" -eq 1 ]
+}
+
+@test "_opencode_handle_permission: falls back to OPENCODE_SESSION_ID env var" {
+  SKIP_PERMISSIONS=true
+  OPENCODE_SESSION_ID="env-session-id"
+
+  # Capture session ID used
+  _opencode_send_permission_response() {
+    echo "$1" > "$_tmpdir/session_id"
+  }
+
+  # JSON without sessionID field
+  local json='{"type":"permission.updated","id":"perm123","type":"file.write","title":"test"}'
+  _opencode_handle_permission "$json"
+
+  [ "$(cat "$_tmpdir/session_id")" = "env-session-id" ]
+}
