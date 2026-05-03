@@ -1,0 +1,9 @@
+{"type":"session.created","sessionId":"sess_004","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"I need to run a command that requires permission."}
+{"type":"message.part.updated","callID":"tool_perm_001","name":"Bash","state":"pending"}
+{"type":"permission.requested","callID":"tool_perm_001","tool":"Bash","command":"rm -rf /tmp/test","reason":"destructive operation"}
+{"type":"permission.granted","callID":"tool_perm_001"}
+{"type":"message.part.updated","callID":"tool_perm_001","name":"Bash","state":"running"}
+{"type":"message.part.updated","callID":"tool_perm_001","name":"Bash","state":"completed","output":""}
+{"type":"message.part.updated","text":"Command completed successfully."}
+{"type":"session.idle","sessionId":"sess_004"}
