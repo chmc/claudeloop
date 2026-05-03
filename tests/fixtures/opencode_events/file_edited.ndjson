@@ -1,0 +1,7 @@
+{"type":"session.created","sessionId":"sess_003","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"I will create a new configuration file."}
+{"type":"file.edited","path":"/tmp/config.json","action":"create"}
+{"type":"message.part.updated","text":"Now updating the main script."}
+{"type":"file.edited","file":"/tmp/main.sh","action":"modify"}
+{"type":"message.part.updated","text":"Files have been updated."}
+{"type":"session.idle","sessionId":"sess_003"}

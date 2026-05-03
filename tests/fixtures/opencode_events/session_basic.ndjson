@@ -1,0 +1,9 @@
+{"type":"session.created","sessionId":"sess_001","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"I will read the file and make changes."}
+{"type":"message.part.updated","callID":"tool_001","name":"Read","state":"pending"}
+{"type":"message.part.updated","callID":"tool_001","name":"Read","state":"running"}
+{"type":"message.part.updated","callID":"tool_001","name":"Read","state":"completed","output":"#!/bin/sh\necho hello"}
+{"type":"message.part.updated","text":"Now I will edit the file."}
+{"type":"message.part.updated","callID":"tool_002","name":"Edit","state":"pending"}
+{"type":"message.part.updated","callID":"tool_002","name":"Edit","state":"completed","output":"ok"}
+{"type":"session.idle","sessionId":"sess_001"}

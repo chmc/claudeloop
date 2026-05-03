@@ -1,0 +1,9 @@
+{"type":"session.created","sessionId":"sess_006","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"Starting work."}
+not valid json at all
+{"type":"message.part.updated","callID":"tool_mal_001","name":"Read","state":"pending"}
+{broken json here
+{"type":"message.part.updated","callID":"tool_mal_001","name":"Read","state":"completed","output":"file contents"}
+just plain text
+{"type":"message.part.updated","text":"Work complete."}
+{"type":"session.idle","sessionId":"sess_006"}

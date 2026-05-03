@@ -1,0 +1,10 @@
+{"type":"session.created","sessionId":"sess_005","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"Running a complex operation."}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"pending"}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"pending"}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"pending"}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"running"}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"running"}
+{"type":"message.part.updated","callID":"tool_dup_001","name":"Bash","state":"completed","output":"done"}
+{"type":"message.part.updated","text":"Operation complete."}
+{"type":"session.idle","sessionId":"sess_005"}

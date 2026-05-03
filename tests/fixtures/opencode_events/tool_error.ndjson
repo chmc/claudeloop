@@ -1,0 +1,9 @@
+{"type":"session.created","sessionId":"sess_002","model":"claude-sonnet-4-20250514"}
+{"type":"message.part.updated","text":"I will try to read a file that does not exist."}
+{"type":"message.part.updated","callID":"tool_err_001","name":"Read","state":"pending"}
+{"type":"message.part.updated","callID":"tool_err_001","name":"Read","state":"running"}
+{"type":"message.part.updated","callID":"tool_err_001","name":"Read","state":"error","output":"Error: ENOENT: no such file or directory, open '/nonexistent/file.txt'"}
+{"type":"message.part.updated","text":"The file does not exist. Let me try a different approach."}
+{"type":"message.part.updated","callID":"tool_err_002","name":"Bash","state":"pending"}
+{"type":"message.part.updated","callID":"tool_err_002","name":"Bash","state":"failed","output":"Command exited with code 1: ls /nonexistent"}
+{"type":"session.idle","sessionId":"sess_002"}
