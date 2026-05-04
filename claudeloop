@@ -47,10 +47,7 @@ _CL_PROVIDER="${PROVIDER:-}"
 . "$SCRIPT_DIR/lib/refactor.sh"
 . "$SCRIPT_DIR/lib/execution.sh"
 . "$SCRIPT_DIR/lib/provider.sh"
-<<<<<<< Updated upstream
 . "$SCRIPT_DIR/lib/args.sh"
-=======
->>>>>>> Stashed changes
 . "$SCRIPT_DIR/lib/archive.sh"
 . "$SCRIPT_DIR/lib/recorder.sh"
 . "$SCRIPT_DIR/lib/lessons.sh"
@@ -346,13 +343,9 @@ validate_environment() {
   fi
 
   # Detect provider
-<<<<<<< Updated upstream
   if ! _provider=$(provider_detect); then
     exit 1
   fi
-=======
-  _provider=$(provider_detect)
->>>>>>> Stashed changes
   log_verbose "Provider: $_provider"
 
   # Check if provider CLI is available
