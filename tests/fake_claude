@@ -21,21 +21,15 @@
 # Verification prompts (containing "verif") emit VERIFICATION_PASSED.
 
 FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+FAKE_PROVIDER_DIR="$FAKE_CLAUDE_DIR"
 
-# --- Call counting & capture ---
-count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
-count=$((count + 1))
-printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+# Source shared utilities
+_script_dir="$(cd "$(dirname "$0")" && pwd)"
+. "$_script_dir/lib/fake_provider_common.sh"
 
-mkdir -p "$FAKE_CLAUDE_DIR/prompts" "$FAKE_CLAUDE_DIR/args"
-
-# Handle --version (used by Oxveil's claudeDetection)
-for _arg in "$@"; do
-  if [ "$_arg" = "--version" ]; then
-    echo "fake-claude 0.0.0"
-    exit 0
-  fi
-done
+# --- Initialize ---
+fake_provider_check_version "fake-claude 0.0.0" "$@"
+fake_provider_init
 
 # Detect stream-json input format (bidirectional stdio protocol)
 _stream_json_input=false
@@ -49,51 +43,12 @@ for _arg in "$@"; do
 done
 
 if [ "$_stream_json_input" = "true" ]; then
-  # Read stream-json message from stdin (one line of JSON, don't wait for EOF)
-  IFS= read -r _raw_input 2>/dev/null || _raw_input=""
-  printf '%s' "$_raw_input" > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+  fake_provider_capture_prompt "stream-json"
 else
-  cat > "$FAKE_CLAUDE_DIR/prompts/prompt_$count"
+  fake_provider_capture_prompt "plain"
 fi
-printf '%s\n' "$@" > "$FAKE_CLAUDE_DIR/args/args_$count"
-
-# --- Scenario selection ---
-scenario=""
-if [ -f "$FAKE_CLAUDE_DIR/scenarios" ]; then
-  scenario=$(sed -n "${count}p" "$FAKE_CLAUDE_DIR/scenarios" 2>/dev/null)
-fi
-[ -z "$scenario" ] && scenario=$(cat "$FAKE_CLAUDE_DIR/scenario" 2>/dev/null)
-[ -z "$scenario" ] && scenario="success"
-
-# --- Prompt auto-detection ---
-# Detects claudeloop's AI-parse and verification prompts from captured stdin.
-# Used by success/success_multi/success_realistic to emit appropriate responses
-# instead of the default tool_use output.
-
-is_ai_parse_prompt() {
-  # Matches ai_parse_plan() prompt in lib/ai_parser.sh
-  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
-  [ -f "$prompt_file" ] && grep -q 'plan extraction assistant' "$prompt_file"
-}
-
-is_verify_prompt() {
-  # Matches ai_verify_plan() prompt in lib/ai_parser.sh (plan-level verification)
-  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
-  [ -f "$prompt_file" ] && grep -q 'DECOMPOSED' "$prompt_file"
-}
-
-is_phase_verify_prompt() {
-  # Matches verify_phase() in lib/verify.sh (per-phase verification)
-  local prompt_file="$FAKE_CLAUDE_DIR/prompts/prompt_$count"
-  [ -f "$prompt_file" ] && grep -qi 'verification' "$prompt_file"
-}
-
-# Write a file to CWD so git detects changes after phase execution.
-# Args: $1 - relative file path, $2 - content
-_write_fake_file() {
-  mkdir -p "$(dirname "$1")"
-  printf '%s\n' "$2" > "$1"
-}
+fake_provider_capture_args "$@"
+fake_provider_select_scenario
 
 # --- Scenario functions ---
 # Each emits hardcoded NDJSON matching the real Claude CLI stream-json format.
@@ -429,9 +384,5 @@ scenario_custom() {
 default_exit=0
 "scenario_$scenario"
 
-# --- Exit code ---
-exit_code=""
-if [ -f "$FAKE_CLAUDE_DIR/exit_codes" ]; then
-  exit_code=$(sed -n "${count}p" "$FAKE_CLAUDE_DIR/exit_codes" 2>/dev/null)
-fi
-exit "${exit_code:-$default_exit}"
+# --- Exit ---
+fake_provider_exit "$default_exit"
