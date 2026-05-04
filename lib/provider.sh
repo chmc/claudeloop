@@ -2,15 +2,11 @@
 # Provider abstraction layer
 
 # Source active adapter (SCRIPT_DIR is set by main claudeloop script)
-<<<<<<< Updated upstream
 case "${PROVIDER:-claude}" in
   claude)   . "$SCRIPT_DIR/lib/adapters/claude.sh" ;;
   opencode) . "$SCRIPT_DIR/lib/adapters/opencode.sh" ;;
   *)        . "$SCRIPT_DIR/lib/adapters/claude.sh" ;;
 esac
-=======
-. "$SCRIPT_DIR/lib/adapters/claude.sh"
->>>>>>> Stashed changes
 
 # Detection - returns provider name
 # Respects PROVIDER env/config variable if set
