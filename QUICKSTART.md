@@ -131,6 +131,23 @@ claudeloop --plan ideas.md --ai-parse --no-retry
 claudeloop --ai-parse-feedback --granularity tasks
 ```
 
+## Provider Selection
+
+ClaudeLoop supports multiple AI providers:
+
+| Provider | Command | Min Version |
+|----------|---------|-------------|
+| Claude Code | `--provider claude` | 1.0.0+ |
+| OpenCode | `--provider opencode` | 0.1.0+ |
+
+```bash
+claudeloop --provider claude     # Claude Code (default)
+claudeloop --provider opencode   # OpenCode
+PROVIDER=opencode claudeloop     # via environment variable
+```
+
+**Precedence:** CLI flag > environment variable > config file > default (claude)
+
 ## Config file
 
 On first run, an interactive setup wizard configures your project with smart defaults — just press Enter to accept them all. Settings are saved to `.claudeloop/.claudeloop.conf`. After that, just run `claudeloop` with no arguments:
