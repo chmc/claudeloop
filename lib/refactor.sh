@@ -155,6 +155,10 @@ refactor_phase() {
     phase_set REFACTOR_STATUS "$_rp_phase" "in_progress $_attempt/$_max_attempts"
     write_progress "$PROGRESS_FILE" "$PLAN_FILE"
 
+    # Capture HEAD before this iteration — used to detect if THIS run made changes
+    local _iter_sha
+    _iter_sha=$(git rev-parse HEAD)
+
     # Build prompt (on retry: append error context from previous log)
     local _rp_prompt _rp_log _rp_raw
     _rp_log=".claudeloop/logs/phase-$_rp_phase.refactor.log"
@@ -203,9 +207,9 @@ $_err_ctx
     # Auto-commit any uncommitted refactoring changes
     auto_commit_changes "$_rp_phase" "auto-commit after refactoring"
 
-    # Check if any non-metadata files changed — if not, nothing was refactored
+    # Check if THIS iteration made changes (not cumulative from $_pre_sha)
     local _code_changes
-    _code_changes=$(git diff --name-only "$_pre_sha"..HEAD -- ':!.claudeloop/' 2>/dev/null)
+    _code_changes=$(git diff --name-only "$_iter_sha"..HEAD -- ':!.claudeloop/' 2>/dev/null)
     if [ -z "$_code_changes" ]; then
       log_ts "Nothing to refactor for phase $_rp_phase"
       phase_set REFACTOR_STATUS "$_rp_phase" "completed"
