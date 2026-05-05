@@ -34,3 +34,6 @@ exp_result.md
 
 # Plan files (session-specific)
 .claude/plans/
+
+# Review session audit logs
+.claude/review-sessions/

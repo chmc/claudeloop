@@ -99,8 +99,16 @@ if has_impl_files; then
     fi
 fi
 
-# Gate 10: Code review
-if [ ! -f "$STATE_DIR/review-complete" ]; then
+# Gate 10: Code review (check for session artifact OR legacy touch file)
+_review_pass=false
+for _session in .claude/review-sessions/*/README.md; do
+    [ -f "$_session" ] || continue
+    if grep -q "^result: PASS" "$_session"; then
+        _review_pass=true
+        break
+    fi
+done
+if [ "$_review_pass" = false ] && [ ! -f "$STATE_DIR/review-complete" ]; then
     add_missing "code review not completed"
 fi
 
