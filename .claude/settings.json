@@ -4,5 +4,70 @@
   },
   "env": {
     "DISABLE_AUTOUPDATER": "1"
+  },
+  "plansDirectory": "./.claude/plans",
+  "permissions": {
+    "allow": [
+      "Edit(.claude/plans/**)",
+      "Write(.claude/plans/**)",
+      "Bash(touch *.claude/workflow-state/*)",
+      "Bash(rm *.claude/workflow-state/*)",
+      "Bash(rm -f *.claude/workflow-state/*)",
+      "Bash(mv *.claude/workflow-state/* *.claude/workflow-state/*)",
+      "Bash(mkdir -p *.claude/workflow-state*)",
+      "Bash(echo * > *.claude/workflow-state/*)",
+      "Bash(cat *.claude/workflow-state/*)",
+      "Bash(ls *.claude/workflow-state*)",
+      "Bash(mkdir -p *.claude/plans*)",
+      "Bash(rm *.claude/plans/*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "TaskCreate",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tasks-created.sh"
+        }]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/branch-awareness.sh"
+        }]
+      },
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/planning-checklist.sh"
+        }]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/plan-to-tasks.sh"
+        }]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/tdd-enforcement.sh"
+        }]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/completion-bundle.sh"
+        }]
+      }
+    ]
   }
 }
