@@ -450,6 +450,12 @@ claudeloop --ai-parse-feedback --granularity tasks
 
 **`claude: command not found`** — install the Claude CLI and ensure it's in your PATH
 
+**`opencode: command not found`** — install [OpenCode](https://github.com/opencode-ai/opencode) and ensure it's in your PATH. Verify with `opencode --version` (requires 0.1.0+ with `--format json` support)
+
+**Provider not detected correctly** — ClaudeLoop auto-detects providers by checking for binaries in PATH. Override with `--provider <name>` or set `PROVIDER=<name>` in environment. Check detection with `which claude` or `which opencode`
+
+**Permission prompts behave differently with OpenCode** — OpenCode uses HTTP-based permission handling while Claude Code uses FD7/stdio. If you see unexpected permission behavior, ensure you're using the correct `--dangerously-skip-permissions` equivalent for your provider. OpenCode permission configuration may differ from Claude Code settings
+
 **`Not in a git repository`** — run `git init && git add . && git commit -m "init"` in your project
 
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
