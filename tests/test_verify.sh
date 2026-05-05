@@ -630,3 +630,39 @@ STUB
   [ -n "$break_line" ]
   [ "$break_line" -gt "$sentinel_line" ]
 }
+
+# =============================================================================
+# Pipeline parity with execution.sh
+# =============================================================================
+
+@test "verify_phase: clears tostop before pipeline to prevent SIGTTOU on background writes" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # stty -tostop must appear before set -m (pipeline launch) so background awk
+  # can write spinner/panel to stderr without receiving SIGTTOU and being stopped.
+  local tostop_line setm_line
+  tostop_line=$(grep -n 'stty -tostop' "$src" | head -1 | cut -d: -f1)
+  setm_line=$(grep -n '^\s*set -m$' "$src" | head -1 | cut -d: -f1)
+  [ -n "$tostop_line" ] || { echo "stty -tostop missing from verify.sh"; return 1; }
+  [ -n "$setm_line" ]
+  [ "$tostop_line" -lt "$setm_line" ]
+}
+
+@test "verify_phase: pipeline includes provider_normalize_events before inject_heartbeats" {
+  local src="${BATS_TEST_DIRNAME}/../lib/verify.sh"
+  # Verify pipeline must normalize provider events before inject_heartbeats,
+  # matching execution.sh pipeline structure. Required for non-Claude providers.
+  grep -q 'provider_normalize_events' "$src" \
+    || { echo "provider_normalize_events missing from verify.sh pipeline"; return 1; }
+  # Both stages may be on the same pipeline line; check text order within the line.
+  local pipeline_line
+  pipeline_line=$(grep 'inject_heartbeats' "$src" | head -1)
+  echo "$pipeline_line" | grep -q 'provider_normalize_events' \
+    || { echo "provider_normalize_events not on the same pipeline line as inject_heartbeats"; return 1; }
+  # provider_normalize_events must appear before inject_heartbeats in the pipeline
+  local norm_pos hb_pos before_norm before_hb
+  before_norm="${pipeline_line%%provider_normalize_events*}"
+  norm_pos=${#before_norm}
+  before_hb="${pipeline_line%%inject_heartbeats*}"
+  hb_pos=${#before_hb}
+  [ "$norm_pos" -lt "$hb_pos" ]
+}

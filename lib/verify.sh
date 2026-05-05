@@ -110,6 +110,9 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   # permission_filter writes control_responses to FD 7, which claude reads via stdin.
   exec 7<>"$_verify_fifo"
 
+  # Prevent SIGTTOU on background writes (matches execution.sh:180).
+  stty -tostop 2>/dev/null < /dev/tty || true
+
   set -m
   {
     _rc=0
@@ -117,7 +120,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
     $(provider_cli) $(provider_exec_args) \
       < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
-  } | permission_filter | inject_heartbeats 7>&- | { process_stream_json "$verify_formatted_log" "$verify_log" \
+  } | permission_filter | provider_normalize_events | inject_heartbeats 7>&- | { process_stream_json "$verify_formatted_log" "$verify_log" \
       "false" "${LIVE_LOG:-}" "${SIMPLE_MODE:-false}" "${VERIFY_IDLE_TIMEOUT:-120}" 7>&-; : > "$_sentinel"; } &
   CURRENT_PIPELINE_PID=$!
   CURRENT_PIPELINE_PGID=$(jobs -p 2>/dev/null | tr -d '[:space:]')
