@@ -1170,3 +1170,48 @@ STUB
   grep -q "in_progress 1/3" "$progress_dir/progress_at_1"
   grep -q "in_progress 2/3" "$progress_dir/progress_at_2"
 }
+
+# =============================================================================
+# Bug fix: prior commits exist but current iteration makes no changes
+# =============================================================================
+
+@test "refactor_phase: exits when current iteration makes no changes (prior commits exist)" {
+  REFACTOR_PHASES=true
+  REFACTOR_MAX_RETRIES=5
+
+  echo "0" > "$TEST_DIR/call_count"
+
+  # Record pre_sha before any refactoring
+  local pre_sha
+  pre_sha=$(git rev-parse HEAD)
+
+  # Simulate prior refactor attempt that made a commit
+  echo "prior refactor change" >> file.txt
+  git add file.txt
+  git commit -q -m "prior refactor attempt"
+
+  # Set up state as if resuming with prior attempt
+  phase_set REFACTOR_SHA "1" "$pre_sha"
+  phase_set REFACTOR_ATTEMPTS "1" "1"
+  phase_set REFACTOR_STATUS "1" "in_progress 1/5"
+
+  # Stub that makes NO changes (nothing to refactor this iteration)
+  cat > "$TEST_DIR/bin/claude" << 'STUB'
+#!/bin/sh
+read -r _discard 2>/dev/null || true
+n=$(cat "$TEST_DIR/call_count" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" > "$TEST_DIR/call_count"
+printf '{"type":"tool_use","name":"Read","input":{"file":"file.txt"}}\n'
+printf '{"type":"content_block_start","content_block":{"type":"text","text":"Code is well-structured, nothing to refactor.\n"}}\n'
+exit 0
+STUB
+  chmod +x "$TEST_DIR/bin/claude"
+
+  refactor_phase "1"
+
+  # Should complete (not loop forever)
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
+  # Only 1 call — detected no changes THIS iteration
+  [ "$(cat "$TEST_DIR/call_count")" = "1" ]
+}
