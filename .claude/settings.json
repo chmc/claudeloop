@@ -13,6 +13,7 @@
       "Bash(touch *.claude/workflow-state/*)",
       "Bash(rm *.claude/workflow-state/*)",
       "Bash(rm -f *.claude/workflow-state/*)",
+      "Bash(mv *.claude/workflow-state/* *.claude/workflow-state/*)",
       "Bash(mkdir -p *.claude/workflow-state*)",
       "Bash(echo * > *.claude/workflow-state/*)",
       "Bash(cat *.claude/workflow-state/*)",
