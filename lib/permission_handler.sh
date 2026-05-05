@@ -20,28 +20,42 @@ fi
 # Backwards-compatible FD variable (Claude only - ignored by OpenCode)
 _PERMISSION_FD=${_CLAUDE_PERMISSION_FD:-7}
 
-# Backwards-compatible function aliases
-# These delegate to Claude-prefixed implementations (Claude adapter only)
-# OpenCode adapter has its own implementations with _opencode_ prefix
+# Provider-aware function wrappers
+# Delegate to provider-specific implementations
 
 _extract_field() {
-  _claude_extract_field "$@"
+  case "${PROVIDER:-claude}" in
+    opencode) _opencode_extract_field "$@" ;;
+    *)        _claude_extract_field "$@" ;;
+  esac
 }
 
 _build_stream_message() {
-  _claude_build_stream_message "$@"
+  case "${PROVIDER:-claude}" in
+    opencode) _opencode_build_stream_message "$@" ;;
+    *)        _claude_build_stream_message "$@" ;;
+  esac
 }
 
 _build_allow_response() {
-  _claude_build_allow_response "$@"
+  case "${PROVIDER:-claude}" in
+    opencode) : ;; # OpenCode uses HTTP, no stream response needed
+    *)        _claude_build_allow_response "$@" ;;
+  esac
 }
 
 _build_deny_response() {
-  _claude_build_deny_response "$@"
+  case "${PROVIDER:-claude}" in
+    opencode) : ;; # OpenCode uses HTTP, no stream response needed
+    *)        _claude_build_deny_response "$@" ;;
+  esac
 }
 
 _handle_control_request() {
-  _claude_handle_control_request "$@"
+  case "${PROVIDER:-claude}" in
+    opencode) : ;; # OpenCode uses HTTP protocol, handled differently
+    *)        _claude_handle_control_request "$@" ;;
+  esac
 }
 
 # Route to provider-specific permission filter

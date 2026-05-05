@@ -40,6 +40,20 @@ EOF
   chmod +x "$dir/bin/claude"
 }
 
+# Write the stub opencode script into TEST_DIR/bin/ (wraps fake_opencode)
+_write_opencode_stub() {
+  local dir="$1"
+  mkdir -p "$dir/bin"
+  local fake_opencode_path="${CLAUDELOOP_DIR}/tests/fake_opencode"
+  cat > "$dir/bin/opencode" << OPENCODE_STUB
+#!/bin/sh
+export FAKE_OPENCODE_DIR="$dir"
+exec "$fake_opencode_path" "\$@"
+OPENCODE_STUB
+  chmod +x "$dir/bin/opencode"
+  echo "success" > "$dir/scenario"
+}
+
 setup() {
   TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
@@ -416,4 +430,37 @@ EOF
   [ "$status" -ne 0 ]
   [ "$(_call_count)" -eq 3 ]
   grep -q "Status: failed" "$TEST_DIR/.claudeloop/PROGRESS.md"
+}
+
+# =============================================================================
+# Provider matrix tests: PROVIDER=opencode retry scenarios
+# =============================================================================
+# bats test_tags=provider
+@test "integration: PROVIDER=opencode network error does not consume retry" {
+  _write_opencode_stub "$TEST_DIR"
+  export PROVIDER=opencode
+
+  # Call 1: network error, Call 2: success, Call 3: success
+  printf 'network_error\nsuccess\nsuccess\n' > "$TEST_DIR/scenarios"
+
+  _cl --plan PLAN.md --max-retries 2
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/call_count" 2>/dev/null || echo 0)" -eq 3 ]
+  [ "$(_completed_count)" -eq 2 ]
+  # Attempts counter not consumed
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/.claudeloop/PROGRESS.md" | grep -q "Attempts: 1"
+}
+
+# bats test_tags=provider
+@test "integration: PROVIDER=opencode overload error triggers retry" {
+  _write_opencode_stub "$TEST_DIR"
+  export PROVIDER=opencode
+
+  # Call 1: overload error (transient), Call 2: success, Call 3: success
+  printf 'overload_error\nsuccess\nsuccess\n' > "$TEST_DIR/scenarios"
+
+  _cl --plan PLAN.md --max-retries 2
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/call_count" 2>/dev/null || echo 0)" -eq 3 ]
+  [ "$(_completed_count)" -eq 2 ]
 }

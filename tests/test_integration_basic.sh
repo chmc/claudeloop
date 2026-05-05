@@ -40,6 +40,21 @@ EOF
   chmod +x "$dir/bin/claude"
 }
 
+# Write the stub opencode script into TEST_DIR/bin/ (wraps fake_opencode)
+_write_opencode_stub() {
+  local dir="$1"
+  mkdir -p "$dir/bin"
+  # Write stub with paths baked in at creation time
+  local fake_opencode_path="${CLAUDELOOP_DIR}/tests/fake_opencode"
+  cat > "$dir/bin/opencode" << OPENCODE_STUB
+#!/bin/sh
+export FAKE_OPENCODE_DIR="$dir"
+exec "$fake_opencode_path" "\$@"
+OPENCODE_STUB
+  chmod +x "$dir/bin/opencode"
+  echo "success" > "$dir/scenario"
+}
+
 setup() {
   TEST_DIR="$BATS_TEST_TMPDIR"
   export TEST_DIR
@@ -721,4 +736,48 @@ PROGRESS
   echo "$output" | grep "Parsing plan file" | grep -q "✓"
   # Should NOT show "Using cached plan" for a normal parse
   ! echo "$output" | grep -q "Using cached plan"
+}
+
+# =============================================================================
+# Provider matrix tests: PROVIDER=opencode
+# =============================================================================
+# bats test_tags=provider
+@test "integration: full pipeline works with PROVIDER=opencode" {
+  _write_opencode_stub "$TEST_DIR"
+  export PROVIDER=opencode
+
+  _cl --plan PLAN.md
+  [ "$status" -eq 0 ]
+  [ -f "$TEST_DIR/.claudeloop/PROGRESS.md" ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+# bats test_tags=provider
+@test "integration: PROVIDER=opencode phase retry works" {
+  _write_opencode_stub "$TEST_DIR"
+  export PROVIDER=opencode
+
+  # Call 1 (phase 1): failure, Call 2 (phase 1 retry): success, Call 3 (phase 2): success
+  printf 'failure\nsuccess\nsuccess\n' > "$TEST_DIR/scenarios"
+
+  _cl --plan PLAN.md --max-retries 3
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/call_count" 2>/dev/null || echo 0)" -eq 3 ]
+  [ "$(_completed_count)" -eq 2 ]
+}
+
+# bats test_tags=provider
+@test "integration: PROVIDER=opencode quota error does not consume retry" {
+  _write_opencode_stub "$TEST_DIR"
+  export PROVIDER=opencode
+
+  # Call 1: quota error, Call 2: success, Call 3: success
+  printf 'quota_error\nsuccess\nsuccess\n' > "$TEST_DIR/scenarios"
+
+  _cl --plan PLAN.md --max-retries 2 --quota-retry-interval 0
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TEST_DIR/call_count" 2>/dev/null || echo 0)" -eq 3 ]
+  [ "$(_completed_count)" -eq 2 ]
+  # Attempts counter not consumed
+  grep -A5 "Phase 1: Setup" "$TEST_DIR/.claudeloop/PROGRESS.md" | grep -q "Attempts: 1"
 }

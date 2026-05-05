@@ -28,7 +28,7 @@ _script_dir="$(cd "$(dirname "$0")" && pwd)"
 # --- Initialize ---
 fake_provider_check_version "fake-opencode 0.0.0" "$@"
 fake_provider_init
-fake_provider_capture_prompt "plain"
+fake_provider_capture_prompt "stream-json"
 fake_provider_capture_args "$@"
 fake_provider_select_scenario
 
