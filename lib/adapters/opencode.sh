@@ -33,6 +33,12 @@ _opencode_permission_protocol() {
   printf '%s' 'http'
 }
 
+# Build a stream message for OpenCode stdin (plain text, no JSON wrapper needed)
+# OpenCode accepts prompts directly on stdin without JSON encoding
+_opencode_build_stream_message() {
+  printf '%s' "$1"
+}
+
 # Normalize OpenCode JSON events to Claude stream-json format
 # Reads NDJSON from stdin, emits normalized events to stdout
 # Malformed JSON lines go to stderr with warning
