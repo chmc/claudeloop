@@ -93,13 +93,23 @@ claudeloop --monitor
 
 > **First run?** A setup wizard configures your project with smart defaults — just press Enter. Settings are saved for future runs, no flags needed.
 
-### Multi-Provider Support (Preview)
+### Multi-Provider Support
 
-ClaudeLoop supports multiple AI providers. Currently only Claude is available; OpenCode support is coming soon.
+ClaudeLoop supports multiple AI providers:
+
+| Provider | CLI | Status |
+|----------|-----|--------|
+| Claude Code | `claude` | Default |
+| OpenCode | `opencode` | Supported |
 
 ```sh
-claudeloop --provider claude          # explicit (default)
-PROVIDER=claude claudeloop            # via environment
+# Claude Code (default)
+claudeloop --provider claude
+PROVIDER=claude claudeloop
+
+# OpenCode
+claudeloop --provider opencode
+PROVIDER=opencode claudeloop
 ```
 
 **Precedence:** CLI flag > environment variable > config file > default (claude)
