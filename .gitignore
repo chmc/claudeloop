@@ -27,3 +27,13 @@ exp_result.md
 
 # Verification session audit logs
 .verification-sessions/
+
+# Workflow state (session-specific)
+.claude/workflow-state/*
+!.claude/workflow-state/.gitkeep
+
+# Plan files (session-specific)
+.claude/plans/
+
+# Review session audit logs
+.claude/review-sessions/
