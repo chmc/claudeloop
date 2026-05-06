@@ -28,6 +28,7 @@ Implementation details:
 - Saves ~$1-2 per unnecessary retry attempt
 - Claude is no longer pressured to make fake edits
 - Signal file serves as documentation of why no changes were needed
+- Signal files act as idempotency records — always write even when phase is a no-op, so future runs can detect prior completion without re-executing
 
 **Negative:**
 - Adds a new file-based signaling mechanism (more state to manage)
