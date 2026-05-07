@@ -104,7 +104,7 @@ fi
 
 # Gate 10: Code review (check for session artifact OR legacy touch file)
 _review_pass=false
-for _session in .claude/review-sessions/*/README.md; do
+for _session in "${CLAUDE_PROJECT_DIR:-.}"/.claude/review-sessions/*/README.md; do
     [ -f "$_session" ] || continue
     if grep -q "^result: PASS" "$_session"; then
         _review_pass=true
