@@ -21,6 +21,7 @@ Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify 
 | 7 | Architecture | TaskUpdate (complete) | Create ADR if indicated |
 | 8 | Install/README | TaskUpdate (complete) | Update if plan indicated |
 | 9 | Simplify | TaskUpdate (complete) | Run /simplify for impl tasks |
+| 9.5 | Feature Registry | TaskUpdate (complete) | Review FEATURES.md if impl changed |
 | 10 | Code review | TaskUpdate (complete) | Review before task closes |
 | 11 | Visual verification | TaskUpdate (complete) | Verify or justify skip |
 
@@ -61,6 +62,8 @@ Located in `.claude/workflow-state/` (gitignored):
 | `review-complete` | Code review done | Code review |
 | `visual-verified` | Visual verification done | /verify skill |
 | `visual-skip-reason` | Skip justification | Manual |
+| `features-reviewed` | FEATURES.md updated | Manual |
+| `features-no-impact` | Skip reason (no feature changes) | Manual |
 
 ## Plan File Handling
 
