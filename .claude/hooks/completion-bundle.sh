@@ -92,10 +92,13 @@ if [ -f "$REQUIREMENTS_FILE" ]; then
     fi
 fi
 
-# Gate 9: Simplify (if impl files were edited)
+# Gates 9 & 9.5: Impl-file checks (simplify + feature registry)
 if has_impl_files; then
     if [ ! -f "$STATE_DIR/simplify-complete" ]; then
         add_missing "/simplify not run"
+    fi
+    if [ ! -f "$STATE_DIR/features-reviewed" ] && [ ! -f "$STATE_DIR/features-no-impact" ]; then
+        add_missing "feature registry not reviewed (update docs/FEATURES.md or provide skip reason)"
     fi
 fi
 
