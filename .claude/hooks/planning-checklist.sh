@@ -272,6 +272,8 @@ rm -f "$STATE_DIR/simplify-complete"
 rm -f "$STATE_DIR/review-complete"
 rm -f "$STATE_DIR/visual-verified"
 rm -f "$STATE_DIR/visual-skip-reason"
+rm -f "$STATE_DIR/features-reviewed"
+rm -f "$STATE_DIR/features-no-impact"
 
 # Allow (exit 0 with no output)
 exit 0

@@ -278,3 +278,75 @@ EOF
     echo "$reason" | grep -q "ADR"
     echo "$reason" | grep -q "workflow"
 }
+
+@test "completion: denies when impl files changed but feature registry not reviewed" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    # No features-reviewed or features-no-impact
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("feature registry")'
+}
+
+@test "completion: allows when features-reviewed exists" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    touch "$TEST_DIR/.claude/workflow-state/features-reviewed"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: allows when features-no-impact exists" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    echo "Refactoring only, no new features" > "$TEST_DIR/.claude/workflow-state/features-no-impact"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: no features check when only test files changed" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    echo "tests/test_foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    # No features-reviewed, no simplify-complete (not needed for tests-only)
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
