@@ -8,7 +8,7 @@
 ## Rules
 
 - Branch awareness: `git branch --show-current` before any work. Flag stable vs beta, ask before changes.
-- Skill-first routing: always invoke matching skill, never perform equivalent manually. Compound requests decompose into skill invocations.
+- Skill-first routing: always invoke matching skill, never perform equivalent manually. Compound requests decompose into skill invocations. Use skills end-to-end — never partially use a skill then finish manually (manual steps skip side effects like workspace sync, state updates, cleanup).
 - Completion gate (mandatory): run `/verify` before reporting done. Skip for docs/test-only changes.
 - Autonomous verification (mandatory): never ask user to test. Do it yourself.
 - Continuous improvement: suggest CLAUDE.md/skill/hook changes at natural pause points. Project rules → CLAUDE.md. Workflow rules → skill files. User prefs → memory.
