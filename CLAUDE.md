@@ -25,6 +25,7 @@ Exploration must produce a constraints brief:
 2. Touch points — every function/variable/file affected. Include signatures+callers.
 3. Traps — anything surprising (eval vars, set -eu, `_CLAUDELOOP_NO_*` env vars for test isolation).
 4. Tests — which test files cover modified functions, with specifics.
+5. See [feature docs](docs/FEATURES.md) for product features
 
 Plans: justify every decision from constraints. List files to modify with functions/callers. State what is NOT changing and why.
 
