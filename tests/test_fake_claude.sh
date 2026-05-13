@@ -10,6 +10,9 @@ setup() {
   FAKE_DIR="$BATS_TEST_TMPDIR/fake"
   mkdir -p "$FAKE_DIR"
   export FAKE_CLAUDE_DIR="$FAKE_DIR"
+  # Source provider.sh (defines provider_write_tool_pattern used by has_write_actions)
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
+  . "${BATS_TEST_DIRNAME}/../lib/provider.sh"
   # Source retry.sh for detection helpers
   . "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   # Isolate CWD so fake_claude file writes don't pollute project directory
@@ -324,4 +327,29 @@ run_with_prompt() {
 @test "failure scenario: does NOT write files" {
   run_scenario "failure" > /dev/null 2>&1 || true
   [ ! -f "test.sh" ]
+}
+
+# --- Orphan handling (FAKE_CLAUDE_DIR unset) ---
+
+@test "orphaned: passes through to real claude in PATH" {
+  mkdir -p "$BATS_TEST_TMPDIR/real_bin"
+  printf '#!/bin/sh\necho REAL_CLAUDE_MARKER\n' > "$BATS_TEST_TMPDIR/real_bin/claude"
+  chmod +x "$BATS_TEST_TMPDIR/real_bin/claude"
+
+  unset FAKE_CLAUDE_DIR
+  output=$(PATH="$BATS_TEST_TMPDIR/real_bin" "$FAKE_CLAUDE" 2>&1)
+  [[ "$output" == *"REAL_CLAUDE_MARKER"* ]]
+}
+
+@test "orphaned: fails with clear error when no real claude in PATH" {
+  unset FAKE_CLAUDE_DIR
+  rc=0
+  output=$(PATH="/nonexistent" "$FAKE_CLAUDE" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ]
+  [[ "$output" == *"orphaned"* ]]
+}
+
+@test "orphaned: FAKE_CLAUDE_DIR set still works normally" {
+  output=$(echo "test" | "$FAKE_CLAUDE" --print 2>&1)
+  [[ "$output" == *'"type"'* ]]
 }
