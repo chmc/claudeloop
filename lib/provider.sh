@@ -27,7 +27,12 @@ provider_detect() {
 }
 
 # Return CLI binary name
+# CLAUDELOOP_CLAUDE_BIN overrides PATH lookup — use for testing (e.g. fake_claude)
 provider_cli() {
+  if [ -n "${CLAUDELOOP_CLAUDE_BIN:-}" ]; then
+    printf '%s\n' "$CLAUDELOOP_CLAUDE_BIN"
+    return
+  fi
   case "${PROVIDER:-claude}" in
     opencode) _opencode_cli ;;
     *)        printf 'claude\n' ;;
