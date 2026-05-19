@@ -4,12 +4,57 @@
 # Runs a Claude instance to refactor code after each phase, with verification and rollback.
 # Refactor state is persisted to PROGRESS.md and can resume on restart.
 
-# build_refactor_prompt(phase_num [pre_sha])
+# build_refactor_analysis(pre_sha)
+# Runs code smell detectors on files changed since pre_sha (or HEAD~1).
+# Returns formatted analysis string, empty if no issues found.
+# Separated from build_refactor_prompt so callers can cache the result across retries.
+build_refactor_analysis() {
+  local _bra_pre_sha="${1:-}"
+  local _bra_changed_files _bra_long_blocks _bra_duplicates _bra_nesting _bra_fanout
+  if [ -n "$_bra_pre_sha" ]; then
+    _bra_changed_files=$(git diff --name-only ':!.claudeloop/' "${_bra_pre_sha}..HEAD" 2>/dev/null)
+  else
+    _bra_changed_files=$(git diff --name-only ':!.claudeloop/' HEAD~1 2>/dev/null)
+  fi
+  _bra_changed_files=$(printf '%s\n' "$_bra_changed_files" | \
+    grep -E '\.(sh|js|ts|jsx|tsx|go|java|c|cpp|rs|css|py|rb)$' || true)
+
+  [ -z "$_bra_changed_files" ] && return 0
+
+  # Word-split intentional: git diff --name-only produces newline-separated paths, no spaces
+  # shellcheck disable=SC2086
+  _bra_long_blocks=$(detect_long_blocks 50 $_bra_changed_files 2>/dev/null)
+  # shellcheck disable=SC2086
+  _bra_duplicates=$(detect_duplicates 10 $_bra_changed_files 2>/dev/null)
+  # shellcheck disable=SC2086
+  _bra_nesting=$(detect_nesting 4 $_bra_changed_files 2>/dev/null)
+  # shellcheck disable=SC2086
+  _bra_fanout=$(detect_fanout 10 $_bra_changed_files 2>/dev/null)
+
+  local _bra_result=""
+  [ -n "$_bra_long_blocks" ] && _bra_result="${_bra_result}### Long Blocks (>50 lines) — candidates to split
+${_bra_long_blocks}
+"
+  [ -n "$_bra_duplicates" ] && _bra_result="${_bra_result}### Potential Duplicates — candidates to consolidate
+${_bra_duplicates}
+"
+  [ -n "$_bra_nesting" ] && _bra_result="${_bra_result}### Deep Nesting (>4 levels) — candidates to flatten
+${_bra_nesting}
+"
+  [ -n "$_bra_fanout" ] && _bra_result="${_bra_result}### High Coupling (>10 imports) — candidates to split
+${_bra_fanout}
+"
+  printf '%s' "$_bra_result"
+}
+
+# build_refactor_prompt(phase_num [pre_sha [analysis]])
 # Builds the refactoring prompt including phase context and git diff stats.
 # When pre_sha is provided, shows accumulated diff from pre_sha..HEAD instead of HEAD~1.
+# When analysis is provided (pre-computed smell output), uses it directly — avoids recomputing on retries.
 build_refactor_prompt() {
   local _brp_phase="$1"
   local _brp_pre_sha="${2:-}"
+  local _brp_cached_analysis="${3:-__compute__}"
   local _brp_title _brp_desc _brp_diff_stat
   _brp_title=$(get_phase_title "$_brp_phase")
   _brp_desc=$(get_phase_description "$_brp_phase")
@@ -27,41 +72,14 @@ build_refactor_prompt() {
       [ -f "$_f" ] && printf '%s %s\n' "$(wc -l < "$_f" | tr -d ' ')" "$_f"
     done | sort -rn | head -10)
 
-  # Run code smell detectors on changed code files (graceful — empty on failure)
-  local _brp_changed_files _brp_long_blocks _brp_duplicates _brp_nesting _brp_fanout
-  if [ -n "$_brp_pre_sha" ]; then
-    _brp_changed_files=$(git diff --name-only "${_brp_pre_sha}..HEAD" 2>/dev/null)
-  else
-    _brp_changed_files=$(git diff --name-only HEAD~1 2>/dev/null)
-  fi
-  _brp_changed_files=$(printf '%s\n' "$_brp_changed_files" | \
-    grep -E '\.(sh|js|ts|jsx|tsx|go|java|c|cpp|rs|css|py|rb)$' || true)
-
-  _brp_long_blocks="" _brp_duplicates="" _brp_nesting="" _brp_fanout=""
-  if [ -n "$_brp_changed_files" ]; then
-    # shellcheck disable=SC2086
-    _brp_long_blocks=$(detect_long_blocks 50 $_brp_changed_files 2>/dev/null) || true
-    # shellcheck disable=SC2086
-    _brp_duplicates=$(detect_duplicates 10 $_brp_changed_files 2>/dev/null) || true
-    # shellcheck disable=SC2086
-    _brp_nesting=$(detect_nesting 4 $_brp_changed_files 2>/dev/null) || true
-    # shellcheck disable=SC2086
-    _brp_fanout=$(detect_fanout 10 $_brp_changed_files 2>/dev/null) || true
-  fi
-
+  # Run code smell detectors on changed code files (graceful — empty on failure).
+  # Accepts pre-computed analysis string to avoid recomputing on retries.
   local _brp_analysis=""
-  [ -n "$_brp_long_blocks" ] && _brp_analysis="${_brp_analysis}
-### Long Blocks (>50 lines) — candidates to split
-${_brp_long_blocks}"
-  [ -n "$_brp_duplicates" ] && _brp_analysis="${_brp_analysis}
-### Potential Duplicates — candidates to consolidate
-${_brp_duplicates}"
-  [ -n "$_brp_nesting" ] && _brp_analysis="${_brp_analysis}
-### Deep Nesting (>4 levels) — candidates to flatten
-${_brp_nesting}"
-  [ -n "$_brp_fanout" ] && _brp_analysis="${_brp_analysis}
-### High Coupling (>10 imports) — candidates to split
-${_brp_fanout}"
+  if [ "$_brp_cached_analysis" = "__compute__" ]; then
+    _brp_analysis=$(build_refactor_analysis "$_brp_pre_sha")
+  else
+    _brp_analysis="$_brp_cached_analysis"
+  fi
 
   printf '%s' "You are a refactoring agent. Your ONLY job is to improve code structure.
 You MUST NOT add features, change behavior, or fix bugs.
@@ -192,6 +210,10 @@ refactor_phase() {
 
   print_substep_header "🔧" "Refactoring phase $_rp_phase..."
 
+  # Compute smell analysis once — results don't change between retries
+  local _rp_analysis
+  _rp_analysis=$(build_refactor_analysis "$_pre_sha")
+
   while [ "$_attempt" -lt "$_max_attempts" ]; do
     _attempt=$((_attempt + 1))
 
@@ -219,7 +241,7 @@ refactor_phase() {
     : > "$_rp_log"
     : > "$_rp_raw"
 
-    _rp_prompt=$(build_refactor_prompt "$_rp_phase" "$_pre_sha")
+    _rp_prompt=$(build_refactor_prompt "$_rp_phase" "$_pre_sha" "$_rp_analysis")
 
     if [ -n "$_err_ctx" ]; then
       _rp_prompt="${_rp_prompt}
