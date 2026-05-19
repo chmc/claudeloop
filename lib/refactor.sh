@@ -54,7 +54,7 @@ ${_bra_fanout}
 build_refactor_prompt() {
   local _brp_phase="$1"
   local _brp_pre_sha="${2:-}"
-  local _brp_cached_analysis="${3:-__compute__}"
+  local _brp_analysis_provided="${3+yes}"  # "yes" if $3 was passed (even empty), "" if unset
   local _brp_title _brp_desc _brp_diff_stat
   _brp_title=$(get_phase_title "$_brp_phase")
   _brp_desc=$(get_phase_description "$_brp_phase")
@@ -75,10 +75,10 @@ build_refactor_prompt() {
   # Run code smell detectors on changed code files (graceful — empty on failure).
   # Accepts pre-computed analysis string to avoid recomputing on retries.
   local _brp_analysis=""
-  if [ "$_brp_cached_analysis" = "__compute__" ]; then
-    _brp_analysis=$(build_refactor_analysis "$_brp_pre_sha")
+  if [ "$_brp_analysis_provided" = "yes" ]; then
+    _brp_analysis="$3"
   else
-    _brp_analysis="$_brp_cached_analysis"
+    _brp_analysis=$(build_refactor_analysis "$_brp_pre_sha")
   fi
 
   printf '%s' "You are a refactoring agent. Your ONLY job is to improve code structure.
