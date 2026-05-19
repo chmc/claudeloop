@@ -273,6 +273,9 @@ scenario_rate_limit() {
 
 scenario_success_verbose() {
   default_exit=0
+  if is_ai_parse_prompt; then scenario_ai_parse; return; fi
+  if is_verify_prompt; then scenario_ai_verify_pass; return; fi
+  if is_phase_verify_prompt; then scenario_verify_pass; return; fi
   _write_fake_file "src/lib/runner.sh" '#!/bin/sh
 run_phases() { for phase in $PHASES; do execute_phase "$phase"; done; }
 execute_phase() { local attempts=0 max_retries=3; run_command "$1"; }'
