@@ -16,6 +16,7 @@ Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify 
 | 2 | Planning checklist | ExitPlanMode | 8 sections required |
 | 3 | Plan-to-tasks | Edit/Write (post-plan) | Tasks must exist |
 | 4 | TDD | Edit (impl files) | Test file edited first |
+| 4.5 | Auto-test | PostToolUse Edit/Write | Run bats on edited test files |
 | 5 | Documentation | TaskUpdate (complete) | Update if plan indicated |
 | 6 | Workflow | TaskUpdate (complete) | Update skills/hooks/CLAUDE.md |
 | 7 | Architecture | TaskUpdate (complete) | Create ADR if indicated |
