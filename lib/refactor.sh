@@ -27,6 +27,42 @@ build_refactor_prompt() {
       [ -f "$_f" ] && printf '%s %s\n' "$(wc -l < "$_f" | tr -d ' ')" "$_f"
     done | sort -rn | head -10)
 
+  # Run code smell detectors on changed code files (graceful — empty on failure)
+  local _brp_changed_files _brp_long_blocks _brp_duplicates _brp_nesting _brp_fanout
+  if [ -n "$_brp_pre_sha" ]; then
+    _brp_changed_files=$(git diff --name-only "${_brp_pre_sha}..HEAD" 2>/dev/null)
+  else
+    _brp_changed_files=$(git diff --name-only HEAD~1 2>/dev/null)
+  fi
+  _brp_changed_files=$(printf '%s\n' "$_brp_changed_files" | \
+    grep -E '\.(sh|js|ts|jsx|tsx|go|java|c|cpp|rs|css|py|rb)$' || true)
+
+  _brp_long_blocks="" _brp_duplicates="" _brp_nesting="" _brp_fanout=""
+  if [ -n "$_brp_changed_files" ]; then
+    # shellcheck disable=SC2086
+    _brp_long_blocks=$(detect_long_blocks 50 $_brp_changed_files 2>/dev/null) || true
+    # shellcheck disable=SC2086
+    _brp_duplicates=$(detect_duplicates 10 $_brp_changed_files 2>/dev/null) || true
+    # shellcheck disable=SC2086
+    _brp_nesting=$(detect_nesting 4 $_brp_changed_files 2>/dev/null) || true
+    # shellcheck disable=SC2086
+    _brp_fanout=$(detect_fanout 10 $_brp_changed_files 2>/dev/null) || true
+  fi
+
+  local _brp_analysis=""
+  [ -n "$_brp_long_blocks" ] && _brp_analysis="${_brp_analysis}
+### Long Blocks (>50 lines) — candidates to split
+${_brp_long_blocks}"
+  [ -n "$_brp_duplicates" ] && _brp_analysis="${_brp_analysis}
+### Potential Duplicates — candidates to consolidate
+${_brp_duplicates}"
+  [ -n "$_brp_nesting" ] && _brp_analysis="${_brp_analysis}
+### Deep Nesting (>4 levels) — candidates to flatten
+${_brp_nesting}"
+  [ -n "$_brp_fanout" ] && _brp_analysis="${_brp_analysis}
+### High Coupling (>10 imports) — candidates to split
+${_brp_fanout}"
+
   printf '%s' "You are a refactoring agent. Your ONLY job is to improve code structure.
 You MUST NOT add features, change behavior, or fix bugs.
 
@@ -39,6 +75,9 @@ $_brp_diff_stat
 
 ## Source files by size (largest first)
 $_brp_file_sizes
+${_brp_analysis:+
+## Code Smell Analysis (heuristic candidates — use your judgment)
+$_brp_analysis}
 
 ## Rules
 1. ONLY structural changes: extract functions, split files, improve organization
@@ -47,16 +86,22 @@ $_brp_file_sizes
 4. Run the test suite before and after your changes
 5. Commit with message: \"refactor: restructure phase $_brp_phase output\"
 6. MOVE code into new files — do NOT create copies. Delete the original after extracting.
+7. INCREMENTAL ONLY: only refactor code changed by this phase — ignore pre-existing issues elsewhere
 
 ## Steps
 1. Read the largest file listed above
 2. Any source file over 350 lines MUST be split into focused modules
 3. Extract related functions into their own files (e.g., utils, handlers, types)
-4. Update imports — keep the same public API from the original file
-5. Run the test suite to verify nothing broke
-6. Commit with message: \"refactor: restructure phase $_brp_phase output\"
+4. Address code smell candidates above if relevant to this phase's changes:
+   - Long blocks: extract into named functions
+   - Duplicates: consolidate into shared utility
+   - Deep nesting: flatten via early returns or extraction
+   - High coupling: split file by responsibility cluster
+5. Update imports — keep the same public API from the original file
+6. Run the test suite to verify nothing broke
+7. Commit with message: \"refactor: restructure phase $_brp_phase output\"
 
-If ALL files are under 350 lines and well-organized, do nothing."
+If ALL files are under 350 lines, well-organized, and no smell candidates apply, do nothing."
 }
 
 # verify_refactor(phase_num [pre_sha])
