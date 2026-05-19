@@ -15,6 +15,7 @@
 - Plan execution: multi-step plans ("promote → release → sync") = authorization. Only stop on failure.
 - Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash.
 - Enforced workflow: 11 gates block progress until completed. See `docs/WORKFLOW.md` for details. Run `/workflow` for status.
+- Task tracking: after ExitPlanMode approval, create tasks for each Verification item **before writing code**. Mark `in_progress` before starting, `completed` when done.
 
 ## Planning
 
