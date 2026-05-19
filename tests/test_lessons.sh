@@ -344,6 +344,33 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "extract_lessons_summary: returns empty for (skipped)" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: (skipped)' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ -z "$result" ]
+}
+
+@test "extract_lessons_summary: returns empty for quoted (skipped)" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: "(skipped)"' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ -z "$result" ]
+}
+
+@test "extract_lessons_summary: returns empty for (SKIPPED) uppercase" {
+  mkdir -p .claudeloop/logs
+  echo 'LESSONS_SUMMARY: (SKIPPED)' > .claudeloop/logs/phase-1.log
+
+  result=$(extract_lessons_summary ".claudeloop/logs/phase-1.log")
+
+  [ -z "$result" ]
+}
+
 # =============================================================================
 # lessons_write_phase - validation integration
 # =============================================================================
