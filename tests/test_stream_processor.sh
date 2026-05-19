@@ -945,6 +945,51 @@ JSON"
   [[ "$output" == *"[Todos: 1/3 done]"* ]]
 }
 
+@test "TodoWrite: first call does not emit [Todo created] events" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"}]}}'
+  run bash -c "echo '$e1' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  ! echo "$output" | grep -qF '[Todo created]'
+}
+
+@test "TodoWrite: second call with new item emits [Todo created] on stderr" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"}]}}'
+  local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"}]}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF '[Todo created] "Task B"'
+  ! echo "$output" | grep -qF '[Todo created] "Task A"'
+}
+
+@test "TodoWrite: item becoming completed emits [Todo completed] on stderr" {
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"}]}}'
+  local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed"},{"content":"Task B","status":"pending"}]}}'
+  run bash -c "printf '%s\n%s\n' '$e1' '$e2' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qF '[Todo completed]'
+  echo "$output" | grep -qF '"Task A"'
+}
+
+@test "TodoWrite: [Todo created] written to live_log with timestamp" {
+  local _live
+  _live=$(mktemp)
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"}]}}'
+  local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"},{"content":"Task B","status":"pending"}]}}'
+  printf '%s\n%s\n' "$e1" "$e2" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Todo created\].*"Task B"' "$_live"
+  rm -f "$_live"
+}
+
+@test "TodoWrite: [Todo completed] written to live_log with timestamp" {
+  local _live
+  _live=$(mktemp)
+  local e1='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"pending"}]}}'
+  local e2='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Task A","status":"completed"}]}}'
+  printf '%s\n%s\n' "$e1" "$e2" | process_stream_json "$_log" "$_raw" false "$_live"
+  grep -qE '\[[0-9]{2}:[0-9]{2}:[0-9]{2}\].*\[Todo completed\].*"Task A"' "$_live"
+  rm -f "$_live"
+}
+
 # --- TaskStop display ---
 
 @test "TaskStop: shows task_id in preview" {

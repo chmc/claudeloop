@@ -141,6 +141,22 @@ process_stream_json() {
     if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
   }
 
+  function print_todo_created(name) {
+    msg = "[Todo created] \"" name "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
+  function print_todo_completed(name) {
+    msg = "[Todo completed] \342\234\223 \"" name "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
   # extract_task_id(src) - extract task ID trying both snake_case and camelCase
   function extract_task_id(src,    v) {
     v = extract(src, "task_id")
@@ -343,8 +359,28 @@ process_stream_json() {
     at_line_start = 1
   }
 
-  function handle_todo_event(src,    _nt, _nd, af, pos, chunk, p, i, c, nxt) {
+  function handle_todo_event(src,    _nd, af, pos, chunk, p, i, c, nxt, _pc, _j, _found) {
+    _pc = sticky_count
+    for (i = 1; i <= _pc; i++) {
+      prev_todo_contents[i] = sticky_contents[i]
+      prev_todo_statuses[i] = sticky_statuses[i]
+    }
     parse_todo_items(src)
+    if (todo_seen_first) {
+      for (i = 1; i <= sticky_count; i++) {
+        _found = 0
+        for (_j = 1; _j <= _pc; _j++) {
+          if (sticky_contents[i] == prev_todo_contents[_j]) {
+            _found = 1
+            if (sticky_statuses[i] == "completed" && prev_todo_statuses[_j] != "completed")
+              print_todo_completed(sticky_contents[i])
+            break
+          }
+        }
+        if (!_found) print_todo_created(sticky_contents[i])
+      }
+    }
+    todo_seen_first = 1
     _nd = 0
     for (i = 1; i <= sticky_count; i++)
       if (sticky_statuses[i] == "completed") _nd++
@@ -416,6 +452,7 @@ process_stream_json() {
     spinner_start = 0
     last_rate_limit_pct = 0
     prev_total_cost = 0
+    todo_seen_first = 0
     got_result = 0
     post_result_hb = 0
     post_result_events = 0
