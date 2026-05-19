@@ -14,6 +14,7 @@ Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify 
 |---|------|---------|---------|
 | 1 | Branch awareness | First Edit/Write | Confirm branch before work |
 | 2 | Planning checklist | ExitPlanMode | 8 sections required |
+| 2.5 | Plan-to-tasks prompt | PostToolUse ExitPlanMode | Extracts Verification items → TaskCreate prompt |
 | 3 | Plan-to-tasks | Edit/Write (post-plan) | Tasks must exist |
 | 4 | TDD | Edit (impl files) | Test file edited first |
 | 4.5 | Auto-test | PostToolUse Edit/Write | Run bats on edited test files |
