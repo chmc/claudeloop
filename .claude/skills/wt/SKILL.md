@@ -2,7 +2,7 @@
 name: wt
 description: Manage git worktrees for parallel Claude Code sessions
 disable-model-invocation: false
-argument-hint: "[create <name>|rm <name>|list]"
+argument-hint: "[create <name>|rm <name>|land <name>|list]"
 ---
 
 # Worktree Skill
@@ -132,7 +132,7 @@ Runs `git worktree list` and annotates the output. Reports VS Code workspace sta
 
 ### `rm` — Remove a worktree
 
-Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up. Removes the worktree from the VS Code workspace.
+Pushes branch for user review, then waits. User triggers merge separately via `land`. Removes the worktree from the VS Code workspace.
 
 **Steps:**
 
@@ -142,7 +142,7 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
    - Print: "Worktree directory not found — cleaning up orphan branch and workspace entry."
    - `git worktree prune`
    - If `jq` available and `$WORKSPACE_FILE` exists, run the **prune stale entries** helper.
-   - **Ask** cleanup preference (simplified — no PR option since directory is gone):
+   - **Ask** cleanup preference (simplified — directory is gone):
      - **Just remove** (default): `git branch -D "$WT_BRANCH"`, then `git push origin --delete "$WT_BRANCH"` (warn on failure, non-fatal).
      - **Keep branch**: only prune workspace entry, keep branch for later use.
    - Print summary and **return** (skip steps 4-7).
@@ -150,22 +150,53 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
 5. Check for uncommitted changes: `git -C "$WT_DIR" status --porcelain`. If non-empty, **warn and confirm** — list the changes. User must acknowledge before proceeding with `--force`.
 6. Check for unpushed commits: if `git show-ref --verify --quiet "refs/remotes/origin/$WT_BRANCH"`, run `git log "origin/$WT_BRANCH..$WT_BRANCH" --oneline`. Otherwise, all commits are unpushed — warn with `git log "$WT_BRANCH" --oneline --not --remotes`.
 7. **Ask** cleanup preference:
-   - **PR then remove:**
+   - **Push for review** (default):
      1. `git -C "$WT_DIR" push -u origin "$WT_BRANCH"`
-     2. **Warn and confirm** PR base branch (suggest the base used at creation if known).
-     3. `gh pr create --head "$WT_BRANCH" --base "<base>"` — ask for title/description or auto-generate.
-     4. `git worktree remove "$WT_DIR"`
-     5. `git branch -D "$WT_BRANCH"`
-     6. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper (only after step 4 succeeded).
-     7. **On `gh pr create` failure:** warn but proceed with steps 4-6 (commits are safe on remote).
-   - **Just remove:**
+     2. Print: "Branch pushed to `origin/$WT_BRANCH`. Review changes, then say 'put to <base> and clean up' when ready."
+     3. **Return** — leave worktree in place for user review.
+   - **Just remove** (discard — no push):
      1. `git worktree remove "$WT_DIR"` (`--force` if dirty, after user confirmed at step 5)
      2. `git branch -D "$WT_BRANCH"`
      3. `git push origin --delete "$WT_BRANCH"` — warn on failure, non-fatal.
-     4. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper (only after step 1 succeeded).
+     4. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper.
    - **Keep branch:**
      1. `git worktree remove "$WT_DIR"` — removes directory, keeps branch and remote for later use.
-     2. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper (only after step 1 succeeded).
+     2. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper.
+
+### `land` — Merge to target branch after user review
+
+Triggered when user says "put to <base> and clean up" (or similar). Rebases worktree branch onto target, no merge commits, no PR.
+
+**Steps:**
+
+1. Infer `<name>` from context (worktree in use or most recently pushed). **Ask** if ambiguous.
+2. Set `WT_DIR="../claudeloop-wt-<name>"`, `WT_BRANCH="wt/<name>"`, `BASE=<target>` (e.g. `beta`).
+3. Verify remote branch exists: `git fetch origin` then `git show-ref --verify --quiet "refs/remotes/origin/$WT_BRANCH"`. **Hard block** if missing.
+4. Rebase and push (no merge commits):
+   ```sh
+   git fetch origin "$BASE"
+   git rebase "origin/$WT_BRANCH" "origin/$BASE" --onto "origin/$BASE"
+   ```
+   Simpler equivalent — fast-forward beta to include the worktree commits:
+   ```sh
+   git fetch origin
+   git push origin "origin/$WT_BRANCH:refs/heads/$BASE"
+   ```
+   **Preferred approach** (cleanest, no local checkout of beta needed):
+   ```sh
+   git fetch origin
+   git push origin "refs/remotes/origin/$WT_BRANCH:refs/heads/$BASE"
+   git push origin --delete "$WT_BRANCH"
+   ```
+5. If worktree directory still exists:
+   ```sh
+   git worktree remove "$WT_DIR"
+   git branch -D "$WT_BRANCH"
+   ```
+   If directory already gone: `git worktree prune`, then `git branch -D "$WT_BRANCH"`.
+6. If `jq` available and `$WORKSPACE_FILE` exists, run the **remove entry** helper.
+7. Run VS Code CLI: `"$VSCODE_CLI" --remove "$WT_DIR_ABS"` (warn on failure, non-fatal).
+8. Print: "Landed `$WT_BRANCH` → `$BASE`. Worktree and branch cleaned up."
 
 ## Edge cases
 
@@ -188,12 +219,12 @@ Removes `../claudeloop-wt-<name>`, with options to create a PR or just clean up.
 - **Commit normally**: Conventional commits, push with `git push -u origin wt/<name>`.
 - **PR target**: PRs target the base branch the worktree was created from.
 - **CWD isolation (mandatory):** Never `cd` outside the worktree in Bash commands for git write operations (`cherry-pick`, `rebase`, `checkout`, `merge`). These can invalidate the worktree path, permanently breaking all subsequent Bash calls. Use `git -C <path>` for read-only queries if needed.
-- **Landing worktree changes:** Push the branch and create a PR targeting the desired base branch. Never cherry-pick or rebase manually from inside a worktree. `/wt rm` offers integrated "PR then remove".
+- **Landing worktree changes:** Use `/wt rm` to push for review, then `/wt land` when ready to merge. Never cherry-pick or rebase manually from inside a worktree.
 - **Broken cwd recovery (mandatory):** If Bash commands fail with "Path does not exist" or similar cwd errors, the worktree directory was removed externally. Do NOT retry Bash commands — they will all fail. Immediately call `ExitWorktree` to restore the session's working directory.
 
 ## Error handling
 
 - On any git command failure not explicitly handled above, report the error and stop.
 - Never delete a branch without removing the worktree first (unless in orphan cleanup mode where the directory is already gone).
-- If `gh pr create` fails after push, proceed with worktree removal (commits are safe on remote).
+- If `git push` fails during `land`, stop — do not remove the worktree or branch.
 - Workspace file operations are non-fatal — git operations take priority.
