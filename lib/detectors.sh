@@ -42,7 +42,7 @@ detect_duplicates() {
         }
       }
     ' "$_dd_f"
-  done 2>/dev/null | sort | awk '
+  done 2>/dev/null | sort | head -200 | awk '
     $1 == prev { print prev_loc " ~ " $2 ":" $3; prev = ""; next }
     { prev = $1; prev_loc = $2 ":" $3 }
   ' | head -10
@@ -72,13 +72,13 @@ detect_fanout() {
   local _df_thresh="${1:-10}"; shift
   for _df_f in "$@"; do
     [ -f "$_df_f" ] || continue
-    # ESM/static imports at line start + inline require() calls
+    local _df_imports _df_requires _df_count
     _df_imports=$(grep -cE '^[[:space:]]*(import|from|#include|use|mod)[[:space:](\"'"'"']' \
       "$_df_f" 2>/dev/null || true)
     _df_requires=$(grep -cE '\brequire[[:space:]]*\(' "$_df_f" 2>/dev/null || true)
     _df_count=$((_df_imports + _df_requires))
-    [ "$_df_count" -gt "$_df_thresh" ] && \
+    if [ "$_df_count" -gt "$_df_thresh" ]; then
       printf '%s (%d imports)\n' "$_df_f" "$_df_count"
+    fi
   done
-  return 0
 }
