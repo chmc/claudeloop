@@ -18,6 +18,12 @@ setup() {
   [ "$output" = "claude" ]
 }
 
+@test "provider_cli: CLAUDELOOP_CLAUDE_BIN overrides default" {
+  CLAUDELOOP_CLAUDE_BIN="/path/to/fake_claude" run provider_cli
+  [ "$status" -eq 0 ]
+  [ "$output" = "/path/to/fake_claude" ]
+}
+
 @test "provider_exec_args: returns exact execution flags" {
   run provider_exec_args
   [ "$status" -eq 0 ]
@@ -27,7 +33,7 @@ setup() {
 @test "provider_print_args: returns exact print flags" {
   run provider_print_args
   [ "$status" -eq 0 ]
-  [ "$output" = "--print --output-format=stream-json --verbose --include-partial-messages" ]
+  [ "$output" = "--print --output-format=stream-json --verbose --include-partial-messages --model opus" ]
 }
 
 @test "provider_write_tool_pattern: returns pipe-separated tool names" {
