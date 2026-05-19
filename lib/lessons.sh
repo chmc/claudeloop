@@ -41,6 +41,10 @@ extract_lessons_summary() {
     \'*\') _summary="${_summary#\'}"; _summary="${_summary%\'}" ;;
   esac
 
+  case "$(printf '%s' "$_summary" | tr '[:upper:]' '[:lower:]')" in
+    "(skipped)") return 0 ;;
+  esac
+
   printf '%s\n' "$_summary"
 }
 

@@ -529,6 +529,14 @@ LESSONS_SUMMARY: "Learned that caching improves performance by 50%"
 
 ClaudeLoop extracts this marker from the phase log and records it in lessons.md. This gives the self-improvement Claude richer context about decisions and pitfalls, not just timing metrics.
 
+**Skipping:** Write `(skipped)` when the phase produced no novel insight worth recording:
+
+```
+LESSONS_SUMMARY: (skipped)
+```
+
+Skip criteria: (1) clean verification with no discoveries, (2) would duplicate an existing CLAUDE.md rule, (3) insight too narrow to help future work. ClaudeLoop treats `(skipped)` as an intentional no-lesson and writes no summary line.
+
 **Note:** The summary text cannot contain quote characters (`"` or `'`). The extraction regex uses a simple delimiter match.
 
 The lessons file is included when runs are archived (`--archive`). Oxveil reads this file after session completion to offer self-improvement suggestions.

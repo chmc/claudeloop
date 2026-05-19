@@ -21,7 +21,9 @@ build_phase_prompt() {
 
 ## Lessons Summary
 When you complete this phase, end your final response with:
-LESSONS_SUMMARY: "<one sentence that helps future work on THIS codebase: a pattern, gotcha, architectural decision, or workflow insight specific to this project>"'
+LESSONS_SUMMARY: "<lesson>" OR "(skipped)" if this phase produced no novel, actionable insight
+
+Skip if: (1) clean verification with no discoveries, (2) duplicates CLAUDE.md rules, (3) insight too narrow to help future work.'
 
   if grep -qF '{{' "$template_file"; then
     # Substitution mode.
@@ -104,7 +106,9 @@ Implement the above phase completely. Make sure to:
 
 ## Lessons Summary
 When you complete this phase, end your final response with:
-LESSONS_SUMMARY: \"<one sentence that helps future work on THIS codebase: a pattern, gotcha, architectural decision, or workflow insight specific to this project>\""
+LESSONS_SUMMARY: \"<lesson>\" OR \"(skipped)\" if this phase produced no novel, actionable insight
+
+Skip if: (1) clean verification with no discoveries, (2) duplicates CLAUDE.md rules, (3) insight too narrow to help future work."
 }
 
 # Apply retry strategy: archive log, build retry context, optionally replace prompt
