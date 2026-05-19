@@ -165,7 +165,7 @@ Pushes branch for user review, then waits. User triggers merge separately via `l
 
 ### `land` — Merge to target branch after user review
 
-Triggered when user says "put to <base> and clean up" (or similar). Rebases worktree branch onto target, no merge commits, no PR.
+Triggered when user says "it's good", "put to <base> and clean up", or similar approval. Rebases worktree branch onto target, no merge commits, no PR.
 
 **Steps:**
 
