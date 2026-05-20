@@ -441,6 +441,8 @@ _setup_epr_stubs() {
 _setup_rav_stubs() {
   source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
   source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  SCRIPT_DIR="${BATS_TEST_DIRNAME}/.."
+  source "${BATS_TEST_DIRNAME}/../lib/provider.sh"
   source "${BATS_TEST_DIRNAME}/../lib/retry.sh"
   PROGRESS_FILE="$_tmpdir/progress"
   PLAN_FILE="$_tmpdir/plan"

@@ -31,6 +31,23 @@ mkdir -p "$SESSION"
 git diff main...HEAD > "$SESSION/diff.patch" 2>/dev/null || git diff HEAD~1 > "$SESSION/diff.patch"
 ```
 
+## Step 2.5: Run Targeted Tests
+
+For each modified `lib/*.sh` file, run its corresponding test if it exists:
+
+```sh
+for file in $(git diff --name-only main...HEAD | grep '^lib/.*\.sh$'); do
+    base=$(basename "$file" .sh)
+    test_file="tests/test_${base}.sh"
+    if [ -f "$test_file" ]; then
+        echo "Running $test_file..."
+        bats "$test_file" >> "$SESSION/test-results.log" 2>&1 || echo "FAIL: $test_file" >> "$SESSION/test-results.log"
+    fi
+done
+```
+
+If `test-results.log` contains any `FAIL:` lines, set `result: FAIL` in the session README.
+
 ## Step 3: Review Changes
 
 Review the diff using any method:
