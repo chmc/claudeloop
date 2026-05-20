@@ -102,6 +102,13 @@ if has_impl_files; then
     fi
 fi
 
+# Gate 8b: README auto-detect for impl changes
+if has_impl_files; then
+    if [ ! -f "$STATE_DIR/readme-complete" ] && [ ! -f "$STATE_DIR/readme-no-user-impact" ]; then
+        add_missing "README not reviewed (impl files changed — update README.md or touch .claude/workflow-state/readme-no-user-impact)"
+    fi
+fi
+
 # Gate 10: Code review (check for session artifact OR legacy touch file)
 _review_pass=false
 for _session in "${CLAUDE_PROJECT_DIR:-.}"/.claude/review-sessions/*/README.md; do
