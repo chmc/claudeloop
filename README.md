@@ -221,7 +221,7 @@ A fresh read-only Claude checks each task's output with verdict-based pass/fail 
 claudeloop --refactor
 ```
 
-Automatic code quality improvements after each task. Detects large files, extracts modules, runs tests before and after. Rolls back on failure to preserve your work.
+Zero-effort code hygiene. Prevents technical debt from accumulating, keeps your codebase clean automatically.
 
 <p align="center">
   <img src="assets/demo-refactor.gif" alt="Auto-refactor with rollback on failure" width="700">
