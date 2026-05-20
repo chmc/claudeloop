@@ -109,12 +109,18 @@ if has_impl_files; then
     fi
 fi
 
-# Gate 10: Code review (check for session artifact OR legacy touch file)
+# Gate 10: Code review with test validation
 _review_pass=false
 for _session in "${CLAUDE_PROJECT_DIR:-.}"/.claude/review-sessions/*/README.md; do
     [ -f "$_session" ] || continue
     if grep -q "^result: PASS" "$_session"; then
-        _review_pass=true
+        _session_dir=$(dirname "$_session")
+        _test_log="$_session_dir/test-results.log"
+        if [ -f "$_test_log" ] && grep -q "^FAIL:" "$_test_log"; then
+            add_missing "review marked PASS but tests failed (check $_test_log)"
+        else
+            _review_pass=true
+        fi
         break
     fi
 done
