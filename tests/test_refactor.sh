@@ -512,10 +512,8 @@ STUB
   chmod +x "$TEST_DIR/bin/claude"
 
   resume_pending_refactors
-  # Should have rolled back to pre_sha
-  local current_sha
-  current_sha=$(git rev-parse HEAD)
-  [ "$current_sha" = "$pre_sha" ]
+  # in_progress resumes the refactor (no upfront rollback); stub says nothing to refactor → completed
+  [ "$(get_phase_refactor_status 1)" = "completed" ]
 }
 
 @test "resume_pending_refactors: skips when SHA no longer exists" {
