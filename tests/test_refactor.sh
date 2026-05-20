@@ -537,7 +537,7 @@ STUB
   auto_commit_changes "1" "test label"
 
   # Commit message should contain our label
-  git log --oneline -1 | grep -q "Phase 1: test label"
+  git log --oneline -1 | grep -q "chore(phase-1): test label"
   # Worktree should be clean
   [ -z "$(git status --porcelain)" ]
 }

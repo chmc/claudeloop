@@ -214,6 +214,8 @@ refactor_phase() {
   local _rp_analysis
   _rp_analysis=$(build_refactor_analysis "$_pre_sha")
 
+  local _has_crash_changes=false
+
   while [ "$_attempt" -lt "$_max_attempts" ]; do
     _attempt=$((_attempt + 1))
 
@@ -267,6 +269,7 @@ $_err_ctx
         print_warning "Phase $_rp_phase: refactoring failed (exit code $_LAST_CLAUDE_EXIT)"
         # Preserve partial work from crash
         auto_commit_changes "$_rp_phase" "auto-commit after crash"
+        _has_crash_changes=true
         continue
       fi
     fi
@@ -274,10 +277,10 @@ $_err_ctx
     # Auto-commit any uncommitted refactoring changes
     auto_commit_changes "$_rp_phase" "auto-commit after refactoring"
 
-    # Check if THIS iteration made changes (not cumulative from $_pre_sha)
+    # Check if THIS iteration made changes; if crash left prior changes, fall through to verify
     local _code_changes
     _code_changes=$(git diff --name-only "$_iter_sha"..HEAD -- ':!.claudeloop/' 2>/dev/null)
-    if [ -z "$_code_changes" ]; then
+    if [ -z "$_code_changes" ] && [ "$_has_crash_changes" = "false" ]; then
       log_ts "Nothing to refactor for phase $_rp_phase"
       phase_set REFACTOR_STATUS "$_rp_phase" "completed"
       phase_set REFACTOR_SHA "$_rp_phase" ""
