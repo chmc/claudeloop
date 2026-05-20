@@ -185,6 +185,13 @@ elif is_empty_section "README" || is_empty_section "readme"; then
     missing="$missing README (empty),"
 fi
 
+# Check Critic (multi-angle review evidence)
+if ! echo "$plan_content" | grep -q "^## critic"; then
+    missing="$missing Critic (missing),"
+elif is_empty_section "Critic" || is_empty_section "critic"; then
+    missing="$missing Critic (empty),"
+fi
+
 # If any missing or empty, deny
 if [ -n "$missing" ]; then
     # Remove trailing comma
@@ -195,7 +202,7 @@ if [ -n "$missing" ]; then
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "Plan missing or empty sections:$missing",
-    "additionalContext": "All 8 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply."
+    "additionalContext": "All 9 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply."
   }
 }
 EOF
