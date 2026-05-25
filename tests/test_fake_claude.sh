@@ -353,3 +353,29 @@ run_with_prompt() {
   output=$(echo "test" | "$FAKE_CLAUDE" --print 2>&1)
   [[ "$output" == *'"type"'* ]]
 }
+
+# --- Auto-detection from dirname ---
+
+@test "auto-detect: derives FAKE_CLAUDE_DIR from script location" {
+  unset FAKE_CLAUDE_DIR
+  output=$(echo "test" | "$FAKE_CLAUDE" --print 2>&1)
+  [[ "$output" == *'fake-claude-v1'* ]]
+}
+
+@test "auto-detect: follows symlinks to find lib/" {
+  unset FAKE_CLAUDE_DIR
+  mkdir -p "$BATS_TEST_TMPDIR/bin"
+  ln -s "$FAKE_CLAUDE" "$BATS_TEST_TMPDIR/bin/claude"
+  output=$(echo "test" | "$BATS_TEST_TMPDIR/bin/claude" --print 2>&1)
+  [[ "$output" == *'fake-claude-v1'* ]]
+}
+
+@test "auto-detect: passthrough preserved when lib/ absent" {
+  unset FAKE_CLAUDE_DIR
+  mkdir -p "$BATS_TEST_TMPDIR/isolated"
+  cp "$FAKE_CLAUDE" "$BATS_TEST_TMPDIR/isolated/"
+  rc=0
+  output=$(PATH="/nonexistent" "$BATS_TEST_TMPDIR/isolated/fake_claude" 2>&1) || rc=$?
+  [ "$rc" -eq 1 ]
+  [[ "$output" == *"orphaned"* ]]
+}
