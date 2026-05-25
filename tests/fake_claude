@@ -20,46 +20,60 @@
 # AI-parse prompts (containing "plan extraction assistant") emit phase headers.
 # Verification prompts (containing "verif") emit VERIFICATION_PASSED.
 
+# Resolve $0 to absolute path, then follow symlinks to find true script dir
+case "$0" in
+  /*) _self="$0" ;;
+  */*) _self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" ;;
+  *) _self=""
+     _oldifs2="${IFS-_UNSET_}"; IFS=:
+     for _d in $PATH; do
+       [ -x "$_d/$0" ] && { _self="$_d/$0"; break; }
+     done
+     if [ "$_oldifs2" = "_UNSET_" ]; then unset IFS; else IFS="$_oldifs2"; fi ;;
+esac
+_resolved="${_self:-$0}"
+while [ -L "$_resolved" ]; do
+  _link_dir="$(dirname "$_resolved")"
+  _resolved="$(readlink "$_resolved")"
+  case "$_resolved" in /*) ;; *) _resolved="$_link_dir/$_resolved" ;; esac
+done
+_script_dir="$(cd "$(dirname "$_resolved")" && pwd)"
+
 # Self-healing: pass through to real claude if orphaned (FAKE_CLAUDE_DIR unset)
 if [ -z "$FAKE_CLAUDE_DIR" ]; then
-  case "$0" in
-    /*) _self="$0" ;;
-    */*) _self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" ;;
-    *) _self=""
-       _oldifs2="${IFS-_UNSET_}"; IFS=:
-       for _d in $PATH; do
-         [ -x "$_d/$0" ] && { _self="$_d/$0"; break; }
-       done
-       if [ "$_oldifs2" = "_UNSET_" ]; then unset IFS; else IFS="$_oldifs2"; fi ;;
-  esac
-
   if [ -z "$_self" ]; then
     echo "fake_claude: orphaned and cannot resolve own path" >&2
     exit 1
   fi
 
-  _real=""
-  _oldifs="${IFS-_UNSET_}"; IFS=:
-  for _dir in $PATH; do
-    [ -z "$_dir" ] && continue
-    _candidate="$_dir/claude"
-    if [ -x "$_candidate" ] && ! [ "$_candidate" -ef "$_self" ]; then
-      _real="$_candidate"
-      break
-    fi
-  done
-  if [ "$_oldifs" = "_UNSET_" ]; then unset IFS; else IFS="$_oldifs"; fi
+  # Auto-detect FAKE_CLAUDE_DIR from script location if lib exists
+  if [ -f "$_script_dir/lib/fake_provider_common.sh" ]; then
+    FAKE_CLAUDE_DIR="$_script_dir"
+    export FAKE_CLAUDE_DIR
+  else
+    _real=""
+    _oldifs="${IFS-_UNSET_}"; IFS=:
+    for _dir in $PATH; do
+      [ -z "$_dir" ] && continue
+      _candidate="$_dir/claude"
+      if [ -x "$_candidate" ] && ! [ "$_candidate" -ef "$_self" ]; then
+        _real="$_candidate"
+        break
+      fi
+    done
+    if [ "$_oldifs" = "_UNSET_" ]; then unset IFS; else IFS="$_oldifs"; fi
 
-  if [ -n "$_real" ]; then
-    exec "$_real" "$@"
+    if [ -n "$_real" ]; then
+      exec "$_real" "$@"
+    fi
+    echo "fake_claude: orphaned (FAKE_CLAUDE_DIR unset) and no real claude found in PATH" >&2
+    exit 1
   fi
-  echo "fake_claude: orphaned (FAKE_CLAUDE_DIR unset) and no real claude found in PATH" >&2
-  exit 1
 fi
 FAKE_PROVIDER_DIR="$FAKE_CLAUDE_DIR"
 
 # Source shared utilities
-_script_dir="$(cd "$(dirname "$0")" && pwd)"
+_script_dir="$_script_dir"
 . "$_script_dir/lib/fake_provider_common.sh"
 
 # --- Initialize ---
