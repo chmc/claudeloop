@@ -41,7 +41,7 @@ Options:
   --refactor             Auto-refactor code after each phase completion
                          (up to 4 API calls per phase with --verify)
   --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
-  --provider <name>      AI provider (claude, opencode; default: claude)
+  --provider <name>      AI provider (claude, opencode [experimental]; default: claude)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --archive              Archive current run state, start fresh, and exit
   --list-archives        List archived runs and exit

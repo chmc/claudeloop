@@ -265,7 +265,7 @@
 ---
 
 ### provider-opencode
-**Status:** stable
+**Status:** experimental
 **Summary:** OpenCode CLI adapter.
 **Description:** Requires OpenCode with `--output-format json` support.
 **Depends:** [multi-provider]

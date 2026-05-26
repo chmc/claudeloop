@@ -100,14 +100,14 @@ ClaudeLoop supports multiple AI providers:
 | Provider | CLI | Status |
 |----------|-----|--------|
 | Claude Code | `claude` | Default |
-| OpenCode | `opencode` | Supported |
+| OpenCode | `opencode` | Experimental |
 
 **Version Requirements:**
 
 | Provider | Minimum Version | Notes |
 |----------|-----------------|-------|
 | Claude Code | 1.0.0+ | Default provider |
-| OpenCode | 0.1.0+ | Requires `--format json` support |
+| OpenCode | 0.1.0+ | Experimental — not production-tested |
 
 ```sh
 # Claude Code (default)

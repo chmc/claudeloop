@@ -138,7 +138,7 @@ ClaudeLoop supports multiple AI providers:
 | Provider | Command | Min Version |
 |----------|---------|-------------|
 | Claude Code | `--provider claude` | 1.0.0+ |
-| OpenCode | `--provider opencode` | 0.1.0+ |
+| OpenCode | `--provider opencode` | 0.1.0+ (experimental) |
 
 ```bash
 claudeloop --provider claude     # Claude Code (default)
