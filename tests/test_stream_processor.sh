@@ -997,6 +997,14 @@ JSON"
   [[ "$output" == *'[Task created] "Fix auth bug"'* ]]
 }
 
+@test "stream_processor: TaskCreate logged to live_log" {
+  local log_file="$BATS_TEST_TMPDIR/live.log"
+  local input='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Test task","description":"desc"}}'
+  LIVE_LOG="$log_file" run_processor "$input" 2>/dev/null
+  run cat "$log_file"
+  [[ "$output" == *'[Task created] "Test task"'* ]]
+}
+
 # --- TaskStop display ---
 
 @test "TaskStop: shows task_id in preview" {
