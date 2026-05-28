@@ -141,6 +141,14 @@ process_stream_json() {
     if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
   }
 
+  function print_task_created(name) {
+    msg = "[Task created] \"" name "\""
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
   function print_todo_created(name) {
     msg = "[Todo created] \"" name "\""
     if (hooks_enabled != "true") {
