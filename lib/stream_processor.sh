@@ -122,47 +122,35 @@ process_stream_json() {
     return ep + 0
   }
 
+  function print_msg(msg) {
+    if (hooks_enabled != "true") {
+      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
+    }
+    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+  }
+
   function print_task_summary() {
     visible = task_count - task_deleted
     msg = "[Tasks: " task_completed "/" visible " done]"
     if (current_active_form != "") msg = msg " \342\226\270 \"" current_active_form "\""
-    if (hooks_enabled != "true") {
-      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
-    }
-    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_msg(msg)
   }
 
   function print_task_completed(id,    subj) {
     subj = (id in task_subjects) ? task_subjects[id] : "Task " id
-    msg = "[Task completed] \342\234\223 \"" subj "\""
-    if (hooks_enabled != "true") {
-      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
-    }
-    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_msg("[Task completed] \342\234\223 \"" subj "\"")
   }
 
   function print_task_created(name) {
-    msg = "[Task created] \"" name "\""
-    if (hooks_enabled != "true") {
-      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
-    }
-    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_msg("[Task created] \"" name "\"")
   }
 
   function print_todo_created(name) {
-    msg = "[Todo created] \"" name "\""
-    if (hooks_enabled != "true") {
-      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
-    }
-    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_msg("[Todo created] \"" name "\"")
   }
 
   function print_todo_completed(name) {
-    msg = "[Todo completed] \342\234\223 \"" name "\""
-    if (hooks_enabled != "true") {
-      printf "  %s%s%s\n", C_GREEN, msg, C_RESET > "/dev/stderr"
-    }
-    if (live_log != "") { printf "  [%s] %s\n", get_time(), msg >> live_log; fflush(live_log) }
+    print_msg("[Todo completed] \342\234\223 \"" name "\"")
   }
 
   # extract_task_id(src) - extract task ID trying both snake_case and camelCase
