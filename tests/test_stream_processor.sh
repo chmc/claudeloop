@@ -990,6 +990,13 @@ JSON"
   rm -f "$_live"
 }
 
+@test "stream_processor: TaskCreate emits creation message" {
+  local input='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Fix auth bug","description":"desc"}}'
+  run bash -c "echo '$input' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'[Task created] "Fix auth bug"'* ]]
+}
+
 # --- TaskStop display ---
 
 @test "TaskStop: shows task_id in preview" {
