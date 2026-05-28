@@ -46,4 +46,4 @@ gh run list --workflow=release.yml --limit=1
 ## Post-release
 
 - The CI auto-pushes a version bump commit. After the workflow completes, run `git pull` to pick it up.
-- After a **stable** release, also run `/rebase sync` to update beta with the new version commit.
+- After a **stable** release, run `/rebase sync` **before the next beta release**. This syncs beta with the stable version so the next beta correctly bumps to the next minor (e.g., `0.29.0` → `0.30.0-beta.1`).
