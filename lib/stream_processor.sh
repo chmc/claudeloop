@@ -181,6 +181,7 @@ process_stream_json() {
       task_active_forms[task_count] = taf
       task_statuses[task_count] = "pending"
       if (taf != "") current_active_form = taf
+      print_task_created(tsubj)
       print_task_summary()
     } else if (tname == "TaskUpdate") {
       tid = extract_task_id(src) + 0
