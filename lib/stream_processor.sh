@@ -45,7 +45,7 @@ process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
   local hooks_enabled="${3:-false}"
-  local live_log="${4:-}"
+  local live_log="${4:-${LIVE_LOG:-}}"
   local simple_mode="${5:-false}"
   local idle_timeout="${6:-0}"
   awk -v log_file="$log_file" -v raw_log="$raw_log" \
