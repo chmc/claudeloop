@@ -1005,6 +1005,13 @@ JSON"
   [[ "$output" == *'[Task created] "Test task"'* ]]
 }
 
+@test "stream_processor: TaskCreate suppressed when hooks_enabled" {
+  local input='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Hidden task","description":"desc"}}'
+  run bash -c "echo '$input' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' true 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'[Task created]'* ]]
+}
+
 # --- TaskStop display ---
 
 @test "TaskStop: shows task_id in preview" {
