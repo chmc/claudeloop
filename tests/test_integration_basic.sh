@@ -327,6 +327,50 @@ CONF
   [ "$(_call_count)" -eq 2 ]
 }
 
+@test "integration: stale PLAN_FILE falls back to ai-parsed-plan.md when present" {
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
+PLAN_FILE=/var/folders/xx/stale-tmp/plan.md
+CONF
+  cp "$TEST_DIR/PLAN.md" "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
+
+  _cl --dry-run
+  [ "$status" -eq 0 ]
+}
+
+@test "integration: stale PLAN_FILE falls back to PLAN.md when ai-parsed-plan.md absent" {
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
+PLAN_FILE=/var/folders/xx/stale-tmp/plan.md
+CONF
+  rm -f "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
+
+  _cl --dry-run
+  [ "$status" -eq 0 ]
+}
+
+@test "integration: stale PLAN_FILE with no fallbacks exits 1 with error" {
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
+PLAN_FILE=/var/folders/xx/stale-tmp/plan.md
+CONF
+  rm -f "$TEST_DIR/.claudeloop/ai-parsed-plan.md"
+  rm -f "$TEST_DIR/PLAN.md"
+
+  _cl --dry-run
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Plan file not found"* ]]
+}
+
 @test "integration: --reset removes rotated live-*.log files" {
   # First run: creates live.log
   _cl --plan PLAN.md

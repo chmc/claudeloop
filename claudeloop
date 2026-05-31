@@ -245,16 +245,16 @@ main() {
 
   init_live_log
 
-  # Fall back from deleted AI-parsed plan to PLAN.md (global, not just --reset)
-  if [ ! -f "$PLAN_FILE" ]; then
-    case "$PLAN_FILE" in
-      .claudeloop/ai-parsed-plan.md)
-        if [ -f "PLAN.md" ]; then
-          log_ts "ai-parsed-plan.md missing, falling back to PLAN.md"
-          PLAN_FILE="PLAN.md"
-        fi
-        ;;
-    esac
+  # Fall back from any conf-loaded missing plan file to ai-parsed-plan.md, then PLAN.md
+  # Only applies when PLAN_FILE came from conf (not explicit --plan CLI arg)
+  if [ ! -f "$PLAN_FILE" ] && [ -z "$_CLI_PLAN_FILE" ]; then
+    if [ -f ".claudeloop/ai-parsed-plan.md" ]; then
+      log_ts "Plan file missing ($PLAN_FILE), falling back to .claudeloop/ai-parsed-plan.md"
+      PLAN_FILE=".claudeloop/ai-parsed-plan.md"
+    elif [ -f "PLAN.md" ]; then
+      log_ts "Plan file missing ($PLAN_FILE), falling back to PLAN.md"
+      PLAN_FILE="PLAN.md"
+    fi
   fi
 
   # Validate plan and prompt files
