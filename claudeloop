@@ -263,8 +263,12 @@ main() {
     exit 1
   fi
   if [ -n "$PHASE_PROMPT_FILE" ] && [ ! -r "$PHASE_PROMPT_FILE" ]; then
-    print_error "Phase prompt file not found or not readable: $PHASE_PROMPT_FILE"
-    exit 1
+    if [ -n "$_CLI_PHASE_PROMPT_FILE" ]; then
+      print_error "Phase prompt file not found or not readable: $PHASE_PROMPT_FILE"
+      exit 1
+    fi
+    log_ts "Phase prompt file missing ($PHASE_PROMPT_FILE), ignoring conf value"
+    PHASE_PROMPT_FILE=""
   fi
 
   # AI parsing and plan loading

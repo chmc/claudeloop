@@ -371,6 +371,26 @@ CONF
   [[ "$output" == *"Plan file not found"* ]]
 }
 
+@test "integration: stale PHASE_PROMPT_FILE from conf is silently cleared" {
+  cat > "$TEST_DIR/.claudeloop/.claudeloop.conf" << 'CONF'
+BASE_DELAY=0
+AI_PARSE=false
+VERIFY_PHASES=false
+REFACTOR_PHASES=false
+PHASE_PROMPT_FILE=/var/folders/xx/stale-tmp/PROMPT_TEMPLATE.md
+CONF
+
+  _cl --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ignoring conf value"* ]]
+}
+
+@test "integration: --phase-prompt with missing file still fails hard" {
+  _cl --dry-run --phase-prompt /var/folders/xx/stale-tmp/PROMPT_TEMPLATE.md
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Phase prompt file not found"* ]]
+}
+
 @test "integration: --reset removes rotated live-*.log files" {
   # First run: creates live.log
   _cl --plan PLAN.md

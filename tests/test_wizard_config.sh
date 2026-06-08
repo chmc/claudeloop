@@ -116,6 +116,26 @@ _cl_wizard() {
   grep -q "^PHASE_PROMPT_FILE=my_prompt\.txt$" "$TEST_DIR/.claudeloop/.claudeloop.conf"
 }
 
+@test "wizard: 'none' clears inherited PHASE_PROMPT_FILE" {
+  # Simulate an inherited PHASE_PROMPT_FILE from archive restore (env var path)
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' $'\n\n\n\n\n\nnone\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 PHASE_PROMPT_FILE=/missing/prompt.md \"$CLAUDELOOP\""
+  [ "$status" -eq 0 ]
+  ! grep -q "PHASE_PROMPT_FILE" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: '-' clears inherited PHASE_PROMPT_FILE" {
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' $'\n\n\n\n\n\n-\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 PHASE_PROMPT_FILE=/missing/prompt.md \"$CLAUDELOOP\""
+  [ "$status" -eq 0 ]
+  ! grep -q "PHASE_PROMPT_FILE" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
+@test "wizard: Enter keeps inherited PHASE_PROMPT_FILE" {
+  printf 'Execute phase {{PHASE_NUM}}: {{PHASE_TITLE}}\n' > "$TEST_DIR/prompt.md"
+  run sh -c "cd \"$TEST_DIR\" && printf '%s' $'\n\n\n\n\n\n\n\n\n\n' | BASE_DELAY=0 _WIZARD_FORCE=1 _CLAUDELOOP_NO_AUTO_ARCHIVE=1 PHASE_PROMPT_FILE=$TEST_DIR/prompt.md \"$CLAUDELOOP\""
+  [ "$status" -eq 0 ]
+  grep -q "PHASE_PROMPT_FILE" "$TEST_DIR/.claudeloop/.claudeloop.conf"
+}
+
 # =============================================================================
 # Numeric validation — non-digit input silently keeps default
 # =============================================================================

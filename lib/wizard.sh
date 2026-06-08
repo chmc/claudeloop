@@ -108,9 +108,13 @@ run_setup_wizard() {
     printf 'Phase prompt: using --phase-prompt %s\n' "$PHASE_PROMPT_FILE"
   else
     local prompt_default="${PHASE_PROMPT_FILE:-none}"
-    printf 'Phase prompt template file [%s]: ' "$prompt_default"
+    printf 'Phase prompt template file [%s] (enter "none" to clear): ' "$prompt_default"
     read -r response || return 0
-    [ -n "$response" ] && [ "$response" != "none" ] && PHASE_PROMPT_FILE="$response"
+    case "$response" in
+      "")              : ;;                   # keep default
+      none|NONE|None|-) PHASE_PROMPT_FILE="" ;;  # explicit clear; "none" matches the displayed placeholder
+      *)               PHASE_PROMPT_FILE="$response" ;;
+    esac
   fi
 
   # AI_PARSE
