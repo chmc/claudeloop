@@ -31,6 +31,7 @@ handle_orphan_recovery() {
     update_conf_key ".claudeloop/.claudeloop.conf" SKIP_PERMISSIONS "$SKIP_PERMISSIONS"
     update_conf_key ".claudeloop/.claudeloop.conf" VERIFY_PHASES "$VERIFY_PHASES"
     update_conf_key ".claudeloop/.claudeloop.conf" REFACTOR_PHASES "$REFACTOR_PHASES"
+    update_conf_key ".claudeloop/.claudeloop.conf" EFFORT_LEVEL "$EFFORT_LEVEL"
   else
     log_ts "Non-interactive: review .claudeloop/.claudeloop.conf to verify settings"
   fi
