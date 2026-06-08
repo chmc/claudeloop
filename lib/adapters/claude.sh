@@ -2,11 +2,11 @@
 # Claude CLI adapter
 
 _claude_exec_args() {
-  printf '%s' '--input-format stream-json --output-format stream-json --permission-prompt-tool stdio --verbose --include-partial-messages'
+  printf '%s' "--input-format stream-json --output-format stream-json --permission-prompt-tool stdio --verbose --include-partial-messages --effort $EFFORT_LEVEL"
 }
 
 _claude_print_args() {
-  printf '%s' '--print --output-format=stream-json --verbose --include-partial-messages --model opus'
+  printf '%s' "--print --output-format=stream-json --verbose --include-partial-messages --model opus --effort $EFFORT_LEVEL"
 }
 
 _claude_write_tool_pattern() {

@@ -41,6 +41,7 @@ Options:
   --refactor             Auto-refactor code after each phase completion
                          (up to 4 API calls per phase with --verify)
   --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
+  --effort <level>       Claude reasoning effort: low, medium, high, xhigh, max (default: medium; Claude provider only)
   --provider <name>      AI provider (claude, opencode [experimental]; default: claude)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --archive              Archive current run state, start fresh, and exit
@@ -196,6 +197,12 @@ parse_args() {
         if [ $# -lt 2 ]; then echo "Error: --refactor-max-retries requires an argument" >&2; exit 1; fi
         case "$2" in ''|*[!0-9]*) echo "Error: --refactor-max-retries requires a number" >&2; exit 1 ;; esac
         REFACTOR_MAX_RETRIES="$2"; _CLI_REFACTOR_MAX_RETRIES=1
+        shift 2
+        ;;
+      --effort)
+        if [ $# -lt 2 ]; then echo "Error: --effort requires an argument" >&2; exit 1; fi
+        case "$2" in low|medium|high|xhigh|max) ;; *) echo "Error: --effort must be low, medium, high, xhigh, or max" >&2; exit 1 ;; esac
+        EFFORT_LEVEL="$2"; _CLI_EFFORT_LEVEL=1
         shift 2
         ;;
       --provider)

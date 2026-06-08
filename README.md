@@ -273,6 +273,7 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
 --dead-timeout <s>   Exit if only heartbeats for N seconds (default: 180, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
+--effort <level>     Claude reasoning effort: low, medium, high, xhigh, max (default: medium; Claude provider only)
 --verify             Verify each phase with a fresh read-only Claude instance
 --refactor           Auto-refactor code after each phase
 --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
@@ -331,6 +332,7 @@ If you pass CLI flags, those questions are skipped in the wizard. In non-interac
 | `GRANULARITY` | `--granularity` | `tasks` |
 | `VERIFY_PHASES` | `--verify` | `true` |
 | `REFACTOR_PHASES` | `--refactor` | `true` |
+| `EFFORT_LEVEL` | `--effort` | `medium` |
 
 Example `.claudeloop/.claudeloop.conf`:
 

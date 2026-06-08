@@ -227,3 +227,55 @@ _init_git_repo() {
   run load_config_from_latest_archive
   [ "$status" -eq 0 ]
 }
+
+# --- EFFORT_LEVEL ---
+
+@test "load_config: loads EFFORT_LEVEL from conf" {
+  printf 'EFFORT_LEVEL=high\n' > "$_tmpdir/.conf"
+  EFFORT_LEVEL="medium"
+  load_config "$_tmpdir/.conf"
+  [ "$EFFORT_LEVEL" = "high" ]
+}
+
+@test "load_config: rejects invalid EFFORT_LEVEL value" {
+  printf 'EFFORT_LEVEL=banana\n' > "$_tmpdir/.conf"
+  EFFORT_LEVEL="medium"
+  load_config "$_tmpdir/.conf"
+  [ "$EFFORT_LEVEL" = "medium" ]
+}
+
+@test "load_config: accepts all valid EFFORT_LEVEL values" {
+  for level in low medium high xhigh max; do
+    printf 'EFFORT_LEVEL=%s\n' "$level" > "$_tmpdir/.conf"
+    EFFORT_LEVEL="medium"
+    load_config "$_tmpdir/.conf"
+    [ "$EFFORT_LEVEL" = "$level" ]
+  done
+}
+
+@test "write_config: persists EFFORT_LEVEL on first run" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_IDLE_TIMEOUT=60 DEAD_TIMEOUT=90
+  VERIFY_PHASES=false REFACTOR_PHASES=false REFACTOR_MAX_RETRIES=20
+  PROVIDER="" EFFORT_LEVEL="high"
+  _GITIGNORE_APPROVED=true
+  printf '.claudeloop/\n' > .gitignore
+  write_config
+  grep -q 'EFFORT_LEVEL=high' .claudeloop/.claudeloop.conf
+}
+
+@test "write_config: updates EFFORT_LEVEL when CLI flag set" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  _CLI_EFFORT_LEVEL=1
+  EFFORT_LEVEL="xhigh"
+  mkdir -p .claudeloop
+  printf 'EFFORT_LEVEL=medium\n' > .claudeloop/.claudeloop.conf
+  _GITIGNORE_APPROVED=true
+  write_config
+  grep -q 'EFFORT_LEVEL=xhigh' .claudeloop/.claudeloop.conf
+}

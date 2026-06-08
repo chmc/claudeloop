@@ -142,6 +142,17 @@ run_setup_wizard() {
     fi
   fi
 
+  # EFFORT_LEVEL
+  if [ -n "$_CLI_EFFORT_LEVEL" ]; then
+    printf 'Effort level: using --effort %s\n' "$EFFORT_LEVEL"
+  else
+    printf 'Claude effort level (low/medium/high/xhigh/max, Claude provider only) [%s]: ' "$EFFORT_LEVEL"
+    read -r response || return 0
+    case "$response" in
+      low|medium|high|xhigh|max) EFFORT_LEVEL="$response" ;;
+    esac
+  fi
+
   # VERIFY_PHASES
   if [ -n "$_CLI_VERIFY_PHASES" ]; then
     printf 'Verify phases: using --verify\n'
@@ -219,6 +230,17 @@ run_config_wizard() {
     case "$response" in
       [Yy]|[Yy][Ee][Ss]) SKIP_PERMISSIONS=true ;;
       [Nn]|[Nn][Oo]) SKIP_PERMISSIONS=false ;;
+    esac
+  fi
+
+  # EFFORT_LEVEL
+  if [ -n "$_CLI_EFFORT_LEVEL" ]; then
+    printf 'Effort level: using --effort %s\n' "$EFFORT_LEVEL"
+  else
+    printf 'Claude effort level (low/medium/high/xhigh/max, Claude provider only) [%s]: ' "$EFFORT_LEVEL"
+    read -r response || return 0
+    case "$response" in
+      low|medium|high|xhigh|max) EFFORT_LEVEL="$response" ;;
     esac
   fi
 

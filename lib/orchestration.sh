@@ -72,6 +72,7 @@ apply_config_precedence() {
   [ -n "$_CL_REFACTOR_PHASES" ]        && REFACTOR_PHASES="$_CL_REFACTOR_PHASES"
   [ -n "$_CL_REFACTOR_MAX_RETRIES" ]   && REFACTOR_MAX_RETRIES="$_CL_REFACTOR_MAX_RETRIES"
   [ -n "$_CL_PROVIDER" ]               && PROVIDER="$_CL_PROVIDER"
+  [ -n "$_CL_EFFORT_LEVEL" ]           && EFFORT_LEVEL="$_CL_EFFORT_LEVEL"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

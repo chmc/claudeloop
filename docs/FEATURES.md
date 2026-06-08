@@ -243,6 +243,18 @@
 
 ## Providers
 
+### effort-level
+**Status:** stable
+**Summary:** Configurable Claude reasoning effort level passed as `--effort` to every Claude invocation.
+**CLI:** `--effort <level>`
+**Env:** `EFFORT_LEVEL` (also reads `CLAUDE_CODE_EFFORT_LEVEL` as fallback)
+**Config:** `EFFORT_LEVEL`
+**Default:** `medium`
+**Allowed:** `low`, `medium`, `high`, `xhigh`, `max`
+**Files:** `lib/adapters/claude.sh`, `lib/config.sh`, `lib/wizard.sh`, `lib/orchestration.sh`
+
+---
+
 ### multi-provider
 **Status:** stable
 **Summary:** Support multiple AI providers via an adapter pattern.
