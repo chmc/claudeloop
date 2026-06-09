@@ -83,6 +83,8 @@ load_config() {
       EFFORT_LEVEL)
         case "$value" in low|medium|high|xhigh|max) EFFORT_LEVEL="$value" ;; esac
         ;;
+      MODEL)          MODEL="$value" ;;
+      MODEL_VERIFY)   MODEL_VERIFY="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -158,6 +160,8 @@ write_config() {
       printf 'REFACTOR_MAX_RETRIES=%s\n' "$REFACTOR_MAX_RETRIES"
       printf 'PROVIDER=%s\n'              "$PROVIDER"
       printf 'EFFORT_LEVEL=%s\n'          "$EFFORT_LEVEL"
+      printf 'MODEL=%s\n'                "$MODEL"
+      printf 'MODEL_VERIFY=%s\n'         "$MODEL_VERIFY"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -185,6 +189,8 @@ write_config() {
   [ -n "$_CLI_REFACTOR_MAX_RETRIES" ] && update_conf_key "$conf_file" REFACTOR_MAX_RETRIES "$REFACTOR_MAX_RETRIES"
   [ -n "$_CLI_PROVIDER" ]            && update_conf_key "$conf_file" PROVIDER "$PROVIDER"
   [ -n "$_CLI_EFFORT_LEVEL" ]        && update_conf_key "$conf_file" EFFORT_LEVEL "$EFFORT_LEVEL"
+  [ -n "$_CLI_MODEL" ]               && update_conf_key "$conf_file" MODEL "$MODEL"
+  [ -n "$_CLI_MODEL_VERIFY" ]        && update_conf_key "$conf_file" MODEL_VERIFY "$MODEL_VERIFY"
   return 0
 }
 

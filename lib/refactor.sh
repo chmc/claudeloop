@@ -172,7 +172,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without outpu
 
   print_substep_header "🔍" "Verifying refactoring for phase $_vr_phase..."
 
-  run_claude_pipeline "$_vr_prompt" "$_vr_phase" "$_vr_formatted" "$_vr_raw"
+  run_claude_pipeline "$_vr_prompt" "$_vr_phase" "$_vr_formatted" "$_vr_raw" "verify"
   local _vr_exit="$_LAST_CLAUDE_EXIT"
 
   check_verdict "$_vr_raw" "$_vr_phase" "Refactor verification" "$_vr_exit"
@@ -256,7 +256,7 @@ $_err_ctx
     fi
 
     # Run refactoring
-    run_claude_pipeline "$_rp_prompt" "$_rp_phase" "$_rp_log" "$_rp_raw"
+    run_claude_pipeline "$_rp_prompt" "$_rp_phase" "$_rp_log" "$_rp_raw" "refactor"
 
     if [ "$_LAST_CLAUDE_EXIT" -ne 0 ]; then
       if is_auth_error "$_rp_log"; then

@@ -43,3 +43,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0035](0035-recorder-json-safety.md) | Recorder JSON safety — defense in depth | 2026-03-23 | Accepted |
 | [0036](0036-stty-isig-restoration.md) | Restore terminal ISIG after Claude CLI pipeline | 2026-03-27 | Accepted |
 | [0037](0037-provider-abstraction.md) | Provider abstraction layer | 2026-04-30 | Accepted |
+| [0038](0038-per-step-cli-flags.md) | Per-step CLI flag management in provider adapters | 2026-06-09 | Accepted |

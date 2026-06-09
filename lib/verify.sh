@@ -117,7 +117,7 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   {
     _rc=0
     # shellcheck disable=SC2046
-    $(provider_cli) $(provider_exec_args) \
+    $(provider_cli) $(provider_exec_args verify) \
       < "$_verify_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"
   } | permission_filter | provider_normalize_events | inject_heartbeats 7>&- | { process_stream_json "$verify_formatted_log" "$verify_log" \

@@ -2,7 +2,9 @@
 # Claude CLI adapter
 
 _claude_exec_args() {
-  printf '%s' "--input-format stream-json --output-format stream-json --permission-prompt-tool stdio --verbose --include-partial-messages --effort $EFFORT_LEVEL"
+  local _model="$MODEL"
+  [ "${1:-}" = "verify" ] && [ -n "$MODEL_VERIFY" ] && _model="$MODEL_VERIFY"
+  printf '%s' "--input-format stream-json --output-format stream-json --permission-prompt-tool stdio --verbose --include-partial-messages --effort $EFFORT_LEVEL${_model:+ --model $_model}"
 }
 
 _claude_print_args() {

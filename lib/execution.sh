@@ -138,6 +138,7 @@ _kill_pipeline_escalate() {
 #          PGID-based cleanup, sentinel polling, and macOS bash 3.2 workarounds.
 run_claude_pipeline() {
   local _rcp_prompt="$1" _rcp_phase="$2" _rcp_log="$3" _rcp_raw="$4"
+  local _rcp_step="${5:-exec}"
   local _exit_tmp _claude_debug_flag
   _exit_tmp=$(mktemp)
   _claude_debug_flag=""
@@ -188,7 +189,7 @@ run_claude_pipeline() {
     _rc=0
     unset CLAUDECODE   # strip Claude Code marker — nested claude invocations require it unset
     # shellcheck disable=SC2046,SC2086
-    $(provider_cli) $(provider_exec_args) \
+    $(provider_cli) $(provider_exec_args "$_rcp_step") \
       $_claude_debug_flag \
       < "$_claude_fifo" 7>&- 2>&1 || _rc=$?
     printf '%s\n' "$_rc" > "$_exit_tmp"

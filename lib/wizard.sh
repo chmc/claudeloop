@@ -153,6 +153,24 @@ run_setup_wizard() {
     esac
   fi
 
+  # MODEL / MODEL_VERIFY (Claude provider only)
+  if [ "${PROVIDER:-claude}" != "opencode" ]; then
+    if [ -n "$_CLI_MODEL" ]; then
+      printf 'Execution model: using --model %s\n' "$MODEL"
+    else
+      printf 'Execution/refactor model (blank = project default) [%s]: ' "${MODEL:--}"
+      read -r response || return 0
+      [ -n "$response" ] && [ "$response" != "-" ] && MODEL="$response"
+    fi
+    if [ -n "$_CLI_MODEL_VERIFY" ]; then
+      printf 'Verification model: using --model-verify %s\n' "$MODEL_VERIFY"
+    else
+      printf 'Verification model (blank = use execution model) [%s]: ' "${MODEL_VERIFY:--}"
+      read -r response || return 0
+      [ -n "$response" ] && [ "$response" != "-" ] && MODEL_VERIFY="$response"
+    fi
+  fi
+
   # VERIFY_PHASES
   if [ -n "$_CLI_VERIFY_PHASES" ]; then
     printf 'Verify phases: using --verify\n'

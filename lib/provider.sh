@@ -42,8 +42,8 @@ provider_cli() {
 # Return execution mode flags (stream-json pipeline)
 provider_exec_args() {
   case "${PROVIDER:-claude}" in
-    opencode) _opencode_exec_args ;;
-    *)        _claude_exec_args ;;
+    opencode) _opencode_exec_args "$@" ;;
+    *)        _claude_exec_args "$@" ;;
   esac
 }
 
