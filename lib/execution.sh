@@ -509,6 +509,7 @@ execute_phase() {
   mkdir -p ".claudeloop/logs"
   mkdir -p ".claudeloop/signals"
   rm -f ".claudeloop/signals/phase-${phase_num}.md"
+  rm -f ".claudeloop/logs/sticky_state.tsv"
   log_verbose "execute_phase: phase=$phase_num title=$title"
 
   # Update status
