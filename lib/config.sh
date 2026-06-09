@@ -85,6 +85,7 @@ load_config() {
         ;;
       MODEL)          MODEL="$value" ;;
       MODEL_VERIFY)   MODEL_VERIFY="$value" ;;
+      SUBAGENT_MODEL_EXPLORE) SUBAGENT_MODEL_EXPLORE="$value" ;;
     esac
   done < "$conf_file"
 }
@@ -162,6 +163,7 @@ write_config() {
       printf 'EFFORT_LEVEL=%s\n'          "$EFFORT_LEVEL"
       printf 'MODEL=%s\n'                "$MODEL"
       printf 'MODEL_VERIFY=%s\n'         "$MODEL_VERIFY"
+      printf 'SUBAGENT_MODEL_EXPLORE=%s\n' "$SUBAGENT_MODEL_EXPLORE"
       [ -n "$PHASE_PROMPT_FILE" ]    && printf 'PHASE_PROMPT_FILE=%s\n'    "$PHASE_PROMPT_FILE"
       [ -n "$QUOTA_RETRY_INTERVAL" ] && printf 'QUOTA_RETRY_INTERVAL=%s\n' "$QUOTA_RETRY_INTERVAL"
     } > "$conf_file"
@@ -191,6 +193,7 @@ write_config() {
   [ -n "$_CLI_EFFORT_LEVEL" ]        && update_conf_key "$conf_file" EFFORT_LEVEL "$EFFORT_LEVEL"
   [ -n "$_CLI_MODEL" ]               && update_conf_key "$conf_file" MODEL "$MODEL"
   [ -n "$_CLI_MODEL_VERIFY" ]        && update_conf_key "$conf_file" MODEL_VERIFY "$MODEL_VERIFY"
+  [ -n "$_CLI_SUBAGENT_MODEL_EXPLORE" ] && update_conf_key "$conf_file" SUBAGENT_MODEL_EXPLORE "$SUBAGENT_MODEL_EXPLORE"
   return 0
 }
 

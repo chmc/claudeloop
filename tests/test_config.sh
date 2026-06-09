@@ -279,3 +279,38 @@ _init_git_repo() {
   write_config
   grep -q 'EFFORT_LEVEL=xhigh' .claudeloop/.claudeloop.conf
 }
+
+@test "load_config: reads SUBAGENT_MODEL_EXPLORE" {
+  printf 'SUBAGENT_MODEL_EXPLORE=haiku\n' > "$_tmpdir/.conf"
+  SUBAGENT_MODEL_EXPLORE=""
+  load_config "$_tmpdir/.conf"
+  [ "$SUBAGENT_MODEL_EXPLORE" = "haiku" ]
+}
+
+@test "write_config: persists SUBAGENT_MODEL_EXPLORE on first run" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_IDLE_TIMEOUT=60 DEAD_TIMEOUT=90
+  VERIFY_PHASES=false REFACTOR_PHASES=false REFACTOR_MAX_RETRIES=20
+  PROVIDER="" EFFORT_LEVEL="medium" MODEL="" MODEL_VERIFY=""
+  SUBAGENT_MODEL_EXPLORE="haiku"
+  _GITIGNORE_APPROVED=true
+  printf '.claudeloop/\n' > .gitignore
+  write_config
+  grep -q 'SUBAGENT_MODEL_EXPLORE=haiku' .claudeloop/.claudeloop.conf
+}
+
+@test "write_config: updates SUBAGENT_MODEL_EXPLORE when CLI flag set" {
+  cd "$_tmpdir"
+  DRY_RUN=false
+  _CLI_SUBAGENT_MODEL_EXPLORE=1
+  SUBAGENT_MODEL_EXPLORE="haiku"
+  mkdir -p .claudeloop
+  printf 'SUBAGENT_MODEL_EXPLORE=\n' > .claudeloop/.claudeloop.conf
+  _GITIGNORE_APPROVED=true
+  write_config
+  grep -q 'SUBAGENT_MODEL_EXPLORE=haiku' .claudeloop/.claudeloop.conf
+}

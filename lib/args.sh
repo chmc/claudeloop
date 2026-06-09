@@ -44,6 +44,7 @@ Options:
   --effort <level>       Claude reasoning effort: low, medium, high, xhigh, max (default: medium; Claude provider only)
   --model <name>         Model for execution and refactoring phases (default: project setting; Claude provider only)
   --model-verify <name>  Model for verification phases (default: --model value; Claude provider only)
+  --subagent-model <type>:<model>  Model for subagent types (e.g. explore:haiku; Claude provider only)
   --provider <name>      AI provider (claude, opencode [experimental]; default: claude)
   --dangerously-skip-permissions  Pass --dangerously-skip-permissions to claude
   --archive              Archive current run state, start fresh, and exit
@@ -215,6 +216,14 @@ parse_args() {
       --model-verify)
         if [ $# -lt 2 ]; then echo "Error: --model-verify requires an argument" >&2; exit 1; fi
         MODEL_VERIFY="$2"; _CLI_MODEL_VERIFY=1
+        shift 2
+        ;;
+      --subagent-model)
+        if [ $# -lt 2 ]; then echo "Error: --subagent-model requires an argument (e.g. explore:haiku)" >&2; exit 1; fi
+        case "$2" in
+          explore:*) SUBAGENT_MODEL_EXPLORE="${2#explore:}"; _CLI_SUBAGENT_MODEL_EXPLORE=1 ;;
+          *) echo "Error: --subagent-model type must be 'explore' (e.g. explore:haiku)" >&2; exit 1 ;;
+        esac
         shift 2
         ;;
       --provider)

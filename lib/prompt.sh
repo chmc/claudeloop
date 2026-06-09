@@ -157,3 +157,16 @@ ${_retry_ctx}"
 
   printf '%s' "$_ars_prompt"
 }
+
+# Append subagent model instruction when SUBAGENT_MODEL_EXPLORE is set.
+# Args: $1 - prompt text
+# Returns: prompt with instruction appended (stdout)
+append_subagent_model_instructions() {
+  local _asmi_prompt="$1"
+  if [ -n "${SUBAGENT_MODEL_EXPLORE:-}" ]; then
+    printf '%s\n\n## Subagent Model Override\n\nWhen using the Agent tool with subagent_type "Explore", always pass model: "%s".' \
+      "$_asmi_prompt" "$SUBAGENT_MODEL_EXPLORE"
+  else
+    printf '%s' "$_asmi_prompt"
+  fi
+}

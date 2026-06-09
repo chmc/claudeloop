@@ -32,6 +32,7 @@ _CL_PROVIDER="${PROVIDER:-}"
 _CL_EFFORT_LEVEL="${EFFORT_LEVEL:-${CLAUDE_CODE_EFFORT_LEVEL:-}}"
 _CL_MODEL="${MODEL:-}"
 _CL_MODEL_VERIFY="${MODEL_VERIFY:-}"
+_CL_SUBAGENT_MODEL_EXPLORE="${SUBAGENT_MODEL_EXPLORE:-}"
 case "$_CL_EFFORT_LEVEL" in
   low|medium|high|xhigh|max|'') ;;
   *) printf 'Warning: ignoring invalid EFFORT_LEVEL=%s (must be low|medium|high|xhigh|max)\n' "$_CL_EFFORT_LEVEL" >&2
@@ -104,6 +105,7 @@ PROVIDER=""                  # AI provider (claude, opencode; default: auto-dete
 EFFORT_LEVEL="medium"        # Claude reasoning effort (low|medium|high|xhigh|max)
 MODEL=""                     # Model for execution/refactoring (empty = project default)
 MODEL_VERIFY=""              # Model for verification (empty = project default)
+SUBAGENT_MODEL_EXPLORE=""    # Model for Explore subagents (empty = no override)
 _REFACTORING_PHASE=""
 CURRENT_PIPELINE_PID=""     # PID of running claude pipeline (last in pipeline), for interrupt cleanup
 CURRENT_PIPELINE_PGID=""    # PGID of running claude pipeline (first in pipeline), for group kill
@@ -121,6 +123,7 @@ _CLI_PROVIDER=""
 _CLI_EFFORT_LEVEL=""
 _CLI_MODEL=""
 _CLI_MODEL_VERIFY=""
+_CLI_SUBAGENT_MODEL_EXPLORE=""
 
 # Set to 1 in tests to bypass [ -t 0 ] TTY check in run_setup_wizard
 _WIZARD_FORCE="${_WIZARD_FORCE:-}"

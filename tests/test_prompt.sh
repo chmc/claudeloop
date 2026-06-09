@@ -99,3 +99,26 @@ EOF
     --phase-prompt "$TEST_DIR/prompt.md"
   [ "$status" -eq 0 ]
 }
+
+# ── append_subagent_model_instructions ──────────────────────────────────────
+
+@test "append_subagent_model_instructions: injects instruction when SUBAGENT_MODEL_EXPLORE set" {
+  SUBAGENT_MODEL_EXPLORE="haiku"
+  result=$(append_subagent_model_instructions "base prompt text")
+  printf '%s' "$result" | grep -q "Subagent Model Override"
+  printf '%s' "$result" | grep -q '"Explore"'
+  printf '%s' "$result" | grep -q '"haiku"'
+}
+
+@test "append_subagent_model_instructions: returns prompt unchanged when unset" {
+  SUBAGENT_MODEL_EXPLORE=""
+  result=$(append_subagent_model_instructions "base prompt text")
+  [ "$result" = "base prompt text" ]
+}
+
+@test "append_subagent_model_instructions: uses configured model name verbatim" {
+  SUBAGENT_MODEL_EXPLORE="sonnet"
+  result=$(append_subagent_model_instructions "prompt")
+  printf '%s' "$result" | grep -q '"sonnet"'
+  ! printf '%s' "$result" | grep -q '"haiku"'
+}

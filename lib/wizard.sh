@@ -169,6 +169,13 @@ run_setup_wizard() {
       read -r response || return 0
       [ -n "$response" ] && [ "$response" != "-" ] && MODEL_VERIFY="$response"
     fi
+    if [ -n "$_CLI_SUBAGENT_MODEL_EXPLORE" ]; then
+      printf 'Explore subagent model: using --subagent-model explore:%s\n' "$SUBAGENT_MODEL_EXPLORE"
+    else
+      printf 'Explore subagent model (blank = no override, e.g. haiku) [%s]: ' "${SUBAGENT_MODEL_EXPLORE:--}"
+      read -r response || return 0
+      [ -n "$response" ] && [ "$response" != "-" ] && SUBAGENT_MODEL_EXPLORE="$response"
+    fi
   fi
 
   # VERIFY_PHASES

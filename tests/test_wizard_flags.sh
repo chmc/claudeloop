@@ -157,3 +157,20 @@ _cl_wizard() {
   [ "$status" -ne 0 ]
   [ -f "$TEST_DIR/.claudeloop/.claudeloop.conf" ]
 }
+
+@test "claudeloop: --subagent-model explore:haiku sets SUBAGENT_MODEL_EXPLORE" {
+  run "$CLAUDELOOP" \
+    --plan "$TEST_DIR/PLAN.md" \
+    --dry-run \
+    --subagent-model explore:haiku
+  [ "$status" -eq 0 ]
+}
+
+@test "claudeloop: --subagent-model rejects unknown type" {
+  run "$CLAUDELOOP" \
+    --plan "$TEST_DIR/PLAN.md" \
+    --dry-run \
+    --subagent-model plan:haiku
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"type must be 'explore'"* ]]
+}

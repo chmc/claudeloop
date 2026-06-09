@@ -549,6 +549,9 @@ ${_git_context}"
     prompt=$(apply_retry_strategy "$phase_num" "$attempt" "$title" "$description" "$_git_context" "$log_file" "$prompt")
   fi
 
+  # Append subagent model overrides (after retry strategy so instruction survives all tiers)
+  prompt=$(append_subagent_model_instructions "$prompt")
+
   # Write metadata + prompt header to log
   {
     printf '=== EXECUTION START phase=%s attempt=%s time=%s ===\n' \

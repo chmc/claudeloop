@@ -244,6 +244,7 @@ refactor_phase() {
     : > "$_rp_raw"
 
     _rp_prompt=$(build_refactor_prompt "$_rp_phase" "$_pre_sha" "$_rp_analysis")
+    _rp_prompt=$(append_subagent_model_instructions "$_rp_prompt")
 
     if [ -n "$_err_ctx" ]; then
       _rp_prompt="${_rp_prompt}

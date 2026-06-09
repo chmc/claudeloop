@@ -34,6 +34,7 @@ handle_orphan_recovery() {
     update_conf_key ".claudeloop/.claudeloop.conf" EFFORT_LEVEL "$EFFORT_LEVEL"
     update_conf_key ".claudeloop/.claudeloop.conf" MODEL "$MODEL"
     update_conf_key ".claudeloop/.claudeloop.conf" MODEL_VERIFY "$MODEL_VERIFY"
+    update_conf_key ".claudeloop/.claudeloop.conf" SUBAGENT_MODEL_EXPLORE "$SUBAGENT_MODEL_EXPLORE"
   else
     log_ts "Non-interactive: review .claudeloop/.claudeloop.conf to verify settings"
   fi
@@ -78,6 +79,7 @@ apply_config_precedence() {
   [ -n "$_CL_EFFORT_LEVEL" ]           && EFFORT_LEVEL="$_CL_EFFORT_LEVEL"
   [ -n "$_CL_MODEL" ]                  && MODEL="$_CL_MODEL"
   [ -n "$_CL_MODEL_VERIFY" ]           && MODEL_VERIFY="$_CL_MODEL_VERIFY"
+  [ -n "$_CL_SUBAGENT_MODEL_EXPLORE" ] && SUBAGENT_MODEL_EXPLORE="$_CL_SUBAGENT_MODEL_EXPLORE"
 
   # Parse CLI arguments (CLI takes priority over everything)
   parse_args "$@"

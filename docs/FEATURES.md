@@ -257,14 +257,14 @@
 
 ### model-per-step
 **Status:** stable
-**Summary:** Override the target project's model setting per step type (execution, verification).
-**Description:** Prevents project-level model settings (e.g. `opusplan`) from affecting claudeloop phases. Execution and refactoring share `MODEL`; verification uses `MODEL_VERIFY` (falls back to `MODEL`). AI parsing always uses opus.
-**CLI:** `--model <name>`, `--model-verify <name>`
-**Env:** `MODEL`, `MODEL_VERIFY`
-**Config:** `MODEL`, `MODEL_VERIFY`
+**Summary:** Override the target project's model setting per step type (execution, verification, subagents).
+**Description:** Prevents project-level model settings (e.g. `opusplan`) from affecting claudeloop phases. Execution and refactoring share `MODEL`; verification uses `MODEL_VERIFY` (falls back to `MODEL`); Explore subagents use `SUBAGENT_MODEL_EXPLORE` (prompt-injected directive). AI parsing always uses opus.
+**CLI:** `--model <name>`, `--model-verify <name>`, `--subagent-model explore:<name>`
+**Env:** `MODEL`, `MODEL_VERIFY`, `SUBAGENT_MODEL_EXPLORE`
+**Config:** `MODEL`, `MODEL_VERIFY`, `SUBAGENT_MODEL_EXPLORE`
 **Default:** empty (uses project default)
 **Depends:** [effort-level], [multi-provider]
-**Files:** `lib/adapters/claude.sh`, `lib/provider.sh`, `lib/execution.sh`, `lib/verify.sh`, `lib/refactor.sh`, `lib/config.sh`, `lib/wizard.sh`, `lib/orchestration.sh`
+**Files:** `lib/adapters/claude.sh`, `lib/provider.sh`, `lib/execution.sh`, `lib/verify.sh`, `lib/refactor.sh`, `lib/prompt.sh`, `lib/config.sh`, `lib/wizard.sh`, `lib/orchestration.sh`
 **ADR:** [0038](docs/adr/0038-per-step-cli-flags.md)
 
 ---
