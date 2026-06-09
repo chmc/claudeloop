@@ -37,6 +37,11 @@ Located in `.claude/workflow-state/` (gitignored). Naming: one file per gate con
 
 Hooks in `settings.json` fire in **array order**. `branch-awareness.sh` must remain first in PreToolUse for Edit/Write — it gates all subsequent hooks.
 
+## State file traps
+
+- **Cleanup block exclusion**: state files that must survive across multiple ExitPlanMode calls (e.g. `tasks-verification-hash`) must NOT go in the cleanup block at the end of `planning-checklist.sh` — it runs on every successful pass, so writing then deleting in the same invocation is a no-op.
+- **Cross-hook coordination via mtime**: when hooks can't share context, compare state file mtimes to detect dependencies (e.g. `[ "$STATE_DIR/tasks-created" -nt "$STATE_DIR/tasks-verification-hash" ]` detects "tasks were recreated since hash was stored").
+
 ## Keeping docs in sync
 
 Any change to hook logic that affects gate behavior must update `docs/WORKFLOW.md`:
