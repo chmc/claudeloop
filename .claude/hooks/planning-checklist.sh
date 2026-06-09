@@ -209,6 +209,44 @@ EOF
     exit 0
 fi
 
+# Check tasks created if plan has a non-N/A Verification section
+verification_required=0
+if echo "$plan_content" | grep -q "^## verification"; then
+    if ! is_na_section "Verification" && ! is_na_section "verification"; then
+        verification_required=1
+    fi
+fi
+
+if [ "$verification_required" -eq 1 ]; then
+    if [ ! -f "$STATE_DIR/tasks-created" ]; then
+        cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Tasks not created. Use TaskCreate for each Verification item before calling ExitPlanMode.",
+    "additionalContext": "All plan sections are complete. Now create tasks from the Verification checklist, then call ExitPlanMode again."
+  }
+}
+EOF
+        exit 0
+    fi
+    # Deny if tasks-created is older than the plan file (stale from previous cycle)
+    if [ "$plan_file" -nt "$STATE_DIR/tasks-created" ]; then
+        cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Tasks are stale (created before current plan). Recreate tasks from Verification items, then call ExitPlanMode.",
+    "additionalContext": "The plan file was modified after tasks were created. Use TaskCreate for each current Verification item."
+  }
+}
+EOF
+        exit 0
+    fi
+fi
+
 # All sections present - now check which have non-N/A content
 # Extract section content and check if it starts with N/A
 
@@ -273,7 +311,6 @@ EOF
 touch "$STATE_DIR/plan-exited"
 
 # Clean up state for fresh workflow cycle
-rm -f "$STATE_DIR/tasks-created"
 rm -f "$STATE_DIR/edit-order"
 rm -f "$STATE_DIR/simplify-complete"
 rm -f "$STATE_DIR/review-complete"

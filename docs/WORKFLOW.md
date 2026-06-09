@@ -5,7 +5,7 @@ This project uses Claude Code hooks to enforce a development workflow. These hoo
 ## Workflow Overview
 
 ```
-Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify → Review → Verify
+Branch confirm → Plan (9 sections) → Tasks → ExitPlanMode → TDD → Updates → Simplify → Review → Verify
 ```
 
 ## Gates
@@ -13,9 +13,8 @@ Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify 
 | # | Gate | Trigger | Purpose |
 |---|------|---------|---------|
 | 1 | Branch awareness | First Edit/Write | Confirm branch before work |
-| 2 | Planning checklist | ExitPlanMode | 8 sections required |
-| 2.5 | Plan-to-tasks prompt | PostToolUse ExitPlanMode | Extracts Verification items → TaskCreate prompt |
-| 3 | Plan-to-tasks | Edit/Write (post-plan) | Tasks must exist |
+| 2 | Planning checklist | ExitPlanMode | 9 sections required + tasks must exist |
+| 3 | Plan-to-tasks (fallback) | Edit/Write (post-plan) | Defense-in-depth: tasks must exist |
 | 4 | TDD | Edit (impl files) | Test file edited first |
 | 4.5 | Auto-test | PostToolUse Edit/Write | Run bats on edited test files |
 | 5 | Documentation | TaskUpdate (complete) | Update if plan indicated |
@@ -29,7 +28,7 @@ Branch confirm → Plan (8 sections) → Tasks → TDD → Updates → Simplify 
 
 ## Planning Checklist (Gate 2)
 
-Every plan must address these 8 sections (use "N/A - reason" if not applicable):
+Every plan must address these 9 sections (use "N/A - reason" if not applicable):
 
 1. **Architecture Impact** - How does this affect system architecture?
 2. **ADR** - Does this need an Architectural Decision Record?
@@ -39,6 +38,9 @@ Every plan must address these 8 sections (use "N/A - reason" if not applicable):
 6. **Install / Uninstall** - Any installation changes?
 7. **Release** - Release considerations?
 8. **README** - README updates needed?
+9. **Critic** - Multi-angle review evidence?
+
+If the plan has a non-N/A **Verification** section, tasks (TaskCreate) must be created from it **before** calling ExitPlanMode. ExitPlanMode is denied until tasks exist and are newer than the plan file.
 
 ## TDD File Patterns (Gate 4)
 
@@ -58,7 +60,7 @@ Located in `.claude/workflow-state/` (gitignored):
 | `branch-confirmed` | Branch acknowledged | User confirmation |
 | `plan-exited` | ExitPlanMode called | Gate 2 |
 | `plan-requirements.json` | Which sections need updates | Gate 2 |
-| `tasks-created` | Tasks exist from plan | `tasks-created.sh` (PostToolUse on TaskCreate) |
+| `tasks-created` | Tasks created from plan Verification items | `tasks-created.sh` (PostToolUse on TaskCreate, before ExitPlanMode) |
 | `edit-order` | Tracks file edit sequence | Gates 1, 4 |
 | `simplify-complete` | /simplify was run | /simplify skill |
 | `review-complete` | Code review done | Code review |
