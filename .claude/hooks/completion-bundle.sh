@@ -92,13 +92,28 @@ if [ -f "$REQUIREMENTS_FILE" ]; then
     fi
 fi
 
-# Gates 9 & 9.5: Impl-file checks (simplify + feature registry)
+# Gate 9: Simplify
 if has_impl_files; then
     if [ ! -f "$STATE_DIR/simplify-complete" ]; then
         add_missing "/simplify not run"
     fi
-    if [ ! -f "$STATE_DIR/features-reviewed" ] && [ ! -f "$STATE_DIR/features-no-impact" ]; then
-        add_missing "feature registry not reviewed (update docs/FEATURES.md or provide skip reason)"
+fi
+
+# Gate 9.5: Feature registry (plan-driven path takes precedence over heuristic)
+features_required="false"
+if [ -f "$REQUIREMENTS_FILE" ]; then
+    features_required=$(jq -r '.features // false' "$REQUIREMENTS_FILE")
+fi
+if [ "$features_required" = "true" ]; then
+    if [ ! -f "$STATE_DIR/features-reviewed" ]; then
+        add_missing "features update planned but docs/FEATURES.md not updated"
+    fi
+elif has_impl_files; then
+    if [ ! -f "$STATE_DIR/features-reviewed" ]; then
+        if [ ! -f "$STATE_DIR/features-no-impact" ] || \
+           ! grep -q '[^[:space:]]' "$STATE_DIR/features-no-impact" 2>/dev/null; then
+            add_missing "feature registry not reviewed (update docs/FEATURES.md or echo reason > .claude/workflow-state/features-no-impact)"
+        fi
     fi
 fi
 

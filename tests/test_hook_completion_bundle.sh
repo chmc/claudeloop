@@ -410,3 +410,119 @@ EOF
     [ "$status" -eq 0 ]
     [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
 }
+
+@test "completion: denies when features-no-impact is empty (touch only)" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    touch "$TEST_DIR/.claude/workflow-state/readme-no-user-impact"
+    touch "$TEST_DIR/.claude/workflow-state/features-no-impact"
+    # features-no-impact is 0 bytes — should be denied
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("feature registry")'
+}
+
+@test "completion: denies when features-no-impact contains only whitespace" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    touch "$TEST_DIR/.claude/workflow-state/readme-no-user-impact"
+    printf '\n   \n' > "$TEST_DIR/.claude/workflow-state/features-no-impact"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("feature registry")'
+}
+
+@test "completion: allows when features-no-impact has real content" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":false}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    touch "$TEST_DIR/.claude/workflow-state/readme-no-user-impact"
+    echo "Bug fix only, no user-facing feature changes" > "$TEST_DIR/.claude/workflow-state/features-no-impact"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: denies when plan features:true but only features-no-impact exists" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":true}
+EOF
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    echo "no feature changes" > "$TEST_DIR/.claude/workflow-state/features-no-impact"
+    # features-reviewed is missing — plan says features: true, skip not allowed
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("features update planned")'
+}
+
+@test "completion: allows when plan features:true and features-reviewed exists" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":true}
+EOF
+    echo "lib/foo.sh" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    touch "$TEST_DIR/.claude/workflow-state/readme-no-user-impact"
+    touch "$TEST_DIR/.claude/workflow-state/features-reviewed"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: denies when plan features:true with no impl files and no features-reviewed" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false,"features":true}
+EOF
+    # No edit-order file (no impl files changed)
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/visual-verified"
+    # features: true should fire even without impl files (plan-driven)
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("features update planned")'
+}

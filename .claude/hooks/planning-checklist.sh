@@ -192,6 +192,13 @@ elif is_empty_section "Critic" || is_empty_section "critic"; then
     missing="$missing Critic (empty),"
 fi
 
+# Check Features
+if ! echo "$plan_content" | grep -q "^## features"; then
+    missing="$missing Features (missing),"
+elif is_empty_section "Features" || is_empty_section "features"; then
+    missing="$missing Features (empty),"
+fi
+
 # Check Scope (never N/A — every change has scope boundaries)
 if ! echo "$plan_content" | grep -q "^## scope"; then
     missing="$missing Scope (missing),"
@@ -209,7 +216,7 @@ if [ -n "$missing" ]; then
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "Plan missing or empty sections:$missing",
-    "additionalContext": "All 10 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A)."
+    "additionalContext": "All 11 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A)."
   }
 }
 EOF
@@ -350,6 +357,11 @@ if ! is_na_section "readme" && ! is_na_section "README"; then
     readme_req="true"
 fi
 
+features_req="false"
+if ! is_na_section "features" && ! is_na_section "Features"; then
+    features_req="true"
+fi
+
 # Write requirements file
 cat > "$STATE_DIR/plan-requirements.json" <<EOF
 {
@@ -361,6 +373,7 @@ cat > "$STATE_DIR/plan-requirements.json" <<EOF
   "install": $install_req,
   "release": $release_req,
   "readme": $readme_req,
+  "features": $features_req,
   "plan_file": "$plan_file"
 }
 EOF

@@ -31,6 +31,9 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Features
+N/A - no feature changes in this test plan
+
 ## Scope
 In scope: test feature implementation
 Out of scope: unrelated modules
@@ -118,6 +121,9 @@ N/A - no readme changes
 ## Critic
 N/A - small change
 
+## Features
+N/A - no feature impact
+
 ## Scope
 In scope: the main change
 Out of scope: nothing else affected
@@ -168,6 +174,13 @@ Update with new feature
 
 ## Critic
 Reviewed
+
+## Features
+N/A - no feature impact
+
+## Scope
+In scope: the fix
+Out of scope: unrelated modules
 
 ## Verification
 N/A - no verification
@@ -242,6 +255,9 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Features
+N/A - no feature impact
+
 ## Scope
 In scope: the main feature
 Out of scope: unrelated modules
@@ -290,6 +306,9 @@ Update with new feature
 
 ## Critic
 Reviewed from multiple angles
+
+## Features
+N/A - no feature impact
 EOF
 
     INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
@@ -332,6 +351,9 @@ Update with new feature
 
 ## Critic
 Reviewed from multiple angles
+
+## Features
+N/A - no feature impact
 
 ## Scope
 
@@ -379,6 +401,9 @@ Update with new feature
 
 ## Critic
 Reviewed from multiple angles
+
+## Features
+N/A - no feature impact
 
 ## Scope
 N/A - no scope decisions
@@ -428,6 +453,9 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Features
+N/A - no feature impact
+
 ## Scope
 Out of scope: unrelated modules
 
@@ -475,6 +503,9 @@ Update with new feature
 
 ## Critic
 Reviewed from multiple angles
+
+## Features
+N/A - no feature impact
 
 ## Scope
 In scope: the main feature
@@ -524,6 +555,9 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Features
+N/A - no feature impact
+
 ## Scope
 In scope: run_setup_wizard changes
 Out of scope: run_config_wizard - different recovery path, no change needed
@@ -572,6 +606,9 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Features
+N/A - no feature impact
+
 ## Scope
 In scope: the main feature
 Out of scope: unrelated modules
@@ -585,4 +622,200 @@ EOF
 
     [ "$status" -eq 0 ]
     [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "planning-checklist: denies plan missing Features section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Features")'
+}
+
+@test "planning-checklist: denies plan with empty Features section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Features
+
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Features (empty)")'
+}
+
+@test "planning-checklist: writes features:true for non-N/A Features section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+N/A - no changes
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+N/A - no tests
+
+## Documentation
+N/A - no doc changes
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+N/A - no readme changes
+
+## Critic
+N/A - small change
+
+## Features
+Update the feature registry for new flag
+
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ -f "$TEST_DIR/.claude/workflow-state/plan-requirements.json" ]
+    jq -e '.features == true' "$TEST_DIR/.claude/workflow-state/plan-requirements.json"
+}
+
+@test "planning-checklist: writes features:false for N/A Features section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+N/A - no changes
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+N/A - no tests
+
+## Documentation
+N/A - no doc changes
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+N/A - no readme changes
+
+## Critic
+N/A - small change
+
+## Features
+N/A - no feature changes
+
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ -f "$TEST_DIR/.claude/workflow-state/plan-requirements.json" ]
+    jq -e '.features == false' "$TEST_DIR/.claude/workflow-state/plan-requirements.json"
 }
