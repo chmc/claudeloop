@@ -23,7 +23,7 @@
 
 Exploration must produce a constraints brief:
 1. Conventions — patterns, error handling, naming. Cite files+lines.
-2. Touch points — every function/variable/file affected. Include signatures+callers.
+2. Touch points — every function/variable/file affected. Include signatures+callers. Flag sibling functions (same file, parallel structure, similar callers).
 3. Traps — anything surprising (eval vars, set -eu, `_CLAUDELOOP_NO_*` env vars for test isolation).
 4. Tests — which test files cover modified functions, with specifics.
 5. See [feature docs](docs/FEATURES.md) for product features

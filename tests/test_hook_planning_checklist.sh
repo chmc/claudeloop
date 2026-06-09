@@ -31,6 +31,10 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Scope
+In scope: test feature implementation
+Out of scope: unrelated modules
+
 ## Verification
 - Verify the feature works
 - Check edge cases'
@@ -113,6 +117,10 @@ N/A - no readme changes
 
 ## Critic
 N/A - small change
+
+## Scope
+In scope: the main change
+Out of scope: nothing else affected
 
 ## Verification
 N/A - no verification steps
@@ -234,10 +242,295 @@ Update with new feature
 ## Critic
 Reviewed from multiple angles
 
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
+
 ## Verification
 N/A - no verification steps needed
 EOF
     # No tasks-created file — should still be allowed
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "planning-checklist: denies plan missing Scope section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Scope")'
+}
+
+@test "planning-checklist: denies plan with empty Scope section" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Scope (empty)")'
+}
+
+@test "planning-checklist: denies Scope with N/A" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+N/A - no scope decisions
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("Scope")'
+}
+
+@test "planning-checklist: denies Scope missing 'In scope:' marker" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+Out of scope: unrelated modules
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | test("[Ss]cope")'
+}
+
+@test "planning-checklist: denies Scope missing 'Out of scope:' marker" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+In scope: the main feature
+
+## Verification
+N/A - no steps
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | test("[Ss]cope")'
+}
+
+@test "planning-checklist: allows valid Scope with both markers" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+
+## ADR
+N/A - no decisions
+
+## Workflow / State Machines
+N/A - no workflow changes
+
+## Tests (unit, e2e, integration)
+Unit tests needed
+
+## Documentation
+Update README
+
+## Install / Uninstall
+N/A - no install changes
+
+## Release
+N/A - not releasing
+
+## README
+Update with new feature
+
+## Critic
+Reviewed from multiple angles
+
+## Scope
+In scope: run_setup_wizard changes
+Out of scope: run_config_wizard - different recovery path, no change needed
+
+## Verification
+N/A - no steps
+EOF
 
     INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
     export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
@@ -278,6 +571,10 @@ Update with new feature
 
 ## Critic
 Reviewed from multiple angles
+
+## Scope
+In scope: the main feature
+Out of scope: unrelated modules
 EOF
     # No tasks-created file — should still be allowed
 

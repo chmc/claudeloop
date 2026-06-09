@@ -192,6 +192,13 @@ elif is_empty_section "Critic" || is_empty_section "critic"; then
     missing="$missing Critic (empty),"
 fi
 
+# Check Scope (never N/A — every change has scope boundaries)
+if ! echo "$plan_content" | grep -q "^## scope"; then
+    missing="$missing Scope (missing),"
+elif is_empty_section "Scope" || is_empty_section "scope"; then
+    missing="$missing Scope (empty),"
+fi
+
 # If any missing or empty, deny
 if [ -n "$missing" ]; then
     # Remove trailing comma
@@ -202,11 +209,62 @@ if [ -n "$missing" ]; then
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "Plan missing or empty sections:$missing",
-    "additionalContext": "All 9 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply."
+    "additionalContext": "All 10 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A)."
   }
 }
 EOF
     exit 0
+fi
+
+# Validate Scope section: must contain both 'in scope' and 'out of scope' markers, never N/A
+if is_na_section "Scope" || is_na_section "scope"; then
+    cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Scope section cannot be N/A — every change has scope boundaries. List what is In scope: and Out of scope: with justification.",
+    "additionalContext": "Scope must enumerate functions/files being changed (In scope:) and related functions deliberately excluded (Out of scope: with reason)."
+  }
+}
+EOF
+    exit 0
+fi
+
+scope_start=$(grep -in "^## scope" "$plan_file" | head -1 | cut -d: -f1) || true
+if [ -n "$scope_start" ]; then
+    scope_tail=$((scope_start + 1))
+    scope_body=$(tail -n +"$scope_tail" "$plan_file" | head -30)
+    scope_next=$(echo "$scope_body" | grep -n '^## ' | head -1 | cut -d: -f1)
+    if [ -n "$scope_next" ]; then
+        scope_last=$((scope_next - 1))
+        [ "$scope_last" -gt 0 ] && scope_body=$(echo "$scope_body" | head -"$scope_last")
+    fi
+    scope_lower=$(echo "$scope_body" | tr '[:upper:]' '[:lower:]')
+    scope_deny=""
+    if ! echo "$scope_lower" | grep -q "in scope"; then
+        scope_deny="missing 'In scope:' list"
+    fi
+    if ! echo "$scope_lower" | grep -q "out of scope"; then
+        if [ -n "$scope_deny" ]; then
+            scope_deny="$scope_deny and 'Out of scope:' list"
+        else
+            scope_deny="missing 'Out of scope:' list"
+        fi
+    fi
+    if [ -n "$scope_deny" ]; then
+        cat <<EOF
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Scope section $scope_deny. Name sibling functions explicitly.",
+    "additionalContext": "Scope must contain 'In scope:' and 'Out of scope:' markers. Example: 'Out of scope: run_config_wizard — recovery path, unchanged because X'."
+  }
+}
+EOF
+        exit 0
+    fi
 fi
 
 # Check tasks created if plan has a non-N/A Verification section
