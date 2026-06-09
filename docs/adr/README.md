@@ -44,3 +44,4 @@ For background on ADRs, see [Michael Nygard's article](https://cognitect.com/blo
 | [0036](0036-stty-isig-restoration.md) | Restore terminal ISIG after Claude CLI pipeline | 2026-03-27 | Accepted |
 | [0037](0037-provider-abstraction.md) | Provider abstraction layer | 2026-04-30 | Accepted |
 | [0038](0038-per-step-cli-flags.md) | Per-step CLI flag management in provider adapters | 2026-06-09 | Accepted |
+| [0039](0039-prompt-injected-subagent-model.md) | Prompt-injected subagent model control | 2026-06-09 | Accepted |
