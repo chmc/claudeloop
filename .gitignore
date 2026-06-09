@@ -18,6 +18,9 @@ PROGRESS.md
 # Test artifacts
 tests/.tmp/
 tests/fixtures/.tmp/
+tests/call_count
+tests/args/
+tests/prompts/
 
 # Backup files
 *.bak
