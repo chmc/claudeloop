@@ -25,6 +25,7 @@ setup() {
   . "$CLAUDELOOP_DIR/lib/permission_handler.sh"
   . "$CLAUDELOOP_DIR/lib/provider.sh"
   . "$CLAUDELOOP_DIR/lib/verify.sh"
+  . "$CLAUDELOOP_DIR/lib/prompt.sh"
   . "$CLAUDELOOP_DIR/lib/execution.sh"
   . "$CLAUDELOOP_DIR/lib/progress.sh"
   . "$CLAUDELOOP_DIR/lib/refactor.sh"
