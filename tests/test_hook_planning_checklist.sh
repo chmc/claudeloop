@@ -60,6 +60,9 @@ N/A - not releasing
 
 ## README
 Update with new feature
+
+## Critic
+Reviewed from multiple angles
 EOF
 
     INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
@@ -98,6 +101,9 @@ N/A - not releasing
 
 ## README
 N/A - no readme changes
+
+## Critic
+N/A - small change
 EOF
 
     INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
@@ -139,6 +145,9 @@ N/A - not releasing
 
 ## README
 Update with new feature
+
+## Critic
+Reviewed
 EOF
 
     INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
