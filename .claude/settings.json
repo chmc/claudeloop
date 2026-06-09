@@ -37,6 +37,13 @@
           "type": "command",
           "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-edited-tests.sh"
         }]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{
+          "type": "command",
+          "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shellcheck-on-edit.sh"
+        }]
       }
     ],
     "PreToolUse": [

@@ -13,7 +13,7 @@
 - Autonomous verification (mandatory): never ask user to test. Do it yourself.
 - Continuous improvement: suggest CLAUDE.md/skill/hook changes at natural pause points. Project rules → CLAUDE.md. Workflow rules → skill files. User prefs → memory.
 - Plan execution: multi-step plans ("promote → release → sync") = authorization. Only stop on failure.
-- Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash.
+- Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash. Contextual guidance in `.claude/rules/` (shell-code, parsers, hooks-and-workflow).
 - Enforced workflow: 11 gates block progress until completed. See `docs/WORKFLOW.md` for details. Run `/workflow` for status.
 - Task tracking: create tasks (TaskCreate) for each Verification item **before calling ExitPlanMode**. ExitPlanMode is denied until tasks exist. Mark `in_progress` before starting, `completed` when done.
 
