@@ -43,43 +43,24 @@ plan_content=$(cat "$plan_file" | tr '[:upper:]' '[:lower:]')
 # Ensure state directory exists
 mkdir -p "$STATE_DIR"
 
+# Extract body of a named section (lines between heading and next ## heading)
+get_section_body() {
+    _section="$1"
+    _file="$2"
+    _start=$(grep -in "^## $_section" "$_file" | head -1 | cut -d: -f1) || true
+    [ -z "$_start" ] && return
+    _tail=$((_start + 1))
+    tail -n +"$_tail" "$_file" | awk '/^## /{exit} {print}'
+}
+
 # Helper: check if section is empty (no content after heading, before next section heading)
 # Returns 0 (true) if section is EMPTY
 # Returns 1 (false) if section has content
 is_empty_section() {
     section_name="$1"
-    # Get content between this section and next ## heading
-    # Use grep -i for case-insensitive matching
-    section_start=$(grep -in "^## $section_name" "$plan_file" | head -1 | cut -d: -f1) || return 1
-    if [ -z "$section_start" ]; then
-        return 1
-    fi
-    # Get next few lines after heading, stop at next section heading
-    tail_start="$((section_start + 1))"
-    content=$(tail -n +"$tail_start" "$plan_file" | head -20)
-    # Find first section heading (^## )
-    next_section=$(echo "$content" | grep -n '^## ' | head -1 | cut -d: -f1)
-
-    # If there's a next section, take only lines before it
-    if [ -n "$next_section" ]; then
-        # Remove one from next_section to get last line before it
-        last_line="$((next_section - 1))"
-        if [ "$last_line" -gt 0 ]; then
-            content=$(echo "$content" | head -"$last_line")
-        else
-            content=""
-        fi
-    fi
-
-    # Check if first non-empty line exists
-    first_content=$(echo "$content" | grep -v '^$' | head -1)
-
-    # If no content found (empty section)
-    if [ -z "$first_content" ]; then
-        return 0  # IS empty
-    fi
-
-    return 1  # NOT empty
+    content=$(get_section_body "$section_name" "$plan_file")
+    first_content=$(printf '%s' "$content" | grep -v '^$' | head -1)
+    [ -z "$first_content" ]
 }
 
 # Helper: check if section starts with N/A
@@ -87,34 +68,9 @@ is_empty_section() {
 # Returns 1 (false) otherwise
 is_na_section() {
     section_name="$1"
-    section_start=$(grep -in "^## $section_name" "$plan_file" | head -1 | cut -d: -f1) || return 1
-    if [ -z "$section_start" ]; then
-        return 1
-    fi
-    # Get next few lines after heading, stop at next section heading
-    tail_start="$((section_start + 1))"
-    content=$(tail -n +"$tail_start" "$plan_file" | head -20)
-    # Find first section heading (^## )
-    next_section=$(echo "$content" | grep -n '^## ' | head -1 | cut -d: -f1)
-
-    # If there's a next section, take only lines before it
-    if [ -n "$next_section" ]; then
-        # Remove one from next_section to get last line before it
-        last_line="$((next_section - 1))"
-        if [ "$last_line" -gt 0 ]; then
-            content=$(echo "$content" | head -"$last_line")
-        else
-            content=""
-        fi
-    fi
-
-    # Get first non-empty line
-    first_content=$(echo "$content" | grep -v '^$' | head -1 | tr '[:upper:]' '[:lower:]')
-
-    if echo "$first_content" | grep -qE '^n/?a[[:space:]]|^n/?a$|^n/?a[[:space:]]*-'; then
-        return 0  # IS N/A
-    fi
-    return 1  # NOT N/A
+    content=$(get_section_body "$section_name" "$plan_file")
+    first_content=$(printf '%s' "$content" | grep -v '^$' | head -1 | tr '[:upper:]' '[:lower:]')
+    echo "$first_content" | grep -qE '^n/?a[[:space:]]|^n/?a$|^n/?a[[:space:]]*-'
 }
 
 # Required sections (check case-insensitive)
@@ -215,8 +171,8 @@ if [ -n "$missing" ]; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "Plan missing or empty sections:$missing",
-    "additionalContext": "All 11 sections required with non-empty content. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A)."
+    "permissionDecisionReason": "Plan missing or empty sections:$missing. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A).",
+    "additionalContext": "All 11 sections required with non-empty content."
   }
 }
 EOF
@@ -296,9 +252,32 @@ if [ "$verification_required" -eq 1 ]; then
 EOF
         exit 0
     fi
-    # Deny if tasks-created is older than the plan file (stale from previous cycle)
-    if [ "$plan_file" -nt "$STATE_DIR/tasks-created" ]; then
-        cat <<'EOF'
+    # Staleness check: compare Verification section hash (falls back to mtime if no hash stored)
+    current_verification_hash=$(get_section_body "Verification" "$plan_file" | cksum | cut -f1 -d' ')
+    if [ -f "$STATE_DIR/tasks-verification-hash" ]; then
+        # If tasks were recreated since last hash write, update hash unconditionally
+        if [ "$STATE_DIR/tasks-created" -nt "$STATE_DIR/tasks-verification-hash" ]; then
+            echo "$current_verification_hash" > "$STATE_DIR/tasks-verification-hash"
+        else
+            stored_hash=$(cat "$STATE_DIR/tasks-verification-hash")
+            if [ "$current_verification_hash" != "$stored_hash" ]; then
+                cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Tasks are stale (Verification section changed). Recreate tasks from Verification items, then call ExitPlanMode.",
+    "additionalContext": "The Verification section was modified after tasks were created. Use TaskCreate for each current Verification item."
+  }
+}
+EOF
+                exit 0
+            fi
+        fi
+    else
+        # No hash stored yet — fall back to mtime check
+        if [ "$plan_file" -nt "$STATE_DIR/tasks-created" ]; then
+            cat <<'EOF'
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
@@ -308,7 +287,10 @@ EOF
   }
 }
 EOF
-        exit 0
+            exit 0
+        fi
+        # Fresh by mtime — store hash for future comparisons
+        echo "$current_verification_hash" > "$STATE_DIR/tasks-verification-hash"
     fi
 fi
 

@@ -24,7 +24,7 @@ Branch confirm → Plan (11 sections) → Tasks → ExitPlanMode → TDD → Upd
 | 9 | Simplify | TaskUpdate (complete) | Run /simplify for impl tasks |
 | 9.5 | Feature Registry | TaskUpdate (complete) | Plan-driven: `features-reviewed` required if plan says features impacted. Heuristic fallback: `features-no-impact` (non-empty) accepted if plan says N/A but impl files changed |
 | 10 | Code review | TaskUpdate (complete) | Review before task closes |
-| 11 | Visual verification | TaskUpdate (complete) | Verify or justify skip |
+| 11 | Visual verification | TaskUpdate (complete) | Verify or justify skip (auto-skipped for docs-only changes) |
 
 ## Planning Checklist (Gate 2)
 
@@ -42,7 +42,7 @@ Every plan must address these 11 sections (use "N/A - reason" if not applicable)
 10. **Features** - Does this change user-facing features requiring FEATURES.md update? (N/A accepted with reason; non-N/A sets `features: true` in requirements, blocking completion until `features-reviewed` is created — no skip path)
 11. **Scope** - What's in scope and out of scope? (N/A not accepted — must contain `In scope:` and `Out of scope:` markers with explicit function/file enumeration)
 
-If the plan has a non-N/A **Verification** section, tasks (TaskCreate) must be created from it **before** calling ExitPlanMode. ExitPlanMode is denied until tasks exist and are newer than the plan file.
+If the plan has a non-N/A **Verification** section, tasks (TaskCreate) must be created from it **before** calling ExitPlanMode. ExitPlanMode is denied until tasks exist and the Verification section content matches the hash stored when tasks were last created (falls back to mtime comparison on first use).
 
 ## TDD File Patterns (Gate 4)
 
@@ -63,6 +63,7 @@ Located in `.claude/workflow-state/` (gitignored):
 | `plan-exited` | ExitPlanMode called | Gate 2 |
 | `plan-requirements.json` | Which sections need updates | Gate 2 |
 | `tasks-created` | Tasks created from plan Verification items | `tasks-created.sh` (PostToolUse on TaskCreate, before ExitPlanMode) |
+| `tasks-verification-hash` | Verification section cksum at task creation time | `planning-checklist.sh` (written on first fresh pass, updated when tasks recreated) |
 | `edit-order` | Tracks file edit sequence | Gates 1, 4 |
 | `simplify-complete` | /simplify was run | /simplify skill |
 | `review-complete` | Code review done | Code review |

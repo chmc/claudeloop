@@ -526,3 +526,55 @@ EOF
     echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
     echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("features update planned")'
 }
+
+@test "completion: docs-only edit-order skips visual verification requirement" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    # Only .md files edited — docs-only change
+    echo "CLAUDE.md" > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    # No visual-verified, no visual-skip-reason
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: no edit-order file skips visual verification requirement" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    # No edit-order at all (pure docs/discussion session)
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "completion: impl file in edit-order still requires visual verification" {
+    cat > "$TEST_DIR/.claude/workflow-state/plan-requirements.json" <<'EOF'
+{"architecture":false,"adr":false,"workflow":false,"tests":false,"documentation":false,"install":false,"release":false,"readme":false}
+EOF
+    printf 'CLAUDE.md\nlib/foo.sh\n' > "$TEST_DIR/.claude/workflow-state/edit-order"
+    touch "$TEST_DIR/.claude/workflow-state/simplify-complete"
+    touch "$TEST_DIR/.claude/workflow-state/review-complete"
+    touch "$TEST_DIR/.claude/workflow-state/features-reviewed"
+    touch "$TEST_DIR/.claude/workflow-state/readme-no-user-impact"
+    # No visual-verified
+
+    INPUT='{"tool_name":"TaskUpdate","tool_input":{"taskId":"1","status":"completed"}}'
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/completion-bundle.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("visual verification")'
+}

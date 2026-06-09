@@ -819,3 +819,75 @@ EOF
     [ -f "$TEST_DIR/.claude/workflow-state/plan-requirements.json" ]
     jq -e '.features == false' "$TEST_DIR/.claude/workflow-state/plan-requirements.json"
 }
+
+@test "planning-checklist: missing sections error includes N/A hint in permissionDecisionReason" {
+    cat > "$TEST_DIR/.claude/plans/test-plan.md" <<'EOF'
+# Test Plan
+
+## Architecture Impact
+Some content
+EOF
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    # N/A hint must appear in the main reason field, not just additionalContext
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | contains("N/A")'
+}
+
+@test "planning-checklist: not stale when plan edited but Verification section unchanged" {
+    printf '%s\n' "$FULL_PLAN_TEMPLATE" > "$TEST_DIR/.claude/plans/test-plan.md"
+
+    # First pass: tasks fresh by mtime — hook stores hash and allows
+    sleep 0.1
+    touch "$TEST_DIR/.claude/workflow-state/tasks-created"
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+
+    # Hash file must have been written
+    [ -f "$TEST_DIR/.claude/workflow-state/tasks-verification-hash" ]
+
+    # Simulate editing a non-Verification section — update plan mtime to be newer
+    # than tasks-created, but keep Verification content identical
+    sleep 0.1
+    sed -i '' 's/^Some content$/Some content updated/' "$TEST_DIR/.claude/plans/test-plan.md" 2>/dev/null || \
+        sed -i 's/^Some content$/Some content updated/' "$TEST_DIR/.claude/plans/test-plan.md"
+
+    # Second pass: plan is newer than tasks-created by mtime, but Verification hash matches
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ] || ! echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+}
+
+@test "planning-checklist: stale when Verification section content changed" {
+    printf '%s\n' "$FULL_PLAN_TEMPLATE" > "$TEST_DIR/.claude/plans/test-plan.md"
+
+    # First pass: store hash
+    sleep 0.1
+    touch "$TEST_DIR/.claude/workflow-state/tasks-created"
+
+    INPUT='{"tool_name":"ExitPlanMode","tool_input":{}}'
+    export PLAN_FILE="$TEST_DIR/.claude/plans/test-plan.md"
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+    [ "$status" -eq 0 ]
+    [ -f "$TEST_DIR/.claude/workflow-state/tasks-verification-hash" ]
+
+    # Modify the Verification section content
+    sleep 0.1
+    printf '%s\n' "$FULL_PLAN_TEMPLATE" > "$TEST_DIR/.claude/plans/test-plan.md"
+    printf '\n- Added new verification step\n' >> "$TEST_DIR/.claude/plans/test-plan.md"
+
+    # Second pass: Verification hash differs → stale
+    run bash -c "echo '$INPUT' | '$TEST_DIR/.claude/hooks/planning-checklist.sh'"
+    [ "$status" -eq 0 ]
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecision == "deny"'
+    echo "$output" | jq -e '.hookSpecificOutput.permissionDecisionReason | test("[Ss]tale|[Tt]ask")'
+}

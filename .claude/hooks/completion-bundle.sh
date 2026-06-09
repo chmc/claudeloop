@@ -143,9 +143,17 @@ if [ "$_review_pass" = false ] && [ ! -f "$STATE_DIR/review-complete" ]; then
     add_missing "code review not completed"
 fi
 
-# Gate 11: Visual verification
-if [ ! -f "$STATE_DIR/visual-verified" ] && [ ! -f "$STATE_DIR/visual-skip-reason" ]; then
-    add_missing "visual verification not done (or no skip reason provided)"
+# Gate 11: Visual verification (auto-skip for docs-only changes)
+_docs_only=false
+if [ ! -f "$EDIT_ORDER_FILE" ]; then
+    _docs_only=true
+elif ! grep -qE '^(lib/|src/|claudeloop$|install\.sh$|uninstall\.sh$)' "$EDIT_ORDER_FILE" 2>/dev/null; then
+    _docs_only=true
+fi
+if [ "$_docs_only" = "false" ]; then
+    if [ ! -f "$STATE_DIR/visual-verified" ] && [ ! -f "$STATE_DIR/visual-skip-reason" ]; then
+        add_missing "visual verification not done (or no skip reason provided)"
+    fi
 fi
 
 # If any missing, deny completion
