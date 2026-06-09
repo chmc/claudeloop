@@ -12,6 +12,7 @@
 - Completion gate (mandatory): run `/verify` before reporting done. Skip for docs/test-only changes.
 - Autonomous verification (mandatory): never ask user to test. Do it yourself.
 - Continuous improvement: suggest CLAUDE.md/skill/hook changes at natural pause points. Project rules → CLAUDE.md. Workflow rules → skill files. User prefs → memory.
+- Post-implementation debrief: after completing a plan, share lessons that would change future approach. Codebase traps, plan-vs-reality gaps, process improvements — not generic observations. Skip if nothing non-obvious was learned. User decides what to persist.
 - Plan execution: multi-step plans ("promote → release → sync") = authorization. Only stop on failure.
 - Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash. Contextual guidance in `.claude/rules/` (shell-code, parsers, hooks-and-workflow).
 - Enforced workflow: 11 gates block progress until completed. See `docs/WORKFLOW.md` for details. Run `/workflow` for status.
