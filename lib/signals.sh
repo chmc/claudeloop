@@ -19,8 +19,10 @@ _safe_disable_jobctl() {
 handle_interrupt() {
   set +e          # bash 3.2 does not exempt trap handlers from set -e
   _restore_isig   # re-enable Ctrl+C in case Claude CLI disabled ISIG
-  # Close FIFO write end before kill — prevents blocking on readerless FIFO
-  exec 7>&- 2>/dev/null || true
+  # Close FIFO write end before kill — prevents blocking on readerless FIFO.
+  # Do NOT add 2>/dev/null: exec without a command makes redirections permanent,
+  # so 2>/dev/null would silence stderr for all subsequent phases.
+  exec 7>&- || true
   # Kill running claude pipeline immediately with SIGTERM → SIGKILL escalation (1s timeout)
   if [ -n "${CURRENT_PIPELINE_PID:-}" ]; then
     _kill_pipeline_escalate "${CURRENT_PIPELINE_PID}" "${CURRENT_PIPELINE_PGID:-}" 1

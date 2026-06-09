@@ -41,6 +41,7 @@ inject_heartbeats() {
 # Args: $1 - log_file path, $2 - raw_log path, $3 - hooks_enabled (true|false, default false)
 #       $4 - live_log path, $5 - simple_mode (true|false, default false)
 #       $6 - idle_timeout (seconds, 0=disabled)
+#       $7 - sticky_state_file path (optional, persists panel state across phases)
 process_stream_json() {
   local log_file="$1"
   local raw_log="$2"
@@ -48,6 +49,7 @@ process_stream_json() {
   local live_log="${4:-${LIVE_LOG:-}}"
   local simple_mode="${5:-false}"
   local idle_timeout="${6:-0}"
+  local sticky_state="${7:-}"
   awk -v log_file="$log_file" -v raw_log="$raw_log" \
       -v trunc_len="${STREAM_TRUNCATE_LEN:-300}" \
       -v hooks_enabled="$hooks_enabled" \
@@ -56,7 +58,8 @@ process_stream_json() {
       -v idle_timeout_s="$idle_timeout" \
       -v override_term_height="${STREAM_TERM_HEIGHT:-0}" \
       -v tool_timeout_override="${_TOOL_TIMEOUT_OVERRIDE:-}" \
-      -v dead_timeout_override="${_DEAD_TIMEOUT_OVERRIDE:-}" '
+      -v dead_timeout_override="${_DEAD_TIMEOUT_OVERRIDE:-}" \
+      -v sticky_state_file="$sticky_state" '
   # extract(s, key) - return scalar value for "key":value in s
   # Returns: string value (unescape \n \t \"), numeric/bool raw text,
   #          or "" for object/array values (signals non-scalar)
@@ -488,6 +491,49 @@ process_stream_json() {
     thinking_log_interval = 30
     printf "[%s]\n", get_time()
     if (live_log != "") { printf "[%s]\n", get_time() >> live_log }
+    # Restore sticky panel state from previous phase
+    if (sticky_state_file != "") {
+      _rs_hdr = ""
+      if ((getline _rs_hdr < sticky_state_file) > 0) {
+        split(_rs_hdr, _rs_hp, "\t")
+        if (_rs_hp[1] == "source") {
+          if (_rs_hp[2] == "task") {
+            task_count    = _rs_hp[3] + 0
+            task_completed = _rs_hp[4] + 0
+            task_deleted   = _rs_hp[5] + 0
+            while ((getline _rs_line < sticky_state_file) > 0) {
+              split(_rs_line, _rs_sp, "\t")
+              if (_rs_sp[1] == "task") {
+                _rs_id = _rs_sp[2] + 0
+                task_subjects[_rs_id]      = _rs_sp[3]
+                task_statuses[_rs_id]      = _rs_sp[4]
+                task_active_forms[_rs_id]  = _rs_sp[5]
+                if (_rs_sp[4] == "in_progress" && _rs_sp[5] != "")
+                  current_active_form = _rs_sp[5]
+              }
+            }
+            sync_tasks_to_sticky()
+          } else if (_rs_hp[2] == "todo") {
+            while ((getline _rs_line < sticky_state_file) > 0) {
+              split(_rs_line, _rs_sp, "\t")
+              if (_rs_sp[1] == "todo") {
+                sticky_count++
+                sticky_contents[sticky_count] = _rs_sp[2]
+                sticky_statuses[sticky_count] = _rs_sp[3]
+              }
+            }
+            todo_count     = sticky_count
+            todo_completed = 0
+            for (_rs_i = 1; _rs_i <= sticky_count; _rs_i++)
+              if (sticky_statuses[_rs_i] == "completed") todo_completed++
+            todo_seen_first = 1
+            sticky_source   = "todo"
+          }
+        }
+        close(sticky_state_file)
+      }
+      sticky_all_done = 0
+    }
     fflush()
   }
 
@@ -943,6 +989,29 @@ process_stream_json() {
     }
   }
   END {
+    # Serialize sticky panel state for next phase
+    if (sticky_state_file != "" && (sticky_source == "task" || sticky_source == "todo")) {
+      if (sticky_source == "task") {
+        printf "source\ttask\t%d\t%d\t%d\n", task_count, task_completed, task_deleted > sticky_state_file
+        for (_ei = 1; _ei <= task_count; _ei++) {
+          _en = (_ei in task_subjects)      ? task_subjects[_ei]      : ""
+          _es = (_ei in task_statuses)      ? task_statuses[_ei]      : "pending"
+          _ea = (_ei in task_active_forms)  ? task_active_forms[_ei]  : ""
+          gsub(/\t/, " ", _en); gsub(/\n/, " ", _en)
+          gsub(/\t/, " ", _ea); gsub(/\n/, " ", _ea)
+          printf "task\t%d\t%s\t%s\t%s\n", _ei, _en, _es, _ea > sticky_state_file
+        }
+        close(sticky_state_file)
+      } else if (sticky_source == "todo") {
+        printf "source\ttodo\t%d\t%d\t0\n", todo_count, todo_completed > sticky_state_file
+        for (_ei = 1; _ei <= sticky_count; _ei++) {
+          _en = sticky_contents[_ei]
+          gsub(/\t/, " ", _en); gsub(/\n/, " ", _en)
+          printf "todo\t%s\t%s\n", _en, sticky_statuses[_ei] > sticky_state_file
+        }
+        close(sticky_state_file)
+      }
+    }
     if (sticky_rendered > 0) {
       printf "\r\033[2K" > "/dev/stderr"
       for (_ei = 0; _ei < sticky_rendered; _ei++)
@@ -958,6 +1027,6 @@ process_stream_json() {
 
 _self="${0##*/}"
 if [ "$_self" = "stream_processor.sh" ]; then
-  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log] [simple_mode] [idle_timeout]\n' >&2; exit 1; }
-  process_stream_json "$1" "$2" "${3:-false}" "${4:-}" "${5:-false}" "${6:-0}"
+  [ "$#" -lt 2 ] && { printf 'Usage: stream_processor.sh <log_file> <raw_log> [hooks_enabled] [live_log] [simple_mode] [idle_timeout] [sticky_state_file]\n' >&2; exit 1; }
+  process_stream_json "$1" "$2" "${3:-false}" "${4:-}" "${5:-false}" "${6:-0}" "${7:-}"
 fi

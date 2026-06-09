@@ -1785,3 +1785,69 @@ JSON"
   last_spinner=$(printf '%s' "$output" | grep -o '[0-9]*s Todo [0-9]*/[0-9]*' | tail -1)
   [ -n "$last_spinner" ]
 }
+
+# --- sticky_state_file round-trip ---
+
+@test "sticky_state_file: phase 2 restores task panel from state file" {
+  local state_file="$BATS_TEST_TMPDIR/sticky_state.tsv"
+  local log2="$BATS_TEST_TMPDIR/log2"
+  local raw2="$BATS_TEST_TMPDIR/raw2"
+
+  # Phase 1: create 2 tasks, complete first
+  local e1='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task one","description":"d","activeForm":"Doing one"}}'
+  local e2='{"type":"tool_use","name":"TaskCreate","input":{"subject":"Task two","description":"d","activeForm":"Doing two"}}'
+  local e3='{"type":"tool_use","name":"TaskUpdate","input":{"taskId":"1","status":"completed"}}'
+  local hb='{"type":"heartbeat"}'
+  local result='{"type":"result","duration_ms":500,"num_turns":1,"input_tokens":10,"output_tokens":5}'
+  bash -c "printf '%s\n%s\n%s\n%s\n%s\n%s\n' '$e1' '$e2' '$e3' '$hb' '$hb' '$result' | \
+    _SKIP_HEARTBEATS=1 sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' false 0 '$state_file'" 2>/dev/null
+
+  # State file must exist with task source
+  [ -f "$state_file" ]
+  grep -q '^source	task	2	1	0$' "$state_file"
+  grep -q '^task	1	Task one	completed' "$state_file"
+  grep -q '^task	2	Task two	pending' "$state_file"
+
+  # Phase 2: no task events, just a heartbeat — panel should render from restored state
+  run bash -c "printf '%s\n%s\n%s\n' '$hb' '$hb' '$result' | \
+    _SKIP_HEARTBEATS=1 sh '$STREAM_PROCESSOR_LIB' '$log2' '$raw2' false '' false 0 '$state_file' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  # Task summary should appear even though no TaskCreate events were sent
+  [[ "$output" == *"Task one"* ]] || [[ "$output" == *"Tasks: 1/2"* ]]
+}
+
+@test "sticky_state_file: missing state file is a no-op (no crash)" {
+  local missing="$BATS_TEST_TMPDIR/nonexistent_state.tsv"
+  local hb='{"type":"heartbeat"}'
+  run bash -c "echo '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' false 0 '$missing' 2>/dev/null"
+  [ "$status" -eq 0 ]
+}
+
+@test "sticky_state_file: empty state file is a no-op (no crash)" {
+  local state_file="$BATS_TEST_TMPDIR/empty_state.tsv"
+  : > "$state_file"
+  local hb='{"type":"heartbeat"}'
+  run bash -c "echo '$hb' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' false 0 '$state_file' 2>/dev/null"
+  [ "$status" -eq 0 ]
+}
+
+@test "sticky_state_file: todos persisted and restored across phases" {
+  local state_file="$BATS_TEST_TMPDIR/sticky_todo_state.tsv"
+  local log2="$BATS_TEST_TMPDIR/log2"
+  local raw2="$BATS_TEST_TMPDIR/raw2"
+
+  local todo='{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"Write tests","status":"pending"},{"content":"Run lint","status":"completed"}]}}'
+  local hb='{"type":"heartbeat"}'
+  local result='{"type":"result","duration_ms":500,"num_turns":1,"input_tokens":10,"output_tokens":5}'
+
+  bash -c "printf '%s\n%s\n%s\n' '$todo' '$hb' '$result' | \
+    _SKIP_HEARTBEATS=1 sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' false '' false 0 '$state_file'" 2>/dev/null
+
+  [ -f "$state_file" ]
+  grep -q '^source	todo' "$state_file"
+
+  run bash -c "printf '%s\n%s\n%s\n' '$hb' '$hb' '$result' | \
+    _SKIP_HEARTBEATS=1 sh '$STREAM_PROCESSOR_LIB' '$log2' '$raw2' false '' false 0 '$state_file' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Write tests"* ]] || [[ "$output" == *"Todo"* ]]
+}

@@ -165,8 +165,10 @@ WARNING: Omitting the verdict causes automatic failure. Do not end without it."
   fi
 
   # Close FIFO write end before kill/wait — reduces FIFO reference count and
-  # prevents blocking on a readerless FIFO during cleanup
-  exec 7>&- 2>/dev/null || true
+  # prevents blocking on a readerless FIFO during cleanup.
+  # Do NOT add 2>/dev/null: exec without a command makes redirections permanent,
+  # so 2>/dev/null would silence stderr for all subsequent phases.
+  exec 7>&- || true
 
   # Stream processor done — kill remaining pipeline processes (SIGTERM → SIGKILL escalation).
   _kill_pipeline_escalate "$CURRENT_PIPELINE_PID" "$CURRENT_PIPELINE_PGID"
