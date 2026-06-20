@@ -75,11 +75,52 @@ capture_git_context() {
   fi
 }
 
+# Build plan context block: phase index + reference to original plan file
+# Args: $1 - current phase_num, $2 - original plan file path (optional, defaults to .claudeloop/original-plan.md)
+# Returns: context block on stdout (empty if plan file missing or no phases)
+build_plan_context() {
+  local _bpc_phase="$1"
+  local _bpc_file="${2:-.claudeloop/original-plan.md}"
+  local _bpc_num _bpc_title _bpc_status _bpc_label _bpc_index _bpc_count
+
+  [ -f "$_bpc_file" ] || return 0
+  [ -n "${PHASE_NUMBERS:-}" ] || return 0
+
+  _bpc_index=""
+  _bpc_count=0
+  for _bpc_num in $PHASE_NUMBERS; do
+    _bpc_count=$((_bpc_count + 1))
+    _bpc_title=$(get_phase_title "$_bpc_num")
+    if [ "$_bpc_num" = "$_bpc_phase" ]; then
+      _bpc_label="[CURRENT]"
+    else
+      _bpc_status=$(get_phase_status "$_bpc_num")
+      case "$_bpc_status" in
+        completed) _bpc_label="[done]" ;;
+        failed)    _bpc_label="[FAILED]" ;;
+        pending)   _bpc_label="[pending]" ;;
+        *)         _bpc_label="[${_bpc_status}]" ;;
+      esac
+    fi
+    _bpc_index="${_bpc_index}- Phase ${_bpc_num}: ${_bpc_title} ${_bpc_label}
+"
+  done
+
+  [ "$_bpc_count" -gt 0 ] || return 0
+
+  printf '%s\n' "$_bpc_index"
+  printf 'Before starting, read %s to understand the full project plan and how this phase fits.\n' "$_bpc_file"
+  printf 'It is reference material for context — your task is defined by the ## Phase and ## Task sections below.\n'
+}
+
 # Build default prompt for a phase (when no custom prompt template is used)
-# Args: $1 - phase_num, $2 - title, $3 - description, $4 - git_context
+# Args: $1 - phase_num, $2 - title, $3 - description, $4 - git_context, $5 - plan_context (optional)
 # Returns: prompt string on stdout
 build_default_prompt() {
-  local _bdp_phase="$1" _bdp_title="$2" _bdp_desc="$3" _bdp_git="$4"
+  local _bdp_phase="$1" _bdp_title="$2" _bdp_desc="$3" _bdp_git="$4" _bdp_plan_ctx="${5:-}"
+  local _bdp_plan_section=""
+  [ -n "$_bdp_plan_ctx" ] && _bdp_plan_section="${_bdp_plan_ctx}
+"
 
   printf '%s' "You are executing Phase $_bdp_phase of a multi-phase plan.
 
@@ -88,7 +129,7 @@ build_default_prompt() {
 $_bdp_desc
 
 ## Context
-- This is a fresh Claude instance dedicated to this phase only
+${_bdp_plan_section}- This is a fresh Claude instance dedicated to this phase only
 - Previous phases have been completed and committed to git
 - Even if prior work for this phase exists in git, you MUST complete every subtask listed in the description above — do not assume the phase is done
 - Review recent git history and existing code before implementing

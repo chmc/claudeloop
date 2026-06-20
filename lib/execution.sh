@@ -531,8 +531,9 @@ execute_phase() {
   print_phase_exec_header "$phase_num"
 
   # Build prompt
-  local _git_context prompt
+  local _git_context _plan_context prompt
   _git_context=$(capture_git_context)
+  _plan_context=$(build_plan_context "$phase_num")
 
   if [ -n "$PHASE_PROMPT_FILE" ]; then
     if ! prompt=$(build_phase_prompt "$PHASE_PROMPT_FILE" "$phase_num" "$title" "$description" "$PLAN_FILE"); then
@@ -542,7 +543,7 @@ execute_phase() {
     [ -n "$_git_context" ] && prompt="${prompt}
 ${_git_context}"
   else
-    prompt=$(build_default_prompt "$phase_num" "$title" "$description" "$_git_context")
+    prompt=$(build_default_prompt "$phase_num" "$title" "$description" "$_git_context" "$_plan_context")
   fi
 
   # Apply retry strategy on subsequent attempts

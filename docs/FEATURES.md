@@ -408,6 +408,17 @@
 
 ---
 
+### plan-context
+**Status:** stable
+**Summary:** Inject plan overview and original plan file reference into each phase prompt.
+**Description:** Copies the original plan to `.claudeloop/original-plan.md` during AI parsing. Each phase prompt receives a full phase index (title + status for every phase, with `[CURRENT]` marking the active one) and an imperative instruction to read the original plan file for full project context. Phases with no original plan file receive no injection (graceful degradation). Excluded from stripped/targeted retry strategies.
+**CLI:** (always active when AI parsing is used)
+**Env:** (none)
+**Config:** (none)
+**Files:** `lib/prompt.sh`, `lib/execution.sh`, `lib/orchestration.sh`
+
+---
+
 ### custom-prompts
 **Status:** stable
 **Summary:** Custom prompt templates with placeholder substitution per phase.

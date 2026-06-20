@@ -159,6 +159,11 @@ run_ai_parsing() {
         exit 1
       fi
     fi
+    # Persist original plan alongside ai-parsed plan before overwriting PLAN_FILE
+    case "$PLAN_FILE" in
+      .claudeloop/ai-parsed-plan.md) ;;
+      *) cp "$PLAN_FILE" ".claudeloop/original-plan.md" ;;
+    esac
     PLAN_FILE="$ai_plan"
     # Persist resolved plan file so subsequent runs use it
     if ! $DRY_RUN; then
