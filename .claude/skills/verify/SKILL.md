@@ -101,8 +101,9 @@ All execution modes below share this preamble. Write it once, then add mode-spec
 orig_dir="$PWD"
 tmpdir=$(mktemp -d)
 git -C "$tmpdir" init -q && git -C "$tmpdir" config user.email "test@test.com" && git -C "$tmpdir" config user.name "Test"
-mkdir -p "$tmpdir/bin" "$tmpdir/.claudeloop"
+mkdir -p "$tmpdir/bin/lib" "$tmpdir/.claudeloop"
 cp tests/fake_claude "$tmpdir/bin/claude" && chmod +x "$tmpdir/bin/claude"
+cp tests/lib/fake_provider_common.sh "$tmpdir/bin/lib/"
 export FAKE_CLAUDE_DIR="$tmpdir"
 printf 'BASE_DELAY=0\n' > "$tmpdir/.claudeloop/.claudeloop.conf"
 cp tests/fixtures/smoke-plans/two-phase-deps.md "$tmpdir/PLAN.md"
