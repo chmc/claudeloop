@@ -167,6 +167,16 @@ osascript -e 'tell application "Terminal" to close front window saving no' 2>/de
 rm -rf "$tmpdir"
 ```
 
+#### Screencapture fallback
+
+If `screencapture -l` fails ("could not create image from window") or produces black images:
+
+1. Try `screencapture -x` (captures active window, no sound)
+2. If both fail (sandbox, remote, headless): fall back to stub execution via Bash tool with `tee`
+   - Grep ANSI output for key UI elements (logo, phase headers, spinner chars, completion banner)
+   - Document as "ANSI-only verification — screencapture unavailable" in session README
+   - This is acceptable for logic verification but NOT for visual regression of colors/layout
+
 #### Screenshot verification checklist
 
 Regression checklist for UI changes. Your must-verify assertions (from Step 0) are the primary success criteria.

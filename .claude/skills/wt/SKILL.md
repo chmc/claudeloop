@@ -170,6 +170,12 @@ Triggered when user says "it's good", "put to <base> and clean up", or similar a
 **Steps:**
 
 1. Infer `<name>` from context (worktree in use or most recently pushed). **Ask** if ambiguous.
+   - **EnterWorktree detection**: If `$(git rev-parse --show-toplevel)` is under `.claude/worktrees/`, the session is inside an EnterWorktree-managed worktree. The branch name is the current branch (not `wt/<name>` format). Sequence:
+     1. Commit any staged changes
+     2. Push branch to origin
+     3. Call `ExitWorktree` with `action: "keep"` (cannot land from inside — git writes break cwd)
+     4. After ExitWorktree returns, continue with step 3 using the pushed branch name
+   - **`/wt create` worktrees**: Infer from `../claudeloop-wt-<name>` directory or most recently pushed `wt/*` branch.
 2. Set `WT_DIR="../claudeloop-wt-<name>"`, `WT_BRANCH="wt/<name>"`, `BASE=<target>` (e.g. `beta`).
 3. Verify remote branch exists: `git fetch origin` then `git show-ref --verify --quiet "refs/remotes/origin/$WT_BRANCH"`. **Hard block** if missing.
 4. Rebase and push (no merge commits):

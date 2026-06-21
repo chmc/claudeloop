@@ -50,6 +50,7 @@ Tests running full `claudeloop` pipelines must set these env vars in `setup()`:
 | `_SENTINEL_MAX_WAIT` | `30` | Safety net: fail fast on hangs (default 1800s) |
 | `_KILL_ESCALATE_TIMEOUT` | `1` | Faster pipeline teardown (default 3s) |
 | `_CLAUDELOOP_NO_AUTO_ARCHIVE` | `1` | Skip archive prompt at startup |
+| `_NUDGE_DISABLED` | `1` | Prevents `read < /dev/tty` hang in non-TTY test context |
 
 Also set in `.claudeloop.conf`: `BASE_DELAY=0`, `AI_PARSE=false`, `VERIFY_PHASES=false`, `REFACTOR_PHASES=false` (unless testing those features).
 

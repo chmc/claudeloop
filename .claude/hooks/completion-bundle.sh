@@ -6,6 +6,9 @@
 set -eu
 
 STATE_DIR="${CLAUDE_PROJECT_DIR:-.}/.claude/workflow-state"
+if [ ! -d "$STATE_DIR" ] && [ -d ".claude/workflow-state" ]; then
+    STATE_DIR=".claude/workflow-state"
+fi
 REQUIREMENTS_FILE="$STATE_DIR/plan-requirements.json"
 EDIT_ORDER_FILE="$STATE_DIR/edit-order"
 
@@ -26,6 +29,13 @@ status=$(printf '%s' "$input" | jq -r '.tool_input.status // empty' 2>/dev/null)
 # Only check status: completed
 if [ "$status" != "completed" ]; then
     exit 0
+fi
+
+# Dry-run mode: list missing gates without denying (usage: COMPLETION_DRY_RUN=1 sh hook.sh)
+if [ "${COMPLETION_DRY_RUN:-}" = "1" ]; then
+    _dry_run=true
+else
+    _dry_run=false
 fi
 
 # Collect missing requirements
@@ -156,8 +166,12 @@ if [ "$_docs_only" = "false" ]; then
     fi
 fi
 
-# If any missing, deny completion
+# If any missing, deny completion (or print in dry-run mode)
 if [ -n "$missing" ]; then
+    if [ "$_dry_run" = "true" ]; then
+        printf 'Missing gates: %s\n' "$missing"
+        exit 0
+    fi
     cat <<EOF
 {
   "hookSpecificOutput": {

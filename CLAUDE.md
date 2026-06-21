@@ -118,3 +118,5 @@ shellcheck -s sh lib/retry.sh         # lint (SC3043 OK)
 ## Worktree
 
 When inside a worktree: never `cd` outside for git writes (breaks cwd permanently). If cwd breaks, call `ExitWorktree` immediately. See `/wt` for full rules.
+
+Gate files (`.claude/workflow-state/*`) resolve via `CLAUDE_PROJECT_DIR` which may point to the main repo, not the worktree. When using EnterWorktree, create gate files in the main repo's `.claude/workflow-state/` or use `/wt create` worktrees which share the main repo's `.claude/` directory.

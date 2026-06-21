@@ -42,6 +42,11 @@ Hooks in `settings.json` fire in **array order**. `branch-awareness.sh` must rem
 - **Cleanup block exclusion**: state files that must survive across multiple ExitPlanMode calls (e.g. `tasks-verification-hash`) must NOT go in the cleanup block at the end of `planning-checklist.sh` — it runs on every successful pass, so writing then deleting in the same invocation is a no-op.
 - **Cross-hook coordination via mtime**: when hooks can't share context, compare state file mtimes to detect dependencies (e.g. `[ "$STATE_DIR/tasks-created" -nt "$STATE_DIR/tasks-verification-hash" ]` detects "tasks were recreated since hash was stored").
 
+## Verification session traps
+
+- `success_verbose` fake_claude scenario produces output but no git diff. claudeloop's "no changes" detection fires, causing 3-4 retry attempts before the phase completes. This is expected behavior — don't investigate as a bug during verification.
+- When verifying with `success_verbose`, set `VERIFY_PHASES=false REFACTOR_PHASES=false` in `.claudeloop.conf` to reduce total execution time.
+
 ## Keeping docs in sync
 
 Any change to hook logic that affects gate behavior must update `docs/WORKFLOW.md`:
