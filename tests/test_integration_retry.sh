@@ -61,6 +61,7 @@ setup() {
   export _SENTINEL_POLL=0.1
   export _EXIT_CODE_WAIT=0
   export _SKIP_HEARTBEATS=1
+  export _NUDGE_DISABLED=1
 
   export _SENTINEL_MAX_WAIT=30
   export _KILL_ESCALATE_TIMEOUT=1

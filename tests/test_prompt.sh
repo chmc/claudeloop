@@ -6,6 +6,8 @@
 
 setup() {
   export TEST_DIR="$BATS_TEST_TMPDIR"
+  export _NUDGE_DISABLED=1
+  . "${BATS_TEST_DIRNAME}/../lib/nudge.sh"
   . "${BATS_TEST_DIRNAME}/../lib/prompt.sh"
 }
 
@@ -121,4 +123,59 @@ EOF
   result=$(append_subagent_model_instructions "prompt")
   printf '%s' "$result" | grep -q '"sonnet"'
   ! printf '%s' "$result" | grep -q '"haiku"'
+}
+
+# ── build_default_prompt nudge injection ────────────────────────────────────
+
+@test "build_default_prompt: nudge text injected after description when provided" {
+  result=$(build_default_prompt "3" "Setup DB" "Create the schema" "" "" "use postgres not sqlite")
+  printf '%s' "$result" | grep -q "use postgres not sqlite"
+}
+
+@test "build_default_prompt: nudge text appears after description before Context" {
+  result=$(build_default_prompt "3" "Setup DB" "Create the schema" "" "" "my guidance")
+  desc_pos=$(printf '%s' "$result" | grep -n "Create the schema" | head -1 | cut -d: -f1)
+  nudge_pos=$(printf '%s' "$result" | grep -n "my guidance" | head -1 | cut -d: -f1)
+  ctx_pos=$(printf '%s' "$result" | grep -n "## Context" | head -1 | cut -d: -f1)
+  [ "$nudge_pos" -gt "$desc_pos" ]
+  [ "$nudge_pos" -lt "$ctx_pos" ]
+}
+
+@test "build_default_prompt: nudge section has CRITICAL directive" {
+  result=$(build_default_prompt "3" "Title" "Desc" "" "" "use approach X")
+  printf '%s' "$result" | grep -q "CRITICAL"
+}
+
+@test "build_default_prompt: no nudge section when 6th arg absent" {
+  result=$(build_default_prompt "3" "Title" "Desc" "" "")
+  ! printf '%s' "$result" | grep -q "CRITICAL.*operator"
+}
+
+# ── apply_retry_strategy _FORCE_STANDARD_STRATEGY ───────────────────────────
+
+@test "apply_retry_strategy: respects _FORCE_STANDARD_STRATEGY — stays standard" {
+  # Stub dependencies
+  get_phase_fail_reason() { printf 'stuck_loop'; }
+  get_phase_consec_fail() { printf '5'; }
+  retry_strategy() { printf 'standard'; }
+  escalate_strategy() { printf 'stripped'; }  # would escalate without override
+  build_retry_context() { printf ''; }
+  MAX_RETRIES=3
+  _FORCE_STANDARD_STRATEGY=true
+  result=$(apply_retry_strategy "3" "4" "Title" "Desc" "" "" "original prompt")
+  # Should not have replaced with stripped prompt ("You are a fresh instance")
+  ! printf '%s' "$result" | grep -q "You are a fresh instance"
+  unset _FORCE_STANDARD_STRATEGY
+}
+
+@test "apply_retry_strategy: escalates normally when _FORCE_STANDARD_STRATEGY unset" {
+  get_phase_fail_reason() { printf 'stuck_loop'; }
+  get_phase_consec_fail() { printf '5'; }
+  retry_strategy() { printf 'stripped'; }
+  escalate_strategy() { printf 'stripped'; }
+  build_retry_context() { printf ''; }
+  MAX_RETRIES=3
+  unset _FORCE_STANDARD_STRATEGY
+  result=$(apply_retry_strategy "3" "4" "Title" "Desc" "" "" "original prompt")
+  printf '%s' "$result" | grep -q "You are a fresh instance"
 }

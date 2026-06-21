@@ -11,6 +11,7 @@ strip_ansi() {
 }
 
 setup() {
+  export _NUDGE_DISABLED=1
   _log="$BATS_TEST_TMPDIR/log"
   _raw="$BATS_TEST_TMPDIR/raw"
   . "$STREAM_PROCESSOR_LIB"   # makes process_stream_json available

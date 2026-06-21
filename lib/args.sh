@@ -18,6 +18,8 @@ Options:
   --continue             Continue from last checkpoint (default)
   --phase <n>            Start from specific phase number
   --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
+  --nudge <n> <text>     Pre-set guidance for phase N's next retry attempt
+  --clear-nudge <n>      Remove any pre-set nudge guidance for phase N
   --recover-progress     Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
@@ -94,6 +96,17 @@ parse_args() {
       --mark-complete)
         if [ $# -lt 2 ]; then echo "Error: --mark-complete requires an argument" >&2; exit 1; fi
         MARK_COMPLETE_PHASE="$2"
+        shift 2
+        ;;
+      --nudge)
+        if [ $# -lt 3 ]; then echo "Error: --nudge requires <phase> <text>" >&2; exit 1; fi
+        NUDGE_PHASE="$2"
+        NUDGE_TEXT="$3"
+        shift 3
+        ;;
+      --clear-nudge)
+        if [ $# -lt 2 ]; then echo "Error: --clear-nudge requires a phase argument" >&2; exit 1; fi
+        CLEAR_NUDGE_PHASE="$2"
         shift 2
         ;;
       --dry-run)

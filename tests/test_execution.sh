@@ -7,9 +7,11 @@ setup() {
   # Stub log_verbose before sourcing (called at definition-time? no, only at call-time)
   export _SENTINEL_MAX_WAIT=30
   export _KILL_ESCALATE_TIMEOUT=1
+  export _NUDGE_DISABLED=1
   log_verbose() { :; }
   log_ts() { :; }
   VERBOSE_MODE=false
+  source "${BATS_TEST_DIRNAME}/../lib/nudge.sh"
   source "${BATS_TEST_DIRNAME}/../lib/prompt.sh"
   source "${BATS_TEST_DIRNAME}/../lib/execution.sh"
   _tmpdir="$BATS_TEST_TMPDIR"
@@ -695,4 +697,24 @@ _setup_rav_stubs() {
   # Just verify it doesn't error when nothing matches
   run _cleanup_test_orphans
   [ "$status" -eq 0 ]
+}
+
+# --- _complete_phase: nudge cleanup ---
+
+@test "_complete_phase: clears nudge file on phase completion" {
+  _setup_epr_stubs
+  source "${BATS_TEST_DIRNAME}/../lib/parser.sh"
+  source "${BATS_TEST_DIRNAME}/../lib/phase_state.sh"
+  # Stub heavy functions
+  extract_lessons_summary() { printf ''; }
+  get_phase_log_path() { printf ''; }
+  lessons_write_phase() { :; }
+  run_refactor_if_needed() { :; }
+  get_phase_title() { printf 'Test Phase'; }
+  phase_set() { :; }
+
+  mkdir -p .claudeloop
+  printf 'some guidance\n' > .claudeloop/nudge-phase-2.md
+  _complete_phase "2" "10"
+  [ ! -f .claudeloop/nudge-phase-2.md ]
 }

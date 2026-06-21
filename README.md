@@ -462,6 +462,26 @@ claudeloop --ai-parse-feedback --granularity tasks
 
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
 
+**Claude is stuck in a loop** — type `n` then Enter while a phase is running to stop it and provide guidance for the next attempt. See [Nudge: Guide Stuck Phases](#nudge-guide-stuck-phases) below.
+
+### Nudge: Guide Stuck Phases
+
+When Claude repeats the same failing approach, nudge it:
+
+1. While a phase is running, type `n` — a hint appears: *Press Enter to nudge*
+2. Press Enter — the phase stops immediately
+3. Enter your guidance (single-line), or type `e` to open `$EDITOR` for multi-line input
+4. Empty input = skip, phase retries without nudge; `Ctrl+U` clears typed text
+
+The guidance is injected at two positions in the retry prompt with a CRITICAL directive. The nudge persists across retries until the phase succeeds, then is automatically cleared.
+
+Pre-set nudge before running (or from another terminal):
+
+```sh
+claudeloop --nudge 3 "use the existing AuthProvider, don't create a new one"
+claudeloop --clear-nudge 3   # remove it
+```
+
 **Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings. ClaudeLoop also detects when Claude exits successfully but made no write actions (Edit, Write, NotebookEdit, or Agent tool calls) and treats the phase as failed for automatic retry.
 
 **Phase marked as failed but the work was done** — ClaudeLoop automatically detects this: if a background sub-invocation caused the Claude process to exit non-zero but the main session completed real work (turns > 0 in the log), the phase is marked completed with a warning. If auto-detection misses a case, use `--mark-complete <n>` to override the status manually:

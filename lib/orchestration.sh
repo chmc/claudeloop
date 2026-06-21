@@ -258,6 +258,21 @@ apply_phase_overrides() {
     log_verbose "main: skipped phases before $START_PHASE (marked completed)"
   fi
 
+  # Apply --nudge N text: write guidance for phase N's next retry
+  if [ -n "$NUDGE_PHASE" ]; then
+    mkdir -p .claudeloop
+    printf '%s\n' "$NUDGE_TEXT" > "$(nudge_file_path "$NUDGE_PHASE")"
+    print_success "Nudge set for phase $NUDGE_PHASE"
+    exit 0
+  fi
+
+  # Apply --clear-nudge N: remove nudge file for phase N
+  if [ -n "$CLEAR_NUDGE_PHASE" ]; then
+    clear_nudge "$CLEAR_NUDGE_PHASE"
+    print_success "Nudge cleared for phase $CLEAR_NUDGE_PHASE"
+    exit 0
+  fi
+
   # Apply --mark-complete N: override status of a specific phase to completed
   if [ -n "$MARK_COMPLETE_PHASE" ]; then
     _mc_title=$(get_phase_title "$MARK_COMPLETE_PHASE")

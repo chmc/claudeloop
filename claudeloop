@@ -42,6 +42,7 @@ esac
 # Source libraries
 . "$SCRIPT_DIR/lib/parser.sh"
 . "$SCRIPT_DIR/lib/phase_state.sh"
+. "$SCRIPT_DIR/lib/nudge.sh"
 . "$SCRIPT_DIR/lib/dependencies.sh"
 . "$SCRIPT_DIR/lib/progress.sh"
 . "$SCRIPT_DIR/lib/plan_changes.sh"
@@ -132,6 +133,9 @@ _WIZARD_FORCE="${_WIZARD_FORCE:-}"
 YES_MODE="${YES_MODE:-false}"
 RESUME_MODE=false
 MARK_COMPLETE_PHASE=""
+NUDGE_PHASE=""
+NUDGE_TEXT=""
+CLEAR_NUDGE_PHASE=""
 RECOVER_PROGRESS=false
 ARCHIVE_MODE=false
 LIST_ARCHIVES=false

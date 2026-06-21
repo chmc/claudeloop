@@ -114,20 +114,31 @@ build_plan_context() {
 }
 
 # Build default prompt for a phase (when no custom prompt template is used)
-# Args: $1 - phase_num, $2 - title, $3 - description, $4 - git_context, $5 - plan_context (optional)
+# Args: $1 - phase_num, $2 - title, $3 - description, $4 - git_context,
+#       $5 - plan_context (optional), $6 - nudge_text (optional)
 # Returns: prompt string on stdout
 build_default_prompt() {
-  local _bdp_phase="$1" _bdp_title="$2" _bdp_desc="$3" _bdp_git="$4" _bdp_plan_ctx="${5:-}"
-  local _bdp_plan_section=""
+  local _bdp_phase="$1" _bdp_title="$2" _bdp_desc="$3" _bdp_git="$4"
+  local _bdp_plan_ctx="${5:-}" _bdp_nudge="${6:-}"
+  local _bdp_plan_section="" _bdp_nudge_section=""
   [ -n "$_bdp_plan_ctx" ] && _bdp_plan_section="${_bdp_plan_ctx}
 "
+  if [ -n "$_bdp_nudge" ]; then
+    _bdp_nudge_section="
+## CRITICAL: Operator Directive
+
+CRITICAL: The human operator stopped execution to override your approach. You MUST follow this directive exactly — do not revert to your previous approach:
+
+${_bdp_nudge}
+"
+  fi
 
   printf '%s' "You are executing Phase $_bdp_phase of a multi-phase plan.
 
 ## Phase $_bdp_phase: $_bdp_title
 
 $_bdp_desc
-
+${_bdp_nudge_section}
 ## Context
 ${_bdp_plan_section}- This is a fresh Claude instance dedicated to this phase only
 - Previous phases have been completed and committed to git
@@ -174,6 +185,9 @@ apply_retry_strategy() {
 
   _prev_verify_log=".claudeloop/logs/phase-$_ars_phase.verify.log"
   [ -f "$_prev_verify_log" ] || _prev_verify_log=""
+
+  # Nudge active: force standard strategy so guidance text is not diluted
+  [ "${_FORCE_STANDARD_STRATEGY:-}" = "true" ] && _strategy="standard"
 
   # For stripped/targeted strategies, replace the base prompt with a simpler one
   if [ "$_strategy" = "stripped" ] && [ -z "$PHASE_PROMPT_FILE" ]; then

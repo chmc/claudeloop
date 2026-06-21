@@ -183,7 +183,11 @@ print_phase_exec_header() {
   log_live ""
   echo "───────────────────────────────────────────────────────────"
   log_live "───────────────────────────────────────────────────────────"
-  printf '%b%s%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: " "$title" "${COLOR_RESET}"
+  local _peh_nudge_tag=""
+  if [ "${_NUDGE_DISABLED:-}" != "1" ] && [ -s ".claudeloop/nudge-phase-${phase_num}.md" ]; then
+    _peh_nudge_tag=" \033[33m(nudge active)\033[0m"
+  fi
+  printf '%b%s%b%b\n' "${COLOR_BLUE}[$timestamp] ▶ Executing Phase $phase_num/$PHASE_COUNT: " "$title" "${COLOR_RESET}" "$_peh_nudge_tag"
   log_live "▶ Executing Phase $phase_num/$PHASE_COUNT: $title"
   if [ "$attempt" -gt 1 ]; then
     printf '%b\n' "${COLOR_YELLOW}[$timestamp] Attempt $attempt/$MAX_RETRIES${COLOR_RESET}"
@@ -195,6 +199,9 @@ print_phase_exec_header() {
       [ -n "$_pt" ] && printf '%b\n' "${COLOR_YELLOW}  Attempt $_pi started: $_pt${COLOR_RESET}"
       _pi=$((_pi + 1))
     done
+  fi
+  if [ -t 0 ] && [ "${YES_MODE:-false}" != "true" ] && [ "${_NUDGE_DISABLED:-}" != "1" ]; then
+    printf '\033[2m  Type n to nudge\033[0m\n'
   fi
   echo "───────────────────────────────────────────────────────────"
   log_live "───────────────────────────────────────────────────────────"

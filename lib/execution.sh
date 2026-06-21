@@ -230,13 +230,42 @@ run_claude_pipeline() {
   # Pre-compute max polls as integer to avoid awk fork per iteration
   _sentinel_max_polls=$(awk "BEGIN{printf \"%d\", ${_sentinel_max} / ${_sentinel_interval}}" 2>/dev/null || echo 999999)
   _sp_prev_raw_size=0
+  _nudge_armed=false
+  _nudge_arm_ttl=0
+  _NUDGE_REQUESTED=false
   while [ ! -f "$_sentinel" ]; do
     _restore_isig  # Re-enable Ctrl+C (Claude CLI may disable ISIG via raw mode)
-    sleep "$_sentinel_interval"
+    if [ -t 0 ] && [ "${YES_MODE:-false}" != "true" ] && [ "${_NUDGE_DISABLED:-}" != "1" ]; then
+      stty icanon icrnl < /dev/tty 2>/dev/null || true
+      _nudge_key=""
+      if IFS= read -t "$_sentinel_interval" -r _nudge_key < /dev/tty 2>/dev/null; then
+        case "$_nudge_key" in
+          n|N)
+            _nudge_armed=true
+            _nudge_arm_ttl=10
+            printf '\r\033[33m  Press Enter to nudge (stops current attempt)\033[0m\n' >&2
+            ;;
+          '')
+            if [ "$_nudge_armed" = "true" ]; then
+              _NUDGE_REQUESTED=true; break
+            fi
+            ;;
+          *) _nudge_armed=false ;;
+        esac
+      else
+        if [ "$_nudge_armed" = "true" ]; then
+          _nudge_arm_ttl=$((_nudge_arm_ttl - 1))
+          [ "$_nudge_arm_ttl" -le 0 ] && _nudge_armed=false
+        fi
+      fi
+    else
+      sleep "$_sentinel_interval"
+    fi
     _sentinel_polls=$((_sentinel_polls + 1))
     # Periodic progress — every 30 polls (30s at default interval).
+    # Suppress when nudge arm is active to avoid visual collision.
     # Runs in the foreground shell, immune to pipeline freezes (SIGTTOU, AWK crash).
-    if [ $((_sentinel_polls % 30)) -eq 0 ] && [ -n "${LIVE_LOG:-}" ]; then
+    if [ $((_sentinel_polls % 30)) -eq 0 ] && [ -n "${LIVE_LOG:-}" ] && [ "$_nudge_armed" != "true" ]; then
       _sp_elapsed=$(awk "BEGIN{printf \"%d\", ${_sentinel_polls} * ${_sentinel_interval:-1}}")
       if kill -0 "$CURRENT_PIPELINE_PID" 2>/dev/null; then
         _sp_raw_size=0
@@ -343,6 +372,7 @@ _complete_phase() {
   _cp_log=$(get_phase_log_path "$_cp_phase")
   _cp_summary=$(extract_lessons_summary "$_cp_log")
   update_phase_status "$_cp_phase" "completed"
+  clear_nudge "$_cp_phase"
   lessons_write_phase "$_cp_phase" "$_cp_title" "$_cp_duration" "success" "$_cp_summary"
   auto_commit_changes "$_cp_phase" "auto-commit after phase completion"
   if [ "$REFACTOR_PHASES" = "true" ]; then
@@ -535,6 +565,9 @@ execute_phase() {
   _git_context=$(capture_git_context)
   _plan_context=$(build_plan_context "$phase_num")
 
+  local _ep_nudge=""
+  _ep_nudge=$(read_nudge "$phase_num")
+
   if [ -n "$PHASE_PROMPT_FILE" ]; then
     if ! prompt=$(build_phase_prompt "$PHASE_PROMPT_FILE" "$phase_num" "$title" "$description" "$PLAN_FILE"); then
       print_error "Failed to build prompt from template: $PHASE_PROMPT_FILE"
@@ -543,12 +576,26 @@ execute_phase() {
     [ -n "$_git_context" ] && prompt="${prompt}
 ${_git_context}"
   else
-    prompt=$(build_default_prompt "$phase_num" "$title" "$description" "$_git_context" "$_plan_context")
+    prompt=$(build_default_prompt "$phase_num" "$title" "$description" "$_git_context" "$_plan_context" "$_ep_nudge")
   fi
 
   # Apply retry strategy on subsequent attempts
+  # Nudge forces standard strategy so guidance is not diluted by stripped/targeted tiers
+  [ -n "$_ep_nudge" ] && _FORCE_STANDARD_STRATEGY=true || _FORCE_STANDARD_STRATEGY=false
   if [ "$attempt" -gt 1 ]; then
     prompt=$(apply_retry_strategy "$phase_num" "$attempt" "$title" "$description" "$_git_context" "$log_file" "$prompt")
+  fi
+  _FORCE_STANDARD_STRATEGY=false
+
+  # Second nudge injection: end of prompt for maximum compliance
+  if [ -n "$_ep_nudge" ]; then
+    prompt="${prompt}
+
+## CRITICAL REMINDER: Operator Directive
+
+You MUST follow this directive from the human operator — do not revert to any previous approach:
+
+${_ep_nudge}"
   fi
 
   # Append subagent model overrides (after retry strategy so instruction survives all tiers)
@@ -573,6 +620,15 @@ ${_git_context}"
   # Run Claude pipeline
   run_claude_pipeline "$prompt" "$phase_num" "$log_file" "$raw_log"
   local claude_exit="$_LAST_CLAUDE_EXIT"
+
+  # Nudge requested: collect guidance, reset attempt counter, retry
+  if [ "${_NUDGE_REQUESTED:-false}" = "true" ]; then
+    _NUDGE_REQUESTED=false
+    if prompt_nudge_text "$phase_num"; then
+      reset_phase_for_retry "$phase_num"
+    fi
+    return 1
+  fi
 
   # Write metadata footer
   duration=$(( $(date '+%s') - start_ts ))
