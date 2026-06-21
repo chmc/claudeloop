@@ -162,7 +162,7 @@ screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
 # Read ALL screenshots with Read tool and verify against checklist below
 
 # Close Terminal window and clean up
-osascript -e 'tell application "Terminal" to close front window' 2>/dev/null
+osascript -e 'tell application "Terminal" to close front window saving no' 2>/dev/null
 rm -rf "$tmpdir"
 ```
 
