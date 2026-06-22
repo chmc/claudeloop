@@ -47,6 +47,8 @@ Hooks in `settings.json` fire in **array order**. `branch-awareness.sh` must rem
 - `success_verbose` fake_claude scenario produces output but no git diff. claudeloop's "no changes" detection fires, causing 3-4 retry attempts before the phase completes. This is expected behavior — don't investigate as a bug during verification.
 - When verifying with `success_verbose`, set `VERIFY_PHASES=false REFACTOR_PHASES=false` in `.claudeloop.conf` to reduce total execution time.
 - `_SENTINEL_POLL` < 1s causes rapid `stty icanon icrnl` resets that drop buffered PTY input. Safe for automated pipeline tests (no TTY reads), unsafe for interactive/expect flows that send keystrokes.
+- For screenshot coordination during interactive flows, use expect-in-Terminal with milestone files: expect touches `$tmpdir/milestone-X` at each screenshot point, a separate Bash poller detects it and calls `screencapture`. osascript System Events keystroke injection has too much latency and focus races to reliably land keystrokes in claudeloop's sentinel loop.
+- `screencapture` lives at `/usr/sbin/screencapture` (not `/usr/bin/screencapture`). Use the full path or ensure `/usr/sbin` is in PATH.
 
 ## Keeping docs in sync
 

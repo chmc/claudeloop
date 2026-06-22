@@ -204,7 +204,9 @@ For features that require TTY input (nudge, interactive prompts), use `expect` t
 
 **Critical traps:**
 
-- `unset env(CLAUDECODE)` at the top of every expect script — Claude Code sets this env var, which forces `YES_MODE=true` and disables all interactive features
+- Use `catch {unset env(CLAUDECODE)}` (not bare `unset env(CLAUDECODE)`) — outside Claude Code (e.g. Terminal.app `do script`), the var doesn't exist and bare `unset` crashes expect immediately
+- `$tmpdir/bin` must be first in PATH via `set env(PATH)` in expect — `ai_parser.sh:15` hardcodes `command -v claude`, ignoring `CLAUDELOOP_CLAUDE_BIN`; PATH override is the only way to route all code paths through fake_claude
+- `screencapture -l $WINDOW_ID` can fail mid-session ("could not create image from window") if Terminal reassigns window IDs — refetch `id of front window` via osascript before each capture, never cache the ID across screenshot calls
 - Wait for a **mid-run signal** (`"Todo 2/4"`, not `"Executing Phase"`) — `success_verbose` auto-detects verify prompts, so calls 1-3 finish in ~1s before the sentinel loop can be armed
 - Use **1200ms delay** before sending bare Enter to kill — lets the current `read -t 1` sentinel cycle expire; shorter delays miss the window
 - Do **NOT** set `_SENTINEL_POLL=0.1` in expect tests — rapid `stty icanon icrnl` resets at 100ms intervals drop buffered PTY input
@@ -212,7 +214,7 @@ For features that require TTY input (nudge, interactive prompts), use `expect` t
 **Minimal skeleton:**
 
 ```tcl
-unset env(CLAUDECODE)
+catch {unset env(CLAUDECODE)}
 set env(FAKE_CLAUDE_THINK) 8
 set env(FAKE_CLAUDE_DIR) "/path/to/tmpdir"
 set env(PATH) "/path/to/tmpdir/bin:$env(PATH)"
