@@ -624,9 +624,8 @@ ${_ep_nudge}"
   # Nudge requested: collect guidance, reset attempt counter, retry
   if [ "${_NUDGE_REQUESTED:-false}" = "true" ]; then
     _NUDGE_REQUESTED=false
-    if prompt_nudge_text "$phase_num"; then
-      reset_phase_for_retry "$phase_num"
-    fi
+    prompt_nudge_text "$phase_num"
+    reset_phase_for_retry "$phase_num"
     return 1
   fi
 

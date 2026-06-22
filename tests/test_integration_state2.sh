@@ -217,6 +217,34 @@ PROGRESS
 }
 
 # =============================================================================
+# --clear-nudge flag
+# =============================================================================
+
+@test "--clear-nudge: removes nudge file and prints confirmation" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  mkdir -p "$TEST_DIR/.claudeloop"
+  printf 'try a different approach\n' > "$TEST_DIR/.claudeloop/nudge-phase-1.md"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --clear-nudge 1"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "nudge cleared"
+  [ ! -f "$TEST_DIR/.claudeloop/nudge-phase-1.md" ]
+}
+
+@test "--clear-nudge: succeeds even when nudge file does not exist" {
+  printf '.claudeloop/\n' > "$TEST_DIR/.gitignore"
+  git -C "$TEST_DIR" add .gitignore
+  git -C "$TEST_DIR" commit -q -m "add gitignore"
+
+  run sh -c "exec </dev/null; cd '$TEST_DIR' && '$CLAUDELOOP' --plan PLAN.md --clear-nudge 1"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -qi "nudge cleared"
+}
+
+# =============================================================================
 # CLAUDECODE=1 auto yes-mode
 # =============================================================================
 

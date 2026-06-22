@@ -718,3 +718,41 @@ _setup_rav_stubs() {
   _complete_phase "2" "10"
   [ ! -f .claudeloop/nudge-phase-2.md ]
 }
+
+# --- execute_phase: nudge-skip deadlock ---
+
+_setup_nudge_exec_stubs() {
+  _setup_epr_stubs
+  MAX_RETRIES=15
+  PHASE_PROMPT_FILE=""
+  get_phase_title() { printf 'Test Phase'; }
+  get_phase_description() { printf 'Test description'; }
+  get_phase_fail_reason() { printf 'none'; }
+  get_phase_consec_fail() { printf '0'; }
+  retry_strategy() { printf 'standard'; }
+  escalate_strategy() { printf '%s' "$1"; }
+  print_phase_exec_header() { :; }
+  capture_git_context() { printf ''; }
+  build_plan_context() { printf ''; }
+  read_nudge() { printf ''; }
+  build_default_prompt() { printf 'prompt text'; }
+  apply_retry_strategy() { printf '%s' "$1"; }
+  append_subagent_model_instructions() { printf '%s' "$1"; }
+  mkdir -p .claudeloop/logs .claudeloop/signals
+}
+
+@test "execute_phase: nudge-skip leaves phase pending (not in_progress)" {
+  _setup_nudge_exec_stubs
+  phase_set STATUS "1" "pending"
+  phase_set ATTEMPTS "1" "1"
+  run_claude_pipeline() { _NUDGE_REQUESTED=true; _LAST_CLAUDE_EXIT=0; }
+  # Override prompt_nudge_text AFTER _setup_nudge_exec_stubs so our stub wins
+  eval 'prompt_nudge_text() { return 1; }'
+
+  # execute_phase returns 1 on nudge (retry signal) — ignore exit code
+  execute_phase "1" || true
+
+  local _status
+  _status=$(get_phase_status "1")
+  [ "$_status" = "pending" ]
+}
