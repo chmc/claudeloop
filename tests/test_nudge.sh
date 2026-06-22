@@ -5,9 +5,11 @@
 
 setup() {
   export _NUDGE_DISABLED=1
+  . "${BATS_TEST_DIRNAME}/../lib/ui.sh"
   . "${BATS_TEST_DIRNAME}/../lib/nudge.sh"
   export TEST_DIR="$BATS_TEST_TMPDIR"
   mkdir -p "$TEST_DIR/.claudeloop"
+  export LIVE_LOG="$TEST_DIR/live.log"
   cd "$TEST_DIR"
 }
 
@@ -92,4 +94,22 @@ teardown() { :; }
   run read_nudge "1"
   [ "$status" -eq 0 ]
   [ "$output" = '$HOME' ]
+}
+
+# --- _nudge_save_text ---
+
+@test "_nudge_save_text: writes nudge file" {
+  _nudge_save_text "3" "use a simpler approach"
+  [ -f "$TEST_DIR/.claudeloop/nudge-phase-3.md" ]
+  [ "$(cat "$TEST_DIR/.claudeloop/nudge-phase-3.md")" = "use a simpler approach" ]
+}
+
+@test "_nudge_save_text: logs to LIVE_LOG" {
+  _nudge_save_text "3" "use a simpler approach"
+  grep -q "Nudge saved: use a simpler approach" "$LIVE_LOG"
+}
+
+@test "_nudge_save_text: no-op log when LIVE_LOG unset" {
+  LIVE_LOG="" _nudge_save_text "3" "test"
+  [ -f "$TEST_DIR/.claudeloop/nudge-phase-3.md" ]
 }

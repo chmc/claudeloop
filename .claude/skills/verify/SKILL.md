@@ -126,6 +126,12 @@ Read the output. Describe what you saw (phase ordering, dependency resolution, p
 
 For UI changes (spinners, colors, formatting), use Terminal.app screenshots to see what users actually see. The Bash tool captures raw bytes, not rendered terminal output.
 
+**Two-tier verification for interactive features:**
+- **Tier 1 — Functional proof (expect transcript):** Proves event sequence — transient messages, keystroke responses, state transitions. Deterministic. This is the pass/fail gate for interactive features.
+- **Tier 2 — Visual regression (screenshots):** Proves steady-state appearance — colors, layout, spinner rendering, banners. Sleep-based timing is fine because these persist on screen.
+
+Transient events (messages overwritten by spinner in <1s) belong in Tier 1. Don't ask screenshots to prove what only the transcript can.
+
 Use **absolute paths** — Terminal.app's `do script` opens in `~`.
 
 After common stub setup, add:
@@ -194,7 +200,7 @@ If `screencapture -l` fails ("could not create image from window") or produces b
 
 #### Interactive flow testing (expect)
 
-For features that require TTY input (nudge, interactive prompts), use `expect` to automate keystrokes via a PTY.
+For features that require TTY input (nudge, interactive prompts), use `expect` to automate keystrokes via a PTY. **Expect is the Tier 1 functional proof method** — the transcript is primary evidence for transient events (messages overwritten by the spinner). Screenshots supplement but cannot replace it for event sequences.
 
 **Critical traps:**
 
@@ -241,6 +247,10 @@ expect {
 #### Screenshot verification checklist
 
 Regression checklist for UI changes. Your must-verify assertions (from Step 0) are the primary success criteria.
+
+**Evidence rules:**
+- Every must-verify item must map to either a screenshot (steady-state) or an expect transcript match (transient). Items without evidence in either tier are NOT verified.
+- Screenshot filenames must describe what is visible in the image, not what event triggered the capture. A filename claiming an event the image does not show is not evidence.
 
 - [ ] Logo + version + plan name
 - [ ] Phase listing with pending icons
