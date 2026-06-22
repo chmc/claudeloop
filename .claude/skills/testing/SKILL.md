@@ -51,6 +51,7 @@ Tests running full `claudeloop` pipelines must set these env vars in `setup()`:
 | `_KILL_ESCALATE_TIMEOUT` | `1` | Faster pipeline teardown (default 3s) |
 | `_CLAUDELOOP_NO_AUTO_ARCHIVE` | `1` | Skip archive prompt at startup |
 | `_NUDGE_DISABLED` | `1` | Prevents `read < /dev/tty` hang in non-TTY test context |
+| `CLAUDECODE` | unset | Claude Code sets this; forces `YES_MODE=true`, disabling interactive features (nudge). Unset when testing interactive behavior. |
 
 Also set in `.claudeloop.conf`: `BASE_DELAY=0`, `AI_PARSE=false`, `VERIFY_PHASES=false`, `REFACTOR_PHASES=false` (unless testing those features).
 

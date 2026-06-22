@@ -163,7 +163,22 @@ screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
 # Read ALL screenshots with Read tool and verify against checklist below
 
 # Close Terminal window and clean up
-osascript -e 'tell application "Terminal" to close front window saving no' 2>/dev/null
+# If Terminal shows "Terminate running processes?" modal, dismiss it first
+osascript -e '
+tell application "System Events"
+  tell process "Terminal"
+    repeat with w in (every window)
+      repeat with s in (every sheet of w)
+        if exists button "Terminate" of s then click button "Terminate" of s
+      end repeat
+    end repeat
+  end tell
+end tell
+tell application "Terminal"
+  repeat with w in every window
+    close w saving no
+  end repeat
+end tell' 2>/dev/null
 rm -rf "$tmpdir"
 ```
 
@@ -176,6 +191,52 @@ If `screencapture -l` fails ("could not create image from window") or produces b
    - Grep ANSI output for key UI elements (logo, phase headers, spinner chars, completion banner)
    - Document as "ANSI-only verification — screencapture unavailable" in session README
    - This is acceptable for logic verification but NOT for visual regression of colors/layout
+
+#### Interactive flow testing (expect)
+
+For features that require TTY input (nudge, interactive prompts), use `expect` to automate keystrokes via a PTY.
+
+**Critical traps:**
+
+- `unset env(CLAUDECODE)` at the top of every expect script — Claude Code sets this env var, which forces `YES_MODE=true` and disables all interactive features
+- Wait for a **mid-run signal** (`"Todo 2/4"`, not `"Executing Phase"`) — `success_verbose` auto-detects verify prompts, so calls 1-3 finish in ~1s before the sentinel loop can be armed
+- Use **1200ms delay** before sending bare Enter to kill — lets the current `read -t 1` sentinel cycle expire; shorter delays miss the window
+- Do **NOT** set `_SENTINEL_POLL=0.1` in expect tests — rapid `stty icanon icrnl` resets at 100ms intervals drop buffered PTY input
+
+**Minimal skeleton:**
+
+```tcl
+unset env(CLAUDECODE)
+set env(FAKE_CLAUDE_THINK) 8
+set env(FAKE_CLAUDE_DIR) "/path/to/tmpdir"
+set env(PATH) "/path/to/tmpdir/bin:$env(PATH)"
+set timeout 120
+log_user 1
+
+spawn sh -c {cd "/path/to/tmpdir" && "/path/to/claudeloop" --plan PLAN.md}
+
+# Wait for mid-run signal — guarantees sentinel loop is live with many seconds remaining
+expect {
+    "Todo 2/4" { send_user "\n### SEEN: mid-run\n" }
+    timeout { send_user "\n### FAIL: never reached mid-run\n"; exit 1 }
+}
+
+after 200
+send "n\r"
+
+expect {
+    "Press Enter to nudge" { send_user "\n### SEEN: armed\n" }
+    timeout { send_user "\n### FAIL: armed\n"; exit 1 }
+}
+
+after 1200
+send "\r"
+
+expect {
+    "Stopped phase" { send_user "\n### SEEN: stopped\n" }
+    timeout { send_user "\n### FAIL: stopped\n"; exit 1 }
+}
+```
 
 #### Screenshot verification checklist
 
