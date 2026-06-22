@@ -169,8 +169,14 @@ screencapture -l "$WINDOW_ID" "$SESSION/screenshot-6-scrolltop.png"
 # Read ALL screenshots with Read tool and verify against checklist below
 
 # Close Terminal window and clean up
-# If Terminal shows "Terminate running processes?" modal, dismiss it first
+# Close first to trigger the "Terminate" sheet, then dismiss it
 osascript -e '
+tell application "Terminal"
+  repeat with w in every window
+    close w saving no
+  end repeat
+end tell
+delay 1
 tell application "System Events"
   tell process "Terminal"
     repeat with w in (every window)
@@ -179,11 +185,6 @@ tell application "System Events"
       end repeat
     end repeat
   end tell
-end tell
-tell application "Terminal"
-  repeat with w in every window
-    close w saving no
-  end repeat
 end tell' 2>/dev/null
 rm -rf "$tmpdir"
 ```
