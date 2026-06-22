@@ -130,6 +130,8 @@ For UI changes (spinners, colors, formatting), use Terminal.app screenshots to s
 - **Tier 1 — Functional proof (expect transcript):** Proves event sequence — transient messages, keystroke responses, state transitions. Deterministic. This is the pass/fail gate for interactive features.
 - **Tier 2 — Visual regression (screenshots):** Proves steady-state appearance — colors, layout, spinner rendering, banners. Sleep-based timing is fine because these persist on screen.
 
+**Tier completion is mandatory:** Tier 1 passing does NOT satisfy the GUI requirement. Both tiers must complete before marking verified. A passing expect transcript with no screenshots is incomplete verification.
+
 Transient events (messages overwritten by spinner in <1s) belong in Tier 1. Don't ask screenshots to prove what only the transcript can.
 
 Use **absolute paths** — Terminal.app's `do script` opens in `~`.
@@ -211,6 +213,9 @@ For features that require TTY input (nudge, interactive prompts), use `expect` t
 - Wait for a **mid-run signal** (`"Todo 2/4"`, not `"Executing Phase"`) — `success_verbose` auto-detects verify prompts, so calls 1-3 finish in ~1s before the sentinel loop can be armed
 - Use **1200ms delay** before sending bare Enter to kill — lets the current `read -t 1` sentinel cycle expire; shorter delays miss the window
 - Do **NOT** set `_SENTINEL_POLL=0.1` in expect tests — rapid `stty icanon icrnl` resets at 100ms intervals drop buffered PTY input
+- For **interactive tests with multiple retry cycles** (nudge, sentinel arming), use `scenario_slow` + `FAKE_CLAUDE_SLEEP=N` instead of `success_verbose` — `success_verbose` auto-dispatches to `scenario_verify_pass` when the phase prompt contains "verification", completing instantly with no mid-run window
+- **Reset must delete nudge files** between expect runs: `rm -f "$tmpdir/.claudeloop/nudge-phase-*.md"` — vim `:q!` leaves pre-existing files intact; a stale nudge file causes `[ -s "$_pnt_path" ]` to return true, producing false "Nudge saved"
+- **TCL exit:** use `close -i $spawn_id` + `wait -i $spawn_id` instead of `send "\003"` + `expect eof` — the latter waits up to 300s for claudeloop's pipeline kill escalation
 
 **Minimal skeleton:**
 

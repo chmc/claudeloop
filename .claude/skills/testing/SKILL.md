@@ -57,6 +57,20 @@ Also set in `.claudeloop.conf`: `BASE_DELAY=0`, `AI_PARSE=false`, `VERIFY_PHASES
 
 Copy from `test_integration_basic.sh` as the reference implementation.
 
+## fake_claude scenario selection
+
+`fake_provider_select_scenario` dispatches based on prompt content **before** running the named scenario. Auto-dispatch overrides take priority:
+
+| Prompt keyword (grep) | Overrides to |
+|---|---|
+| `plan extraction assistant` | `scenario_ai_parse` |
+| `DECOMPOSED` | `scenario_ai_verify_pass` |
+| `verification` (case-insensitive) | `scenario_verify_pass` |
+
+Consequences:
+- `success_verbose` with a prompt containing "verification" completes in ~1s with no Todos and no file changes — useless for timing-sensitive interactive tests
+- Use `scenario_slow` + `FAKE_CLAUDE_SLEEP=N` for tests that need per-cycle timing (nudge, sentinel arming, interactive prompts) — no auto-dispatch, sleeps N seconds, makes no file changes → triggers auto-retry
+
 ## Pre-existing failures
 
 Pre-existing failing suites are mandatory to fix when found.
