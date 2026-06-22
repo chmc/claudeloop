@@ -1,6 +1,6 @@
 #!/bin/sh
 # Gate 2: Planning Checklist
-# Blocks ExitPlanMode unless plan has all 8 required sections
+# Blocks ExitPlanMode unless plan has all 12 required sections
 # See docs/WORKFLOW.md for details
 
 set -eu
@@ -76,6 +76,13 @@ is_na_section() {
 # Required sections (check case-insensitive)
 # Each section must appear as a heading (## Section Name)
 missing=""
+
+# Check Goal (never N/A — every plan must state the user's full request)
+if ! echo "$plan_content" | grep -q "^## goal"; then
+    missing="$missing Goal (missing),"
+elif is_empty_section "Goal" || is_empty_section "goal"; then
+    missing="$missing Goal (empty),"
+fi
 
 # Check Architecture Impact
 if ! echo "$plan_content" | grep -q "^## architecture impact"; then
@@ -171,8 +178,23 @@ if [ -n "$missing" ]; then
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
-    "permissionDecisionReason": "Plan missing or empty sections:$missing. Use 'N/A - reason' for sections that don't apply (Scope never accepts N/A).",
-    "additionalContext": "All 11 sections required with non-empty content."
+    "permissionDecisionReason": "Plan missing or empty sections:$missing. Use 'N/A - reason' for sections that don't apply (Scope and Goal never accept N/A).",
+    "additionalContext": "All 12 sections required with non-empty content."
+  }
+}
+EOF
+    exit 0
+fi
+
+# Validate Goal section: never N/A
+if is_na_section "Goal" || is_na_section "goal"; then
+    cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Goal section cannot be N/A — state the user's full request in their terms, without narrowing or omitting sub-requirements.",
+    "additionalContext": "The Goal section anchors the entire plan. All other sections must trace back to it."
   }
 }
 EOF
@@ -344,6 +366,11 @@ if ! is_na_section "features" && ! is_na_section "Features"; then
     features_req="true"
 fi
 
+goal_req="false"
+if ! is_na_section "goal" && ! is_na_section "Goal"; then
+    goal_req="true"
+fi
+
 # Write requirements file
 cat > "$STATE_DIR/plan-requirements.json" <<EOF
 {
@@ -356,6 +383,7 @@ cat > "$STATE_DIR/plan-requirements.json" <<EOF
   "release": $release_req,
   "readme": $readme_req,
   "features": $features_req,
+  "goal": $goal_req,
   "plan_file": "$plan_file"
 }
 EOF

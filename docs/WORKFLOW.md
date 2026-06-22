@@ -5,7 +5,7 @@ This project uses Claude Code hooks to enforce a development workflow. These hoo
 ## Workflow Overview
 
 ```
-Branch confirm → Plan (11 sections) → Tasks → ExitPlanMode → TDD → Updates → Simplify → Review → Verify
+Branch confirm → Plan (12 sections) → Tasks → ExitPlanMode → TDD → Updates → Simplify → Review → Verify
 ```
 
 ## Gates
@@ -13,7 +13,7 @@ Branch confirm → Plan (11 sections) → Tasks → ExitPlanMode → TDD → Upd
 | # | Gate | Trigger | Purpose |
 |---|------|---------|---------|
 | 1 | Branch awareness | First Edit/Write | Confirm branch before work |
-| 2 | Planning checklist | ExitPlanMode | 11 sections required + tasks must exist |
+| 2 | Planning checklist | ExitPlanMode | 12 sections required + tasks must exist |
 | 3 | Plan-to-tasks (fallback) | Edit/Write (post-plan) | Defense-in-depth: tasks must exist |
 | 4 | TDD | Edit (impl files) | Test file edited first |
 | 4.5 | Auto-test + shellcheck | PostToolUse Edit/Write | Run bats on edited test files; run shellcheck on edited shell files |
@@ -28,19 +28,20 @@ Branch confirm → Plan (11 sections) → Tasks → ExitPlanMode → TDD → Upd
 
 ## Planning Checklist (Gate 2)
 
-Every plan must address these 11 sections (use "N/A - reason" if not applicable):
+Every plan must address these 12 sections (use "N/A - reason" if not applicable):
 
-1. **Architecture Impact** - How does this affect system architecture?
-2. **ADR** - Does this need an Architectural Decision Record?
-3. **Workflow / State Machines** - Any workflow or state changes?
-4. **Tests (unit, e2e, integration)** - What tests are needed?
-5. **Documentation** - What docs need updating?
-6. **Install / Uninstall** - Any installation changes?
-7. **Release** - Release considerations?
-8. **README** - README updates needed?
-9. **Critic** - Multi-angle review evidence?
-10. **Features** - Does this change user-facing features requiring FEATURES.md update? (N/A accepted with reason; non-N/A sets `features: true` in requirements, blocking completion until `features-reviewed` is created — no skip path)
-11. **Scope** - What's in scope and out of scope? (N/A not accepted — must contain `In scope:` and `Out of scope:` markers with explicit function/file enumeration)
+1. **Goal** - User's full request in their terms, without narrowing or omitting sub-requirements. Never N/A. All sections trace back to this.
+2. **Architecture Impact** - How does this affect system architecture?
+3. **ADR** - Does this need an Architectural Decision Record?
+4. **Workflow / State Machines** - Any workflow or state changes?
+5. **Tests (unit, e2e, integration)** - What tests are needed?
+6. **Documentation** - What docs need updating?
+7. **Install / Uninstall** - Any installation changes?
+8. **Release** - Release considerations?
+9. **README** - README updates needed?
+10. **Critic** - Multi-angle review evidence?
+11. **Features** - Does this change user-facing features requiring FEATURES.md update? (N/A accepted with reason; non-N/A sets `features: true` in requirements, blocking completion until `features-reviewed` is created — no skip path)
+12. **Scope** - What's in scope and out of scope? (N/A not accepted — must contain `In scope:` and `Out of scope:` markers with explicit function/file enumeration)
 
 If the plan has a non-N/A **Verification** section, tasks (TaskCreate) must be created from it **before** calling ExitPlanMode. ExitPlanMode is denied until tasks exist and the Verification section content matches the hash stored when tasks were last created (falls back to mtime comparison on first use).
 

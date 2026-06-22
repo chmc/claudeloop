@@ -4,6 +4,7 @@
 - Simplicity first. Write the minimum code that solves the problem. No speculative abstractions. No flexibility nobody asked for. The test: would a senior engineer call this overcomplicated.
 - Surgical changes. Touch only what the task requires. Do not improve neighboring code. Do not refactor what is not broken. Every changed line should trace back to the request.
 - Goal-driven execution. Turn vague instructions into verifiable targets before writing a line. “Add validation” becomes “write tests for invalid inputs, then make them pass.”
+- No silent skips. If a requirement is hard or blocked, say so explicitly in your response — name the problem and propose a path forward. Never silently substitute easier work for what was asked. If any requirement is unresolved, report it — not PASS.
 
 ## Rules
 
@@ -21,6 +22,7 @@
 ## Planning
 
 - **Plan mode = read-only**: no external changes (API calls, GitHub mutations, file edits) even if user confirms "y". **You MUST call ExitPlanMode before making any edits.** Document changes in plan and wait for approval.
+- **Goal persistence (mandatory)**: every plan starts with a `## Goal` section that states the user's full request in their terms, without narrowing, reframing, or omitting sub-requirements. All plan sections must trace back to it. If a section doesn't serve the goal, flag it for review. If something required by the goal is missing, the plan is incomplete. Review the Goal before finalizing.
 
 Exploration must produce a constraints brief:
 1. Conventions — patterns, error handling, naming. Cite files+lines.

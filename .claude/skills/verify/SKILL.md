@@ -34,7 +34,7 @@ changed_files: [<list from git diff --stat>]
 <git diff --stat output>
 
 ## Must-Verify
-<!-- Write BEFORE running anything. Primary success criteria for this specific change. -->
+<!-- Write BEFORE running anything. Each item must verify CHANGED behavior, not baseline. If a must-verify item cannot be verified with the tools and access available in this session, flag it as BLOCKED with the specific missing capability — don't substitute easier checks. -->
 - [ ] <what the change does, with expected observable values>
 - [ ] <what was removed — confirm absence>
 - [ ] <what should NOT happen anymore>
@@ -431,6 +431,13 @@ Write final Result section:
 ## Result
 PASS/FAIL — <one-line summary>
 ```
+
+Before setting `result: PASS`, every Must-Verify item must have a disposition:
+- **PASS** with evidence (screenshot filename or transcript line)
+- **FAIL** with description
+- **BLOCKED** with reason: what was attempted, why it failed, proposed next step — forces `result: PARTIAL`, requires user sign-off for PASS
+
+Items without a disposition default to BLOCKED, not PASS.
 
 ## Browsing past sessions
 
