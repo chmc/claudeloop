@@ -27,7 +27,7 @@ case "$count" in
     printf '{"type":"result","total_cost_usd":0.008,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":1800,"output_tokens":420},"modelUsage":{"claude-sonnet-4-5":{"input_tokens":1800,"output_tokens":420}}}\n'
     ;;
   2)
-    # Phase 2 attempt 1: stuck on wrong approach — runs until killed by nudge
+    # Phase 2 attempt 1: stuck on wrong approach — loops until killed by nudge
     printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-5"}\n'
     sleep 0.5
     printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Implementing queries with string concatenation.\n"}]}}\n'
@@ -37,15 +37,8 @@ case "$count" in
     printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_102"}\n'
     printf '{"type":"tool_result","content":"FAIL\\n  ✗ SQL injection vulnerability detected (23ms)","id":"toolu_n_102"}\n'
     sleep 1
-    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Trying a different concatenation approach.\n"}]}}\n'
-    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/queries.js","old_string":"id +","new_string":"parseInt(id) +"},"id":"toolu_n_103"}\n'
-    printf '{"type":"tool_result","content":"ok","id":"toolu_n_103"}\n'
-    sleep 1
-    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_104"}\n'
-    printf '{"type":"tool_result","content":"FAIL\\n  ✗ SQL injection vulnerability detected (19ms)","id":"toolu_n_104"}\n'
-    sleep 1
-    # Exit with failure — nudge file will be picked up on retry
-    exit 1
+    # Loop forever — nudge will kill this process
+    while true; do sleep 2; done
     ;;
   3)
     # Phase 2 attempt 2: nudge detected — uses prepared statements, succeeds

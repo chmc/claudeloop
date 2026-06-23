@@ -1,0 +1,38 @@
+#!/usr/bin/expect -f
+set timeout 60
+log_user 1
+
+catch {unset env(CLAUDECODE)}
+
+spawn -noecho claudeloop --plan PLAN.md
+
+expect {
+    "SQL injection" { }
+    timeout { send_user "\n### TIMEOUT waiting for Phase 2 output\n"; exit 1 }
+}
+
+after 2000
+send "n\r"
+
+expect {
+    "Press Enter to nudge" { }
+    timeout { send_user "\n### TIMEOUT waiting for arm confirmation\n"; exit 1 }
+}
+
+after 2000
+send "\r"
+
+expect {
+    "nudge>" { }
+    timeout { send_user "\n### TIMEOUT waiting for nudge prompt\n"; exit 1 }
+}
+
+after 500
+send "use prepared statements for all DB queries\r"
+
+expect {
+    "All phases completed" { }
+    timeout { send_user "\n### TIMEOUT waiting for completion\n"; exit 1 }
+}
+
+after 3000

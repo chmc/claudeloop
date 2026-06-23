@@ -2,27 +2,37 @@
 # Extract frames after regeneration:
 #
 # dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-nudge.gif)
-# ffmpeg -ss 3 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-early.png
-# ffmpeg -ss 7 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-mid.png
+# ffmpeg -ss $(echo "$dur * 0.25" | bc) -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-25.png
+# ffmpeg -ss $(echo "$dur * 0.50" | bc) -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-50.png
+# ffmpeg -ss $(echo "$dur * 0.75" | bc) -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-75.png
 # ffmpeg -sseof -0.5 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-final.png
 #
-# Note: Nudge is injected via background file write (not interactive keystrokes).
-# VHS pty does not route to /dev/tty, so sentinel keystroke detection doesn't work.
-# Background job in hidden section writes .claudeloop/nudge-phase-2.md at t=5s.
+# Note: Uses expect inside VHS to drive real interactive nudge flow.
+# expect creates a pty where /dev/tty works; CLAUDECODE must be unset
+# to prevent auto-YES_MODE (see demo-nudge.expect).
 
-frame@early (t~3s):
+frame@early (t~25%):
   - Phase 1 tool output (Bash mkdir, Write src/db.js)
   - "Phase 1 completed successfully"
-  - "Executing Phase 2/2: Query Implementation (nudge active)" header in yellow
+  - "Executing Phase 2/2: Query Implementation" header
+  - "Type n to nudge" hint visible
+  - SQL injection failure: "FAIL  ✗ SQL injection vulnerability detected"
+  - "Press Enter to nudge (stops current attempt)" — nudge armed
 
-frame@mid (t~7s):
-  - Phase 2 attempt 1: SQL injection test failures
-  - "FAIL ✗ SQL injection vulnerability detected"
-  - "Phase 2 failed" + "Retrying phase 2 after 3 seconds..."
+frame@mid (t~50%):
+  - "Stopped Phase 2" message
+  - "nudge>" prompt with typed guidance
+  - "use prepared statements for all DB queries"
+  - "Nudge saved: use prepared statements for all DB queries"
+  - "Retrying phase 2 after 1 seconds..."
 
-final:
-  - "Executing Phase 2/2: Query Implementation (nudge active)" (attempt 2)
+frame@late (t~75%):
+  - "Executing Phase 2/2: Query Implementation (nudge active)" header
   - "Switching to prepared statements as directed."
-  - Bash npm test → "PASS ✓ all queries pass security checks"
+  - Write src/queries.js, Bash npm test
+  - "PASS  ✓ all queries pass security checks"
   - "All phases completed!"
   - Session summary (model, cost, duration, tokens)
+
+final:
+  - Same as frame@late — still time showing completion state
