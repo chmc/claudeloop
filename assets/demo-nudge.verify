@@ -1,23 +1,28 @@
 # Verification manifest for demo-nudge.gif
+# Extract frames after regeneration:
+#
 # dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-nudge.gif)
 # ffmpeg -ss 3 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-early.png
-# ffmpeg -ss 8 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-mid.png
-# ffmpeg -sseof -1 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-final.png
+# ffmpeg -ss 7 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-mid.png
+# ffmpeg -sseof -0.5 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-final.png
 #
-# Note: GIF duration equals actual claudeloop runtime (stops when process exits).
-# VHS stops early if claudeloop completes before all Sleep commands finish.
+# Note: Nudge is injected via background file write (not interactive keystrokes).
+# VHS pty does not route to /dev/tty, so sentinel keystroke detection doesn't work.
+# Background job in hidden section writes .claudeloop/nudge-phase-2.md at t=5s.
 
 frame@early (t~3s):
-  - Phase 1 completing ("Phase 1 completed successfully")
-  - "Executing Phase 2/2: Query Implementation" header starting
+  - Phase 1 tool output (Bash mkdir, Write src/db.js)
+  - "Phase 1 completed successfully"
+  - "Executing Phase 2/2: Query Implementation (nudge active)" header in yellow
 
-frame@mid (t~8s):
-  - Phase 2 executing with SQL injection test failures
-  - "FAIL SQL injection vulnerability detected" lines
-  - "Trying a different concatenation approach" (stuck behavior)
+frame@mid (t~7s):
+  - Phase 2 attempt 1: SQL injection test failures
+  - "FAIL ✗ SQL injection vulnerability detected"
+  - "Phase 2 failed" + "Retrying phase 2 after 3 seconds..."
 
 final:
-  - Phase 2 retry with prepared statements approach
-  - "db.query" calls using parameterized queries
-  - "All phases completed!" or completion summary
-  - Note: nudge> prompt is transient and may not be visible in captured frame
+  - "Executing Phase 2/2: Query Implementation (nudge active)" (attempt 2)
+  - "Switching to prepared statements as directed."
+  - Bash npm test → "PASS ✓ all queries pass security checks"
+  - "All phases completed!"
+  - Session summary (model, cost, duration, tokens)

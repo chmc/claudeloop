@@ -44,10 +44,8 @@ case "$count" in
     printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_104"}\n'
     printf '{"type":"tool_result","content":"FAIL\\n  ✗ SQL injection vulnerability detected (19ms)","id":"toolu_n_104"}\n'
     sleep 1
-    # Stuck — loop until killed by nudge
-    while true; do
-      sleep 2
-    done
+    # Exit with failure — nudge file will be picked up on retry
+    exit 1
     ;;
   3)
     # Phase 2 attempt 2: nudge detected — uses prepared statements, succeeds
