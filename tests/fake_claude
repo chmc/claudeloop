@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fake Claude CLI for testing and verification.
-# Compatible with: claude-code v2.1.71 (checked 2026-03-08)
+# Compatible with: claude-code v2.1.186 (checked 2026-06-23)
 #
 # Emits realistic stream-json events without API calls.
 # Configuration via $FAKE_CLAUDE_DIR (required).
