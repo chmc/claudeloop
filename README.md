@@ -3,16 +3,15 @@
 </p>
 
 <p align="center">
-  <strong>Ship ambitious AI coding projects.</strong><br>
-  Each task gets a fresh Claude — sharp from first to last.
+  <strong>Break big projects into phases. Sharp from first to last.</strong><br>
+  Zero dependencies &nbsp;·&nbsp; Works with any project &nbsp;·&nbsp; Automatic retries
 </p>
 
 <p align="center">
   <a href="https://github.com/chmc/claudeloop/releases"><img src="https://img.shields.io/github/v/release/chmc/claudeloop" alt="GitHub release"></a>
-  <a href="https://github.com/chmc/claudeloop/stargazers"><img src="https://img.shields.io/github/stars/chmc/claudeloop?style=social" alt="Stars"></a>
   <img src="https://img.shields.io/badge/shell-POSIX-blue" alt="POSIX shell">
   <img src="https://img.shields.io/badge/dependencies-zero-green" alt="Zero dependencies">
-  <a href="https://github.com/sponsors/chmc"><img src="https://img.shields.io/github/sponsors/chmc?style=social" alt="Sponsor"></a>
+  <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="License">
 </p>
 
 <p align="center">
@@ -21,9 +20,7 @@
 
 ## The Problem
 
-Long AI coding sessions hit a wall. Context fills up, the model forgets earlier decisions, and quality degrades — task 10 is dumber than task 1. You end up babysitting, copying context manually, or just accepting worse output.
-
-ClaudeLoop fixes this. Describe what you want — structured phases or just free-form notes — and each task gets a **brand-new Claude instance** with fresh context. Progress is saved between tasks. If something fails, it retries automatically with escalating strategies.
+Long AI coding sessions hit a wall. Context fills up, the model forgets earlier decisions, and quality degrades. ClaudeLoop gives each task a fresh instance — progress saved between phases, failures retried automatically.
 
 ## Install
 
@@ -31,35 +28,9 @@ ClaudeLoop fixes this. Describe what you want — structured phases or just free
 curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/main/install.sh | sh
 ```
 
-Requires [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) and [git](https://git-scm.com/). Pure POSIX shell — zero runtime dependencies.
+Requires [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) and [git](https://git-scm.com/). Verify: `claudeloop --version`
 
 See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative install methods.
-
-## Features
-
-| | | |
-|---|---|---|
-| **Fresh Context** | **Dependency Graph** | **Smart Retries** |
-| Each task spawns a new Claude instance. No context degradation, ever. | Declare dependencies between tasks. ClaudeLoop resolves execution order automatically. | Strategy rotation on failure: full prompt → stripped → error-focused. Quota-aware delays. |
-| **Natural Language Plans** | **Verification** | **Auto-Refactor** |
-| Write bullet points or rough notes. `--ai-parse` decomposes them into phases with dependencies. | `--verify` spawns a read-only Claude to check each task with pass/fail verdicts. | `--refactor` runs code quality passes after each task. Rolls back on failure. |
-| **Model Per Step** | **Nudge** <sup>experimental</sup> | **Effort Control** |
-| `--model opus` for execution, `--model-verify sonnet` for checks. Right model for each job. | Type `n` mid-phase to redirect a stuck Claude. Guidance persists across retries. | `--effort low` to `max`. Tune reasoning depth — fast drafts or thorough implementations. |
-
-### ClaudeLoop vs. the alternatives
-
-| | Single long session | Manual splitting | **ClaudeLoop** |
-|---|---|---|---|
-| **Context quality** | Degrades over time | Fresh (manual effort) | **Fresh (automatic)** |
-| **Error recovery** | Manual retry | Manual retry | **Auto-retry with strategy rotation** |
-| **Resume after interrupt** | Start over | Manual bookkeeping | **`--continue` resumes exactly** |
-| **Cost tracking** | None | None | **Per-task cost in replay report** |
-| **Verification** | Trust the output | Manual review | **Fresh read-only Claude checks work** |
-| **Code quality** | Hope for the best | Manual cleanup | **Auto-refactor with rollback** |
-| **Observability** | Scroll terminal | Scroll terminal | **Live monitoring + HTML replay** |
-| **Plan authoring** | Write it yourself | Write it yourself | **Free-form notes → auto-structured** |
-| **Model control** | Same model for every step | Same model for every step | **Different model per step type** |
-| **Mid-run guidance** | Restart from scratch | Restart from scratch | **Nudge stuck phases without losing progress** |
 
 ## Quick Start
 
@@ -81,7 +52,7 @@ See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative
 claudeloop --ai-parse
 ```
 
-ClaudeLoop turns your notes into ordered **phases** with dependencies and shows the plan for confirmation before running. Each phase gets a **fresh Claude instance** — no context degradation, automatic retries, progress saved between tasks.
+ClaudeLoop turns your notes into ordered **phases** with dependencies and shows the plan for confirmation before running. Add `--dry-run` to preview without executing. Each phase gets a fresh Claude instance — automatic retries, progress saved between tasks.
 
 **3. Watch it work** from a second terminal:
 
@@ -90,42 +61,12 @@ claudeloop --monitor
 ```
 
 <p align="center">
-  <img src="assets/screenshot-completion.png" alt="ClaudeLoop run complete — all phases done" width="700">
+  <img src="assets/demo-todos.gif" alt="ClaudeLoop live monitoring — real-time phase progress from a second terminal" width="700">
 </p>
 
-> **Tip:** Add `--dry-run` to preview the plan without executing: `claudeloop --ai-parse --dry-run`
+> **First run** launches a setup wizard — press Enter to accept all defaults for a working setup.
 
-> **First run?** A setup wizard configures your project with smart defaults — just press Enter. Settings are saved for future runs, no flags needed.
-
-> **CI/scripted use:** Add `--yes` to skip all confirmation prompts: `claudeloop --ai-parse --yes`
-
-### Multi-Provider Support
-
-ClaudeLoop supports multiple AI providers:
-
-| Provider | CLI | Status |
-|----------|-----|--------|
-| Claude Code | `claude` | Default |
-| OpenCode | `opencode` | Experimental |
-
-**Version Requirements:**
-
-| Provider | Minimum Version | Notes |
-|----------|-----------------|-------|
-| Claude Code | 1.0.0+ | Default provider |
-| OpenCode | 0.1.0+ | Experimental — not production-tested |
-
-```sh
-# Claude Code (default)
-claudeloop --provider claude
-PROVIDER=claude claudeloop
-
-# OpenCode
-claudeloop --provider opencode
-PROVIDER=opencode claudeloop
-```
-
-**Precedence:** CLI flag > environment variable > config file > default (claude)
+> **CI / non-interactive:** Add `--yes` to skip all confirmation prompts.
 
 <details>
 <summary><strong>Want full control? Write phases yourself</strong></summary>
@@ -160,21 +101,44 @@ See `examples/PLAN.md.example` for a complete example and [Plan File Format](#pl
 
 </details>
 
+## Features
+
+| | | |
+|---|---|---|
+| **Fresh Context** | **Dependency Graph** | **Automatic Retries** |
+| Each phase runs in a new Claude instance. Phase 10 is as good as phase 1. | Declare `Depends on:` between phases. Execution order resolves automatically. | Strategy rotation on failure: full prompt → stripped → error-focused. Quota-aware delays. |
+| **Natural Language Plans** | **Verification** | **Auto-Refactor** |
+| Write bullet points or rough notes. `--ai-parse` decomposes them into phases with dependencies. | `--verify` spawns a read-only Claude to check each phase with pass/fail verdicts. | Runs code quality passes after each phase. Rolls back on failure. |
+| **Resume** | **Model Per Step** | **Effort Control** |
+| `--continue` picks up exactly where you left off. Progress survives interrupts and reboots. | `--model opus` for execution, `--model-verify sonnet` for checks. Right model for each job. | `--effort low` to `max`. Tune reasoning depth — fast drafts or thorough implementations. |
+
 ## AI Plan Decomposition
 
 ```sh
 claudeloop --plan ideas.md --ai-parse --dry-run
 ```
 
-Turn free-form notes into executable tasks. Write bullet points, get a structured plan with dependencies.
+Write anything — bullet points, rough notes, a paragraph. ClaudeLoop structures it into ordered phases with dependencies and shows you the plan before running.
 
 <p align="center">
   <img src="assets/demo-dryrun.gif" alt="AI plan decomposition — turning notes into phases" width="700">
 </p>
 
+## Verification
+
+```sh
+claudeloop --verify
+```
+
+A fresh read-only Claude checks each phase's output independently — separate from the instance that did the work. Pass/fail verdicts, not just a heuristic.
+
+<p align="center">
+  <img src="assets/demo-verify.gif" alt="Verification — read-only Claude checking phase output" width="700">
+</p>
+
 ## Replay Report
 
-Auto-generated self-contained HTML at `.claudeloop/replay.html`. Updates live during execution — just refresh your browser. No server, no external dependencies.
+Auto-generated self-contained HTML at `.claudeloop/replay.html`. Updates live during execution — just refresh your browser. Regenerate any time with `claudeloop --replay`.
 
 <p align="center">
   <img src="assets/screenshot-replay.png" alt="Replay report overview — phases, cost, tokens, timeline" width="700">
@@ -207,60 +171,6 @@ Auto-generated self-contained HTML at `.claudeloop/replay.html`. Updates live du
 </tr>
 </table>
 
-Works on archived runs too. Regenerate with `claudeloop --replay`.
-
-## Nudge: Redirect Stuck Phases <sup>experimental</sup>
-
-Type `n` during execution to stop a stuck phase and provide new direction.
-
-```sh
-# Interactive: type n → Enter → type guidance
-# Pre-set from another terminal:
-claudeloop --nudge 3 "use the existing AuthProvider, don't create a new one"
-```
-
-Your guidance is injected into the retry prompt and persists until the phase succeeds. Use `e` for `$EDITOR` multi-line input.
-
-<p align="center">
-  <img src="assets/demo-nudge.gif" alt="Nudge — redirecting a stuck phase with inline guidance" width="700">
-</p>
-
-## Verification
-
-```sh
-claudeloop --verify
-```
-
-A fresh read-only Claude checks each task's output with verdict-based pass/fail — independent from the instance that did the work.
-
-<p align="center">
-  <img src="assets/demo-verify.gif" alt="Verification — read-only Claude checking phase output" width="700">
-</p>
-
-## Auto-Refactor
-
-```sh
-claudeloop --refactor
-```
-
-Zero-effort code hygiene. Prevents technical debt from accumulating, keeps your codebase clean automatically.
-
-<p align="center">
-  <img src="assets/demo-refactor.gif" alt="Auto-refactor with rollback on failure" width="700">
-</p>
-
-## Live Monitoring
-
-```sh
-claudeloop --monitor
-```
-
-Real-time progress with todo and task tracking from a second terminal.
-
-<p align="center">
-  <img src="assets/demo-todos.gif" alt="Live todo tracking from a second terminal" width="700">
-</p>
-
 ## How It Works
 
 ```
@@ -278,12 +188,15 @@ Each phase prompt includes a full phase index showing per-phase status (`[done]`
 
 ---
 
+## Reference
+
 <details>
 <summary><strong>All CLI Options</strong></summary>
 
 ```
 --plan <file>        Plan file to execute (default: PLAN.md)
 --progress <file>    Progress file (default: PROGRESS.md)
+--provider <name>    AI provider to use: claude, opencode (default: auto-detect)
 --reset              Clear all run state and start fresh
 --continue           Resume from last checkpoint
 --phase <n>          Start from specific phase number
@@ -448,7 +361,7 @@ PHASE_PROMPT_FILE=prompts/my-template.md
 </details>
 
 <details>
-<summary><strong>AI Plan Decomposition</strong></summary>
+<summary><strong>AI Plan Decomposition Details</strong></summary>
 
 Instead of writing a structured plan manually, use `--ai-parse` to let AI decompose any plan file into phases:
 
@@ -461,6 +374,9 @@ claudeloop --plan ideas.md --ai-parse --granularity steps
 
 # Preview without executing
 claudeloop --plan ideas.md --ai-parse --dry-run
+
+# CI / unattended: skip all confirmation prompts
+claudeloop --plan ideas.md --ai-parse --yes
 ```
 
 The AI parser:
@@ -488,46 +404,96 @@ claudeloop --ai-parse-feedback --granularity tasks
 </details>
 
 <details>
-<summary><strong>Troubleshooting</strong></summary>
+<summary><strong>Nudge: Redirect Stuck Phases</strong></summary>
 
-**`claude: command not found`** — install the Claude CLI and ensure it's in your PATH
+Type `n` during execution to stop a stuck phase and provide new direction.
 
-**`opencode: command not found`** — install [OpenCode](https://github.com/opencode-ai/opencode) and ensure it's in your PATH. Verify with `opencode --version` (requires 0.1.0+ with `--format json` support)
+```sh
+# Interactive: type n → Enter → type guidance
+# Pre-set from another terminal:
+claudeloop --nudge 3 "use the existing AuthProvider, don't create a new one"
+```
 
-**Provider not detected correctly** — ClaudeLoop auto-detects providers by checking for binaries in PATH. Override with `--provider <name>` or set `PROVIDER=<name>` in environment. Check detection with `which claude` or `which opencode`
+Your guidance is injected into the retry prompt and persists until the phase succeeds. Use `e` for `$EDITOR` multi-line input.
 
-**Permission prompts behave differently with OpenCode** — OpenCode uses HTTP-based permission handling while Claude Code uses FD7/stdio. If you see unexpected permission behavior, ensure you're using the correct `--dangerously-skip-permissions` equivalent for your provider. OpenCode permission configuration may differ from Claude Code settings
+<p align="center">
+  <img src="assets/demo-nudge.gif" alt="Nudge — redirecting a stuck phase with inline guidance" width="700">
+</p>
 
-**`Not in a git repository`** — run `git init && git add . && git commit -m "init"` in your project
+</details>
 
-**Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
+<details>
+<summary><strong>Auto-Refactor</strong></summary>
 
-**Claude is stuck in a loop** — see [Nudge: Redirect Stuck Phases](#nudge-redirect-stuck-phases) above.
+```sh
+claudeloop --refactor
+```
 
-**Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings. ClaudeLoop also detects when Claude exits successfully but made no write actions (Edit, Write, NotebookEdit, or Agent tool calls) and treats the phase as failed for automatic retry.
+Runs a code quality pass after each phase. If the refactor breaks tests, it rolls back automatically (up to 20 attempts, configurable via `--refactor-max-retries`).
 
-**Phase marked as failed but the work was done** — ClaudeLoop automatically detects this: if a background sub-invocation caused the Claude process to exit non-zero but the main session completed real work (turns > 0 in the log), the phase is marked completed with a warning. If auto-detection misses a case, use `--mark-complete <n>` to override the status manually:
+<p align="center">
+  <img src="assets/demo-refactor.gif" alt="Auto-refactor with rollback on failure" width="700">
+</p>
 
-    claudeloop --mark-complete 1
+</details>
 
-If the repo has uncommitted changes from the prior session, ClaudeLoop detects the existing progress and skips the uncommitted-changes gate automatically.
+<details>
+<summary><strong>Live Monitoring</strong></summary>
 
-**Progress corrupted (wrong plan file overwrote PROGRESS.md)** — ClaudeLoop now backs up PROGRESS.md before overwriting and warns on drastic plan changes. If progress was already lost, reconstruct it from execution logs:
+```sh
+claudeloop --monitor
+```
 
-    claudeloop --plan your-plan.md --recover-progress
+Real-time progress with todo and task tracking from a second terminal.
 
-**Run archiving** — When all phases complete successfully, ClaudeLoop auto-archives the run state (PROGRESS.md, logs, signals) to `.claudeloop/archive/{timestamp}/`. On next startup with a completed run, it prompts to archive before starting fresh. Manual control:
+<p align="center">
+  <img src="assets/demo-todos.gif" alt="Live todo tracking from a second terminal" width="700">
+</p>
 
-    claudeloop --archive           # Archive current run
-    claudeloop --list-archives     # List past runs
-    claudeloop --restore 20260316-143022  # Restore a past run
+</details>
 
-Disable auto-archive with `_CLAUDELOOP_NO_AUTO_ARCHIVE=1`.
+<details>
+<summary><strong>Multi-Provider Support</strong></summary>
 
-**Orphan log detection** — When ClaudeLoop finds log files for phases not in the current plan (e.g., after switching between `--ai-parse` and manual plans), it warns and offers options:
+ClaudeLoop supports multiple AI providers:
 
-- If `.claudeloop/ai-parsed-plan.md` exists: `[r]ecover` (recommended) switches to the AI-parsed plan and reconstructs progress from logs automatically, `[c]ontinue`, or `[a]bort`
-- If no AI-parsed plan exists: `[c]ontinue` or `[a]bort` (with `--reset` hint)
+| Provider | CLI | Status |
+|----------|-----|--------|
+| Claude Code | `claude` | Default |
+| OpenCode | `opencode` | Experimental |
+
+**Version Requirements:**
+
+| Provider | Minimum Version | Notes |
+|----------|-----------------|-------|
+| Claude Code | 1.0.0+ | Default provider |
+| OpenCode | 0.1.0+ | Experimental — not production-tested |
+
+```sh
+# Claude Code (default)
+claudeloop --provider claude
+PROVIDER=claude claudeloop
+
+# OpenCode
+claudeloop --provider opencode
+PROVIDER=opencode claudeloop
+```
+
+**Precedence:** CLI flag > environment variable > config file > default (claude)
+
+</details>
+
+<details>
+<summary><strong>Limitations</strong></summary>
+
+ClaudeLoop is under active development (v0.35.0). Known constraints:
+
+- **OpenCode provider** — experimental, not production-tested. Claude Code is the only fully supported provider.
+- **Phase granularity** — `--ai-parse` works best with clear, enumerable tasks. Vague goals produce vague phases.
+- **Nudge** — mid-run redirection is experimental. Behavior may change in future releases.
+- **Git required** — ClaudeLoop requires a git repository in your project root.
+
+Report issues at [github.com/chmc/claudeloop/issues](https://github.com/chmc/claudeloop/issues).
 
 </details>
 
@@ -587,16 +553,56 @@ The lessons file is included when runs are archived (`--archive`). Oxveil reads 
 
 </details>
 
+<details>
+<summary><strong>Troubleshooting</strong></summary>
+
+**`claude: command not found`** — install the Claude CLI and ensure it's in your PATH
+
+**`opencode: command not found`** — install [OpenCode](https://github.com/opencode-ai/opencode) and ensure it's in your PATH. Verify with `opencode --version` (requires 0.1.0+ with `--format json` support)
+
+**Provider not detected correctly** — ClaudeLoop auto-detects providers by checking for binaries in PATH. Override with `--provider <name>` or set `PROVIDER=<name>` in environment. Check detection with `which claude` or `which opencode`
+
+**Permission prompts behave differently with OpenCode** — OpenCode uses HTTP-based permission handling while Claude Code uses FD7/stdio. If you see unexpected permission behavior, ensure you're using the correct `--dangerously-skip-permissions` equivalent for your provider. OpenCode permission configuration may differ from Claude Code settings
+
+**`Not in a git repository`** — run `git init && git add . && git commit -m "init"` in your project
+
+**Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
+
+**Claude is stuck in a loop** — see [Nudge](#nudge-redirect-stuck-phases) above.
+
+**Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings. ClaudeLoop also detects when Claude exits successfully but made no write actions (Edit, Write, NotebookEdit, or Agent tool calls) and treats the phase as failed for automatic retry.
+
+**Phase marked as failed but the work was done** — ClaudeLoop automatically detects this: if a background sub-invocation caused the Claude process to exit non-zero but the main session completed real work (turns > 0 in the log), the phase is marked completed with a warning. If auto-detection misses a case, use `--mark-complete <n>` to override the status manually:
+
+    claudeloop --mark-complete 1
+
+If the repo has uncommitted changes from the prior session, ClaudeLoop detects the existing progress and skips the uncommitted-changes gate automatically.
+
+**Progress corrupted (wrong plan file overwrote PROGRESS.md)** — ClaudeLoop now backs up PROGRESS.md before overwriting and warns on drastic plan changes. If progress was already lost, reconstruct it from execution logs:
+
+    claudeloop --plan your-plan.md --recover-progress
+
+**Run archiving** — When all phases complete successfully, ClaudeLoop auto-archives the run state (PROGRESS.md, logs, signals) to `.claudeloop/archive/{timestamp}/`. On next startup with a completed run, it prompts to archive before starting fresh. Manual control:
+
+    claudeloop --archive           # Archive current run
+    claudeloop --list-archives     # List past runs
+    claudeloop --restore 20260316-143022  # Restore a past run
+
+Disable auto-archive with `_CLAUDELOOP_NO_AUTO_ARCHIVE=1`.
+
+**Orphan log detection** — When ClaudeLoop finds log files for phases not in the current plan (e.g., after switching between `--ai-parse` and manual plans), it warns and offers options:
+
+- If `.claudeloop/ai-parsed-plan.md` exists: `[r]ecover` (recommended) switches to the AI-parsed plan and reconstructs progress from logs automatically, `[c]ontinue`, or `[a]bort`
+- If no AI-parsed plan exists: `[c]ontinue` or `[a]bort` (with `--reset` hint)
+
+</details>
+
 ## Documentation
 
 - [Quick Start Guide](QUICKSTART.md)
 - [Example Plan](examples/PLAN.md.example)
 - [Architecture Decisions](docs/adr/)
 - [Releases & Changelogs](https://github.com/chmc/claudeloop/releases)
-
-## Credits
-
-Inspired by [ralph](https://github.com/snarktank/ralph) by snarktank.
 
 ## Author
 
