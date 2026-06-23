@@ -41,6 +41,12 @@ gifsicle --optimize=3 --lossy=80 -o demo.gif demo.gif
 gifsicle --optimize=3 --lossy=120 --colors 64 -o demo-execution.gif demo-execution.gif
 ```
 
+## CLAUDECODE env var trap
+
+When running claudeloop under `expect` (e.g. nudge demo), `CLAUDECODE` env var is inherited from the Claude Code session. This triggers `orchestration.sh:92` → `YES_MODE=true` → sentinel skips `/dev/tty` read entirely → interactive features (nudge, sentinel keystrokes) silently stop working.
+
+Fix: `catch {unset env(CLAUDECODE)}` at the top of expect scripts. Use `catch` because outside Claude Code the var doesn't exist and bare `unset` crashes expect.
+
 ## VHS tape changes
 
 - Test by running VHS once and extracting frames BEFORE regenerating all 6 GIFs
