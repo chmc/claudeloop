@@ -5,6 +5,7 @@
 - Surgical changes. Touch only what the task requires. Do not improve neighboring code. Do not refactor what is not broken. Every changed line should trace back to the request.
 - Goal-driven execution. Turn vague instructions into verifiable targets before writing a line. “Add validation” becomes “write tests for invalid inputs, then make them pass.”
 - No silent skips. If a requirement is hard or blocked, say so explicitly in your response — name the problem and propose a path forward. Never silently substitute easier work for what was asked. If any requirement is unresolved, report it — not PASS.
+- Debug from the guard outward. When input doesn't arrive at a receiver: check the `if` condition first (env vars, mode flags, fd state) before tracing transport (pty routing, pipes, signals). The guard is wrong most of the time.
 
 ## Rules
 
@@ -12,7 +13,7 @@
 - Skill-first routing: always invoke matching skill, never perform equivalent manually. Compound requests decompose into skill invocations. Use skills end-to-end — never partially use a skill then finish manually (manual steps skip side effects like workspace sync, state updates, cleanup).
 - Completion gate (mandatory): run `/verify` before reporting done. Skip for docs/test-only changes.
 - Autonomous verification (mandatory): never ask user to test. Do it yourself.
-- Continuous improvement: suggest CLAUDE.md/skill/hook changes at natural pause points. Project rules → CLAUDE.md. Workflow rules → skill files. User prefs → memory.
+- Continuous improvement: suggest CLAUDE.md/skill/hook changes at natural pause points. Project rules → CLAUDE.md. Workflow rules → skill files. User prefs → memory. Workflow lessons (debugging heuristics, verification patterns, automation traps) belong in skills/rules, not memory — if it prevents future bugs it's a rule, if it improves a workflow it's a skill update.
 - Post-implementation debrief: after completing a plan, share lessons that would change future approach. Codebase traps, plan-vs-reality gaps, process improvements — not generic observations. Skip if nothing non-obvious was learned. User decides what to persist.
 - Plan execution: multi-step plans ("promote → release → sync") = authorization. Only stop on failure.
 - Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash. Contextual guidance in `.claude/rules/` (shell-code, parsers, hooks-and-workflow).

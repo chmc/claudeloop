@@ -18,9 +18,9 @@ IFS= read -r _discard 2>/dev/null || true  # consume stdin (cat blocks forever o
 
 Reference: `tests/lib/fake_provider_common.sh:32` uses the same pattern.
 
-## GIF regeneration — mandatory verification
+## GIF regeneration — mandatory visual verification
 
-After running VHS tapes, MUST verify content via ffmpeg frame extraction. File size alone is NOT verification — broken GIFs can be large (the original broken GIFs were 55K–500K and showed only spinners).
+After running VHS tapes, MUST verify content via ffmpeg frame extraction **viewed through the Read tool**. File size, duration, and exit code are NOT verification — broken GIFs can be large (the original broken GIFs were 55K–500K and showed only spinners). Verify as a viewer: "does this GIF communicate the feature to someone seeing it for the first time?"
 
 ```sh
 # Extract frames at 25%, 50%, 75% of duration

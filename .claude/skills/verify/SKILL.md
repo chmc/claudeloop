@@ -207,7 +207,7 @@ For features that require TTY input (nudge, interactive prompts), use `expect` t
 
 **Critical traps:**
 
-- Use `catch {unset env(CLAUDECODE)}` (not bare `unset env(CLAUDECODE)`) — outside Claude Code (e.g. Terminal.app `do script`), the var doesn't exist and bare `unset` crashes expect immediately
+- **`CLAUDECODE` env var kills interactive features silently.** Inherited from Claude Code session → `orchestration.sh:92` sets `YES_MODE=true` → sentinel skips `/dev/tty` read → nudge/keystroke detection stops working with NO error. Always `catch {unset env(CLAUDECODE)}` — use `catch` because outside Claude Code the var doesn't exist and bare `unset` crashes expect
 - `$tmpdir/bin` must be first in PATH via `set env(PATH)` in expect — `ai_parser.sh:15` hardcodes `command -v claude`, ignoring `CLAUDELOOP_CLAUDE_BIN`; PATH override is the only way to route all code paths through fake_claude
 - `screencapture -l $WINDOW_ID` can fail mid-session ("could not create image from window") if Terminal reassigns window IDs — refetch `id of front window` via osascript before each capture, never cache the ID across screenshot calls
 - Wait for a **mid-run signal** (`"Todo 2/4"`, not `"Executing Phase"`) — `success_verbose` auto-detects verify prompts, so calls 1-3 finish in ~1s before the sentinel loop can be armed
@@ -428,6 +428,18 @@ Write to `$SESSION/README.md` incrementally:
 ```
 
 The **Observation** section is mandatory and must describe what the verifier actually saw — command output, screenshot contents, or log file observations. A verification without observation is not a verification.
+
+## Step 4.5: Goal alignment check
+
+Before marking PASS, answer: **"If the user watched me verify this, would they agree it proves what they asked for?"**
+
+Red flags that indicate mechanism-verified-not-goal:
+- Must-verify items describe code paths ("nudge tag appears") instead of user-visible outcomes ("viewer sees interactive nudge flow")
+- GIF/UI verification uses proxy metrics (file size, exit code, duration) instead of visual inspection
+- Verification confirms internal state changed but not that the feature is usable/visible to end users
+- Demo asset verification checks technical correctness but not whether the demo communicates the feature
+
+If any red flag applies: rewrite must-verify items from the user/viewer perspective before proceeding.
 
 ## Step 5: Finalize
 
