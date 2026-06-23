@@ -33,7 +33,7 @@ Exploration must produce a constraints brief:
 
 Plans: justify every decision from constraints. List files to modify with functions/callers. State what is NOT changing and why.
 
-Multi-angle review (mandatory): always launch 2-3 Plan agents with different critique perspectives. Never skip. Verify causal claims by tracing actual code paths — don't just confirm code exists.
+Multi-angle review (mandatory): always launch 2-3 Plan agents with different critique perspectives. Skip only with explicit justification (`**Skip reason:**` in Critic section — acceptable for trivial/mechanical changes, self-referential workflow changes, or single-function changes with no design ambiguity). Verify causal claims by tracing actual code paths — don't just confirm code exists. After launching critic agents and incorporating their feedback, touch `.claude/workflow-state/critic-reviewed`.
 
 Pre-implementation check (per phase):
 1. `git log --oneline -10` — check for prior commits implementing this work

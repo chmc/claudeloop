@@ -252,6 +252,29 @@ EOF
     fi
 fi
 
+# Gate 2.5: Critic review evidence
+if [ ! -f "$STATE_DIR/critic-reviewed" ]; then
+    _cr_body=$(get_section_body "Critic" "$plan_file")
+    if [ -z "$_cr_body" ]; then
+        _cr_body=$(get_section_body "critic" "$plan_file")
+    fi
+    _cr_skip=$(printf '%s' "$_cr_body" | grep -F '**Skip reason:**' | head -1)
+    _cr_skip_text=$(printf '%s' "$_cr_skip" | sed 's/.*\*\*[Ss]kip reason:\*\*[[:space:]]*//')
+    if [ ${#_cr_skip_text} -lt 10 ]; then
+        cat <<'EOF'
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Critic review not completed. Launch 2-3 Plan agents with critic perspectives, incorporate feedback, then touch .claude/workflow-state/critic-reviewed. Or add **Skip reason:** (10+ chars) to the Critic section.",
+    "additionalContext": "Gate 2.5: Multi-angle critic review is mandatory. Skip only for trivial/mechanical changes or self-referential workflow changes."
+  }
+}
+EOF
+        exit 0
+    fi
+fi
+
 # Check tasks created if plan has a non-N/A Verification section
 verification_required=0
 if echo "$plan_content" | grep -q "^## verification"; then
@@ -399,6 +422,7 @@ rm -f "$STATE_DIR/visual-verified"
 rm -f "$STATE_DIR/visual-skip-reason"
 rm -f "$STATE_DIR/features-reviewed"
 rm -f "$STATE_DIR/features-no-impact"
+rm -f "$STATE_DIR/critic-reviewed"
 
 # Allow (exit 0 with no output)
 exit 0

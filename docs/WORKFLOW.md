@@ -14,6 +14,7 @@ Branch confirm → Plan (12 sections) → Tasks → ExitPlanMode → TDD → Upd
 |---|------|---------|---------|
 | 1 | Branch awareness | First Edit/Write | Confirm branch before work |
 | 2 | Planning checklist | ExitPlanMode | 12 sections required + tasks must exist |
+| 2.5 | Critic review evidence | ExitPlanMode | `critic-reviewed` state file OR `**Skip reason:**` (≥10 chars) in Critic section |
 | 3 | Plan-to-tasks (fallback) | Edit/Write (post-plan) | Defense-in-depth: tasks must exist |
 | 4 | TDD | Edit (impl files) | Test file edited first |
 | 4.5 | Auto-test + shellcheck | PostToolUse Edit/Write | Run bats on edited test files; run shellcheck on edited shell files |
@@ -72,6 +73,7 @@ Located in `.claude/workflow-state/` (gitignored):
 | `visual-skip-reason` | Skip justification | Manual |
 | `features-reviewed` | FEATURES.md updated | Manual |
 | `features-no-impact` | Skip reason for Gate 9.5 heuristic path (must be non-empty — whitespace-only rejected) | Manual |
+| `critic-reviewed` | Multi-angle critic review completed | Claude after running critic Plan agents |
 
 ## Plan File Handling
 
