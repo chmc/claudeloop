@@ -458,3 +458,4 @@
 **Env:** `_NUDGE_DISABLED` (set to `1` in tests to prevent `read -t` blocking)
 **Config:** (none)
 **Files:** `lib/nudge.sh`, `lib/execution.sh`, `lib/prompt.sh`, `lib/args.sh`, `lib/ui.sh`
+**Demo:** `assets/fake-claude-nudge`, `assets/setup-demo-nudge.sh`, `assets/setup-demo-nudge-env.sh`, `assets/demo-nudge.tape`

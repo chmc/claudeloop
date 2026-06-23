@@ -5,6 +5,7 @@ Visual assets for the ClaudeLoop README.
 ## When to regenerate
 
 Regenerate **all** GIFs and screenshots when any of these change:
+- `claudeloop` — VERSION line (version appears in startup banner)
 - `lib/ui.sh` — logo, headers, colors, phase icons
 - `lib/stream_processor.sh` — spinner, tool formatting, todo/task panels
 - `lib/execution.sh` — phase output structure
@@ -60,6 +61,14 @@ vhs assets/demo-refactor.tape
 gifsicle --optimize=3 --lossy=80 -o assets/demo-refactor.gif assets/demo-refactor.gif
 ```
 
+### Nudge demo
+
+```sh
+cd /path/to/claudeloop
+vhs assets/demo-nudge.tape
+gifsicle --optimize=3 --lossy=80 -o assets/demo-nudge.gif assets/demo-nudge.gif
+```
+
 ## Regenerating replay screenshots
 
 Requires a `replay.html` file from a real or archived run:
@@ -68,7 +77,7 @@ Requires a `replay.html` file from a real or archived run:
 node assets/capture-replay-screenshots.js path/to/replay.html
 ```
 
-Outputs: `screenshot-replay.png`, `screenshot-replay-files.png`, `screenshot-replay-tools.png`, `screenshot-replay-timetravel.png`.
+Outputs: `screenshot-replay.png`, `screenshot-replay-files.png`, `screenshot-replay-tools.png`, `screenshot-replay-timetravel.png`, `screenshot-replay-filmstrip.png`.
 
 ## Files
 
@@ -100,3 +109,9 @@ Outputs: `screenshot-replay.png`, `screenshot-replay-files.png`, `screenshot-rep
 | `screenshot-replay-tools.png` | Replay report: phase detail with tool usage |
 | `screenshot-replay-timetravel.png` | Replay report: time travel view |
 | `capture-replay-screenshots.js` | Playwright script to regenerate replay screenshots |
+| `screenshot-replay-filmstrip.png` | Replay report: retry filmstrip comparison |
+| `demo-nudge.tape` | VHS tape for nudge demo GIF |
+| `demo-nudge.gif` | Generated nudge demo GIF |
+| `fake-claude-nudge` | Fake Claude for nudge demo (fails then succeeds after nudge) |
+| `setup-demo-nudge.sh` | Prepares temp environment for nudge demo |
+| `setup-demo-nudge-env.sh` | Sources setup-demo-nudge.sh for VHS tape (eval wrapper) |

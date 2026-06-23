@@ -43,6 +43,8 @@ See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative
 | Each task spawns a new Claude instance. No context degradation, ever. | Declare dependencies between tasks. ClaudeLoop resolves execution order automatically. | Strategy rotation on failure: full prompt → stripped → error-focused. Quota-aware delays. |
 | **Natural Language Plans** | **Verification** | **Auto-Refactor** |
 | Write bullet points or rough notes. `--ai-parse` decomposes them into phases with dependencies. | `--verify` spawns a read-only Claude to check each task with pass/fail verdicts. | `--refactor` runs code quality passes after each task. Rolls back on failure. |
+| **Model Per Step** | **Nudge** <sup>experimental</sup> | **Effort Control** |
+| `--model opus` for execution, `--model-verify sonnet` for checks. Right model for each job. | Type `n` mid-phase to redirect a stuck Claude. Guidance persists across retries. | `--effort low` to `max`. Tune reasoning depth — fast drafts or thorough implementations. |
 
 ### ClaudeLoop vs. the alternatives
 
@@ -56,6 +58,8 @@ See [QUICKSTART.md](QUICKSTART.md) for beta versions, uninstall, and alternative
 | **Code quality** | Hope for the best | Manual cleanup | **Auto-refactor with rollback** |
 | **Observability** | Scroll terminal | Scroll terminal | **Live monitoring + HTML replay** |
 | **Plan authoring** | Write it yourself | Write it yourself | **Free-form notes → auto-structured** |
+| **Model control** | Same model for every step | Same model for every step | **Different model per step type** |
+| **Mid-run guidance** | Restart from scratch | Restart from scratch | **Nudge stuck phases without losing progress** |
 
 ## Quick Start
 
@@ -92,6 +96,8 @@ claudeloop --monitor
 > **Tip:** Add `--dry-run` to preview the plan without executing: `claudeloop --ai-parse --dry-run`
 
 > **First run?** A setup wizard configures your project with smart defaults — just press Enter. Settings are saved for future runs, no flags needed.
+
+> **CI/scripted use:** Add `--yes` to skip all confirmation prompts: `claudeloop --ai-parse --yes`
 
 ### Multi-Provider Support
 
@@ -203,6 +209,22 @@ Auto-generated self-contained HTML at `.claudeloop/replay.html`. Updates live du
 
 Works on archived runs too. Regenerate with `claudeloop --replay`.
 
+## Nudge: Redirect Stuck Phases <sup>experimental</sup>
+
+Type `n` during execution to stop a stuck phase and provide new direction.
+
+```sh
+# Interactive: type n → Enter → type guidance
+# Pre-set from another terminal:
+claudeloop --nudge 3 "use the existing AuthProvider, don't create a new one"
+```
+
+Your guidance is injected into the retry prompt and persists until the phase succeeds. Use `e` for `$EDITOR` multi-line input.
+
+<p align="center">
+  <img src="assets/demo-nudge.gif" alt="Nudge — redirecting a stuck phase with inline guidance" width="700">
+</p>
+
 ## Verification
 
 ```sh
@@ -252,6 +274,8 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
                   Complete                         ─────┘
 ```
 
+Each phase prompt includes a full phase index showing per-phase status (`[done]`, `[CURRENT]`, `[pending]`), plus a reference to the original plan file — so Claude always knows what came before and what comes next.
+
 ---
 
 <details>
@@ -269,11 +293,17 @@ Parse PLAN.md ─► Find next phase ─► Spawn Claude ─► Success?
 --dry-run            Validate plan without executing
 --max-retries <n>    Max retry attempts per phase (default: 15)
 --quota-retry-interval <s>  Seconds to wait after quota limit error (default: 900)
---max-phase-time <s> Kill claude after N seconds per phase, then retry (default: 0, disabled)
+--max-phase-time <s> Kill claude after N seconds per phase, then retry (default: 900, 0=disabled)
 --idle-timeout <s>   Exit if no stream activity for N seconds (default: 600, 0=disabled)
 --dead-timeout <s>   Exit if only heartbeats for N seconds (default: 180, 0=disabled)
 --verify-timeout <s> Kill verification after N seconds (default: 300)
 --effort <level>     Claude reasoning effort: low, medium, high, xhigh, max (default: medium; Claude provider only)
+--model <name>       Model for execution/refactoring (default: project setting; Claude provider only)
+--model-verify <name>  Model for verification (default: --model value; Claude provider only)
+--subagent-model <t>:<m>  Model hint for subagent types, injected into phase prompt (e.g. explore:haiku; Claude provider only)
+--nudge <n> <text>   Pre-set guidance for phase N's next retry attempt [experimental]
+--clear-nudge <n>    Remove pre-set nudge guidance for phase N [experimental]
+--yes, -y            Non-interactive mode: skip all confirmation prompts
 --verify             Verify each phase with a fresh read-only Claude instance
 --refactor           Auto-refactor code after each phase
 --refactor-max-retries <n>  Max refactor attempts per phase (default: 20)
@@ -324,7 +354,7 @@ If you pass CLI flags, those questions are skipped in the wizard. In non-interac
 | `BASE_DELAY` | — | `3` |
 | `PHASE_PROMPT_FILE` | `--phase-prompt` | _(empty)_ |
 | `QUOTA_RETRY_INTERVAL` | `--quota-retry-interval` | `900` |
-| `MAX_PHASE_TIME` | `--max-phase-time` | `0` |
+| `MAX_PHASE_TIME` | `--max-phase-time` | `900` |
 | `IDLE_TIMEOUT` | `--idle-timeout` | `600` |
 | `DEAD_TIMEOUT` | `--dead-timeout` | `180` |
 | `VERIFY_TIMEOUT` | `--verify-timeout` | `300` |
@@ -333,6 +363,16 @@ If you pass CLI flags, those questions are skipped in the wizard. In non-interac
 | `VERIFY_PHASES` | `--verify` | `true` |
 | `REFACTOR_PHASES` | `--refactor` | `true` |
 | `EFFORT_LEVEL` | `--effort` | `medium` |
+| `MODEL` | `--model` | _(project default)_ |
+| `MODEL_VERIFY` | `--model-verify` | _(falls back to MODEL)_ |
+| `SUBAGENT_MODEL_EXPLORE` | `--subagent-model explore:<name>` | _(empty)_ |
+
+**Per-step model selection:**
+
+```sh
+# Fast execution, thorough verification
+claudeloop --model sonnet --model-verify opus
+```
 
 Example `.claudeloop/.claudeloop.conf`:
 
@@ -462,25 +502,7 @@ claudeloop --ai-parse-feedback --granularity tasks
 
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
 
-**Claude is stuck in a loop** — type `n` then Enter while a phase is running to stop it and provide guidance for the next attempt. See [Nudge: Guide Stuck Phases](#nudge-guide-stuck-phases) below (Experimental).
-
-### Nudge: Guide Stuck Phases
-
-When Claude repeats the same failing approach, nudge it (Experimental):
-
-1. While a phase is running, type `n` — a hint appears: *Press Enter to nudge*
-2. Press Enter — the phase stops immediately
-3. Enter your guidance (single-line), or type `e` to open `$EDITOR` for multi-line input
-4. Empty input = skip, phase retries without nudge; `Ctrl+U` clears typed text
-
-The guidance is injected at two positions in the retry prompt with a CRITICAL directive. The nudge persists across retries until the phase succeeds, then is automatically cleared.
-
-Pre-set nudge before running (or from another terminal):
-
-```sh
-claudeloop --nudge 3 "use the existing AuthProvider, don't create a new one"
-claudeloop --clear-nudge 3   # remove it
-```
+**Claude is stuck in a loop** — see [Nudge: Redirect Stuck Phases](#nudge-redirect-stuck-phases) above.
 
 **Phase completes but no changes made** — Claude is asking for write permissions it can't grant non-interactively. Re-run with `--dangerously-skip-permissions`, or grant permissions in Claude settings. ClaudeLoop also detects when Claude exits successfully but made no write actions (Edit, Write, NotebookEdit, or Agent tool calls) and treats the phase as failed for automatic retry.
 

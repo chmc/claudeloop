@@ -1,0 +1,72 @@
+#!/bin/sh
+# Fake Claude CLI for nudge demo.
+# Call 1: phase 1 execution — succeeds quickly.
+# Call 2: phase 2 attempt 1 — loops (will be killed by nudge).
+# Call 3: phase 2 attempt 2 — detects nudge, succeeds.
+
+FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
+
+count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
+count=$((count + 1))
+printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
+cat > /dev/null  # consume stdin
+
+case "$count" in
+  1)
+    # Phase 1: project setup — succeeds
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-5"}\n'
+    sleep 0.5
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Setting up project structure.\n"}]}}\n'
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"mkdir -p src && npm init -y"},"id":"toolu_n_001"}\n'
+    printf '{"type":"tool_result","content":"Wrote to package.json","id":"toolu_n_001"}\n'
+    sleep 0.5
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/db.js"},"id":"toolu_n_002"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_n_002"}\n'
+    sleep 0.5
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Project structure created.\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.008,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":1800,"output_tokens":420},"modelUsage":{"claude-sonnet-4-5":{"input_tokens":1800,"output_tokens":420}}}\n'
+    ;;
+  2)
+    # Phase 2 attempt 1: stuck on wrong approach — runs until killed by nudge
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-5"}\n'
+    sleep 0.5
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Implementing queries with string concatenation.\n"}]}}\n'
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/queries.js"},"id":"toolu_n_101"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_n_101"}\n'
+    sleep 1
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_102"}\n'
+    printf '{"type":"tool_result","content":"FAIL\\n  ✗ SQL injection vulnerability detected (23ms)","id":"toolu_n_102"}\n'
+    sleep 1
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Trying a different concatenation approach.\n"}]}}\n'
+    printf '{"type":"tool_use","name":"Edit","input":{"file_path":"src/queries.js","old_string":"id +","new_string":"parseInt(id) +"},"id":"toolu_n_103"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_n_103"}\n'
+    sleep 1
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_104"}\n'
+    printf '{"type":"tool_result","content":"FAIL\\n  ✗ SQL injection vulnerability detected (19ms)","id":"toolu_n_104"}\n'
+    sleep 1
+    # Stuck — loop until killed by nudge
+    while true; do
+      sleep 2
+    done
+    ;;
+  3)
+    # Phase 2 attempt 2: nudge detected — uses prepared statements, succeeds
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-5"}\n'
+    sleep 0.5
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Switching to prepared statements as directed.\n"}]}}\n'
+    printf '{"type":"tool_use","name":"Write","input":{"file_path":"src/queries.js"},"id":"toolu_n_201"}\n'
+    printf '{"type":"tool_result","content":"ok","id":"toolu_n_201"}\n'
+    sleep 1
+    printf '{"type":"tool_use","name":"Bash","input":{"command":"npm test"},"id":"toolu_n_202"}\n'
+    printf '{"type":"tool_result","content":"PASS\\n  ✓ all queries pass security checks (11ms)\\n\\nTests: 3 passed","id":"toolu_n_202"}\n'
+    sleep 0.5
+    printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Queries rewritten with prepared statements. All tests pass.\n"}]}}\n'
+    printf '{"type":"result","total_cost_usd":0.012,"duration_ms":5000,"num_turns":2,"usage":{"input_tokens":2200,"output_tokens":550},"modelUsage":{"claude-sonnet-4-5":{"input_tokens":2200,"output_tokens":550}}}\n'
+    ;;
+  *)
+    printf '{"type":"system","subtype":"init","model":"claude-sonnet-4-5"}\n'
+    printf '{"type":"result","total_cost_usd":0.001,"duration_ms":500,"num_turns":0,"usage":{"input_tokens":100,"output_tokens":20},"modelUsage":{"claude-sonnet-4-5":{"input_tokens":100,"output_tokens":20}}}\n'
+    ;;
+esac
+
+exit 0

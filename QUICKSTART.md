@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/beta/install.sh | B
 **Install a specific version (stable or beta):**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/beta/install.sh | VERSION=0.14.0-beta.1 sh
+curl -fsSL https://raw.githubusercontent.com/chmc/claudeloop/beta/install.sh | VERSION=0.35.0 sh
 ```
 
 **Verify installation:**
