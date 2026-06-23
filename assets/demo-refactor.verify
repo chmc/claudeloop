@@ -1,0 +1,23 @@
+# Verification manifest for demo-refactor.gif
+# dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-refactor.gif)
+# ffmpeg -ss 3.2 -i assets/demo-refactor.gif -vframes 1 /tmp/refactor-25.png
+# ffmpeg -ss 6.5 -i assets/demo-refactor.gif -vframes 1 /tmp/refactor-50.png
+# ffmpeg -ss 9.7 -i assets/demo-refactor.gif -vframes 1 /tmp/refactor-75.png
+
+frame@25%:
+  - "Executing Phase 1/1" header
+  - Tool output: Write/Edit with code content (caching layer implementation)
+
+frame@50%:
+  - "Verifying Phase 1" header
+  - Verification tool calls with VERIFICATION_PASSED in output
+
+frame@75%:
+  - "Refactoring Phase 1" header
+  - Refactor tool calls (Read large files, extraction commands)
+  - "Refactor verification passed" or VERIFICATION_PASSED
+
+final:
+  - "Phase 1 refactored successfully"
+  - "All phases completed!"
+  - Session summary (model, cost, duration, tokens)

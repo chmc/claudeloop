@@ -1,0 +1,23 @@
+# Verification manifest for demo-nudge.gif
+# dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-nudge.gif)
+# ffmpeg -ss 3 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-early.png
+# ffmpeg -ss 8 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-mid.png
+# ffmpeg -sseof -1 -i assets/demo-nudge.gif -vframes 1 /tmp/nudge-final.png
+#
+# Note: GIF duration equals actual claudeloop runtime (stops when process exits).
+# VHS stops early if claudeloop completes before all Sleep commands finish.
+
+frame@early (t~3s):
+  - Phase 1 completing ("Phase 1 completed successfully")
+  - "Executing Phase 2/2: Query Implementation" header starting
+
+frame@mid (t~8s):
+  - Phase 2 executing with SQL injection test failures
+  - "FAIL SQL injection vulnerability detected" lines
+  - "Trying a different concatenation approach" (stuck behavior)
+
+final:
+  - Phase 2 retry with prepared statements approach
+  - "db.query" calls using parameterized queries
+  - "All phases completed!" or completion summary
+  - Note: nudge> prompt is transient and may not be visible in captured frame

@@ -1,0 +1,25 @@
+# Verification manifest for demo-execution.gif
+# dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-execution.gif)
+# ffmpeg -ss 3.5 -i assets/demo-execution.gif -vframes 1 /tmp/exec-25.png
+# ffmpeg -ss 7.0 -i assets/demo-execution.gif -vframes 1 /tmp/exec-50.png
+# ffmpeg -ss 10.5 -i assets/demo-execution.gif -vframes 1 /tmp/exec-75.png
+
+frame@25%:
+  - "Executing Phase 1/5" or "Phase 2/5" header
+  - Tool output with cyan labels
+  - TodoWrite events visible (phase-specific todo items)
+
+frame@50%:
+  - Phase 2 or 3 executing
+  - Todo panel with accumulated items across phases
+  - "Todos N/M done" counter
+
+frame@75%:
+  - Phase 4 or 5 executing
+  - Multiple todos completed
+  - Test output or code output visible
+
+final:
+  - "All phases completed!" or "Run Summary — 5/5 phases"
+  - Session summary (model, cost, duration, tokens)
+  - screenshot-completion.png captured at this point

@@ -33,6 +33,7 @@ SKIP_PERMISSIONS=true
 CONF
 
 FAKE_DIR=$(mktemp -d)
+printf '0' > "$FAKE_DIR/call_count"
 
 FAKE_CLAUDE_BIN=$(mktemp -d)
 cp "$SCRIPT_DIR/fake-claude-nudge" "$FAKE_CLAUDE_BIN/claude"

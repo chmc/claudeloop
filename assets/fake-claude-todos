@@ -9,7 +9,7 @@ FAKE_CLAUDE_DIR="${FAKE_CLAUDE_DIR:?FAKE_CLAUDE_DIR must be set}"
 count=$(cat "$FAKE_CLAUDE_DIR/call_count" 2>/dev/null || echo 0)
 count=$((count + 1))
 printf '%s' "$count" > "$FAKE_CLAUDE_DIR/call_count"
-cat > /dev/null  # consume stdin
+IFS= read -r _discard 2>/dev/null || true  # consume stdin (cat blocks forever on FIFO)
 
 case "$count" in
   1)

@@ -1,0 +1,24 @@
+# Verification manifest for demo-todos.gif
+# Extract frames and verify each checkpoint after regeneration.
+#
+# ffmpeg -ss 2 -i assets/demo-todos.gif -vframes 1 /tmp/todos-25.png
+# ffmpeg -ss 4 -i assets/demo-todos.gif -vframes 1 /tmp/todos-50.png
+# ffmpeg -ss 6 -i assets/demo-todos.gif -vframes 1 /tmp/todos-75.png
+
+frame@25%:
+  - v0.35.0 banner or phase header visible
+  - "Executing Phase 1/1" header
+  - Cyan tool labels (Read, Edit, Write, Bash)
+  - TodoWrite events creating items (e.g. "Todos 1/4" or similar)
+
+frame@50%:
+  - Todo panel visible with partial progress (2/4 or higher)
+  - Tool result output (multi-line code or test output)
+
+frame@75%:
+  - Todo panel showing 3/4 or 4/4
+  - npm test output or code output visible
+
+final:
+  - "All phases completed" or "Run Summary" banner
+  - Session summary (model, cost, duration, tokens)

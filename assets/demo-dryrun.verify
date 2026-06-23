@@ -1,0 +1,24 @@
+# Verification manifest for demo-dryrun.gif
+# Extract frames after regeneration:
+#
+# dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-dryrun.gif)
+# ffmpeg -ss 1.2 -i assets/demo-dryrun.gif -vframes 1 /tmp/dryrun-25.png
+# ffmpeg -ss 2.5 -i assets/demo-dryrun.gif -vframes 1 /tmp/dryrun-50.png
+# ffmpeg -ss 3.7 -i assets/demo-dryrun.gif -vframes 1 /tmp/dryrun-75.png
+
+frame@25%:
+  - Command typed: "./claudeloop --plan examples/PLAN.md.example --dry-run"
+
+frame@50%:
+  - CLAUDELOOP logo (pixel-art block letters)
+  - "claudeloop v0.35.0" version line
+  - "Found 8 phases" message
+
+frame@75%:
+  - Phase listing with pending icons (all 8 phases)
+  - "Dry run complete — plan is valid" message
+  - Phase titles: Project Setup, Database Schema, Todo Model, API Routes, Unit Tests, Integration Tests, Documentation, Deployment Script
+
+final:
+  - Same as 75% (dryrun exits quickly)
+  - Shell prompt returned

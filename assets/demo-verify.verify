@@ -1,0 +1,23 @@
+# Verification manifest for demo-verify.gif
+# dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-verify.gif)
+# ffmpeg -ss 2.3 -i assets/demo-verify.gif -vframes 1 /tmp/verify-25.png
+# ffmpeg -ss 4.5 -i assets/demo-verify.gif -vframes 1 /tmp/verify-50.png
+# ffmpeg -ss 6.8 -i assets/demo-verify.gif -vframes 1 /tmp/verify-75.png
+
+frame@25%:
+  - "Executing Phase 1/1: Add Input Validation" header
+  - Claude CLI executing with tool output
+  - Cyan tool labels (Edit, Write, Bash)
+
+frame@50%:
+  - "Verifying Phase 1" header (blue/header color)
+  - Verification tool calls (Read, Bash, git diff, npm test)
+  - VERIFICATION_PASSED keyword in output
+
+frame@75%:
+  - "Phase 1 completed successfully" or "Phase 1 verified" message
+  - Session cost/token summary
+
+final:
+  - "All phases completed" / "Run Summary"
+  - Session summary (model, cost, duration, tokens)

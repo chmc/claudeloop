@@ -21,6 +21,17 @@ Requires [VHS](https://github.com/charmbracelet/vhs) and [gifsicle](https://www.
 brew install vhs gifsicle
 ```
 
+After each regeneration, verify content via frame extraction (file size alone is not sufficient — broken GIFs can be large):
+
+```sh
+dur=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 assets/demo-<name>.gif)
+ffmpeg -ss $(echo "$dur * 0.25" | bc) -i assets/demo-<name>.gif -vframes 1 /tmp/frame-25.png -y
+ffmpeg -ss $(echo "$dur * 0.50" | bc) -i assets/demo-<name>.gif -vframes 1 /tmp/frame-50.png -y
+ffmpeg -ss $(echo "$dur * 0.75" | bc) -i assets/demo-<name>.gif -vframes 1 /tmp/frame-75.png -y
+```
+
+View each frame and check against `assets/demo-<name>.verify`.
+
 ### Dry-run demo
 
 ```sh
