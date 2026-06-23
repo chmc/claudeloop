@@ -462,11 +462,11 @@ claudeloop --ai-parse-feedback --granularity tasks
 
 **Phase keeps failing** — check `.claudeloop/logs/phase-N.log`. ClaudeLoop automatically rotates retry strategies: early retries use the full phase description, later retries strip boilerplate and focus on the specific error. If all retries fail, consider breaking complex phases into smaller ones
 
-**Claude is stuck in a loop** — type `n` then Enter while a phase is running to stop it and provide guidance for the next attempt. See [Nudge: Guide Stuck Phases](#nudge-guide-stuck-phases) below.
+**Claude is stuck in a loop** — type `n` then Enter while a phase is running to stop it and provide guidance for the next attempt. See [Nudge: Guide Stuck Phases](#nudge-guide-stuck-phases) below (Experimental).
 
 ### Nudge: Guide Stuck Phases
 
-When Claude repeats the same failing approach, nudge it:
+When Claude repeats the same failing approach, nudge it (Experimental):
 
 1. While a phase is running, type `n` — a hint appears: *Press Enter to nudge*
 2. Press Enter — the phase stops immediately

@@ -451,7 +451,7 @@
 ---
 
 ### nudge
-**Status:** beta
+**Status:** experimental
 **Summary:** Type `n` during execution to provide guidance for stuck phases.
 **Description:** Interactive nudge stops the current phase and collects user guidance via single-line input or `$EDITOR`. Input prompt displays as `nudge>` for clarity. Guidance is injected at two positions in the retry prompt with strong directive framing. Forces standard retry strategy so guidance is not diluted by stripped/targeted tiers. Each nudge replaces the previous. "Nudge saved" confirmation is written to the live log. Also available via `--nudge` CLI flag for scripted/pre-run use.
 **CLI:** `--nudge <phase> <text>`, `--clear-nudge <phase>`

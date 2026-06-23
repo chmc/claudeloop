@@ -173,7 +173,7 @@ Edit or delete `.claudeloop/.claudeloop.conf` freely. `--dry-run` never writes t
 - If no stream activity is detected for `IDLE_TIMEOUT` seconds (default: 600), the stream processor exits and the phase is retried. Use `--idle-timeout 0` to disable.
 - If only heartbeats arrive (no real events from Claude) for `DEAD_TIMEOUT` seconds (default: 180), the connection is considered dead and the phase is retried. Use `--dead-timeout 0` to disable.
 - On retry, the previous attempt's output is injected into the prompt so Claude can learn from it
-- If Claude is stuck in a loop, type `n` then Enter while a phase runs to stop it and provide guidance. Type `e` for `$EDITOR` multi-line input. Pre-set with `--nudge <phase> <text>`
+- If Claude is stuck in a loop, type `n` then Enter while a phase runs to stop it and provide guidance (experimental). Type `e` for `$EDITOR` multi-line input. Pre-set with `--nudge <phase> <text>`
 - `--verify` doubles API calls per phase (one for execution, one for verification)
 - `--refactor` adds up to 40 more API calls per phase (20 attempts × refactoring + verification each); up to 42 total with `--verify`
 - Live output is archived to `.claudeloop/live-YYYYMMDD-HHMMSS.log` on each run

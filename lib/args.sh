@@ -18,8 +18,8 @@ Options:
   --continue             Continue from last checkpoint (default)
   --phase <n>            Start from specific phase number
   --mark-complete <n>    Mark a phase as completed (use after a phase was done but logged as failed)
-  --nudge <n> <text>     Pre-set guidance for phase N's next retry attempt
-  --clear-nudge <n>      Remove any pre-set nudge guidance for phase N
+  --nudge <n> <text>     Pre-set guidance for phase N's next retry attempt [experimental]
+  --clear-nudge <n>      Remove any pre-set nudge guidance for phase N [experimental]
   --recover-progress     Reconstruct PROGRESS.md from .claudeloop/logs/ (use after progress corruption)
   --dry-run              Validate plan without execution
   --phase-prompt <file>  Custom prompt template for phase execution
