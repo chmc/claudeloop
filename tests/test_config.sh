@@ -103,6 +103,19 @@ teardown() { :; }
   grep -qF '.DS_Store' .gitignore
 }
 
+@test "_add_platform_gitignore: Darwin non-interactive default still adds ignores" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "Darwin" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=false
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=0
+
+  run _add_platform_gitignore < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF '.DS_Store' .gitignore
+}
+
 @test "_add_platform_gitignore: Darwin YES_MODE adds ignores without reading stdin" {
   cd "$_tmpdir"
   uname() { case "$1" in -s) echo "Darwin" ;; *) command uname "$@" ;; esac; }
@@ -139,6 +152,19 @@ teardown() { :; }
   _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
 
   run _add_platform_gitignore silent < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF 'Thumbs.db' .gitignore
+}
+
+@test "_add_platform_gitignore: Windows non-interactive default still adds ignores" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "MINGW64_NT-10.0" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=false
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=0
+
+  run _add_platform_gitignore < /dev/null
   [ "$status" -eq 0 ]
   grep -qF 'Thumbs.db' .gitignore
 }
@@ -334,6 +360,16 @@ _init_git_repo() {
 
   run load_config_from_latest_archive
   [ "$status" -eq 0 ]
+}
+
+@test "load_config_from_latest_archive: no-op when archive dir exists but is empty" {
+  mkdir -p "$_tmpdir/.claudeloop/archive"
+  cd "$_tmpdir"
+  MAX_RETRIES=10
+
+  run load_config_from_latest_archive
+  [ "$status" -eq 0 ]
+  [ "$MAX_RETRIES" = "10" ]
 }
 
 # --- EFFORT_LEVEL ---
