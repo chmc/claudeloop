@@ -402,6 +402,22 @@ JSON"
   [ "$count" -eq 1 ]
 }
 
+# --- rate_limit_event: rate_limit_info format (Claude Code 2.1.195+) ---
+
+@test "rate_limit_event: status=allowed shows no warning" {
+  local event='{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1783612800,"rateLimitType":"five_hour"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[Rate limit:"* ]]
+}
+
+@test "rate_limit_event: status=rejected shows warning" {
+  local event='{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","resetsAt":1783612800,"rateLimitType":"five_hour"}}'
+  run bash -c "echo '$event' | sh '$STREAM_PROCESSOR_LIB' '$_log' '$_raw' 2>&1 >/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[Rate limit: rejected (five_hour)"* ]]
+}
+
 # --- Phase B: more tool previews (§1) ---
 
 @test "assistant event with WebFetch: url shown in preview" {

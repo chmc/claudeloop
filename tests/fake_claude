@@ -1,6 +1,6 @@
 #!/bin/sh
 # Fake Claude CLI for testing and verification.
-# Compatible with: claude-code v2.1.186 (checked 2026-06-23)
+# Compatible with: claude-code v2.1.195 (checked 2026-07-09)
 #
 # Emits realistic stream-json events without API calls.
 # Configuration via $FAKE_CLAUDE_DIR (required).
@@ -279,7 +279,7 @@ scenario_rate_limit() {
   default_exit=0
   _write_fake_file "test.sh" "echo hello"
   printf '{"type":"system","subtype":"init","model":"fake-claude-v1"}\n'
-  printf '{"type":"rate_limit_event","utilization":0.85}\n'
+  printf '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1783612800,"rateLimitType":"five_hour"}}\n'
   printf '{"type":"tool_use","name":"Edit","input":{"file_path":"test.sh","new_string":"echo hello"},"id":"toolu_fake_040"}\n'
   printf '{"type":"tool_result","content":"ok","id":"toolu_fake_040"}\n'
   printf '{"type":"result","total_cost_usd":0.01,"duration_ms":3000,"num_turns":2,"usage":{"input_tokens":500,"output_tokens":200},"modelUsage":{"fake-claude-v1":{"input_tokens":500,"output_tokens":200}}}\n'

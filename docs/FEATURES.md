@@ -301,6 +301,17 @@
 
 ## Monitoring
 
+### rate-limit-display
+**Status:** stable
+**Summary:** Show a live 7-day quota percentage warning during phase execution.
+**Description:** Parses `rate_limit_event` from the Claude CLI stream-json output and prints a yellow warning when quota usage increases. Supports both the legacy `utilization` float format and the current `rate_limit_info.status` object format (Claude Code 2.1.195+).
+**CLI:** (always enabled)
+**Env:** (none)
+**Config:** (none)
+**Files:** `lib/stream_processor.sh`
+
+---
+
 ### live-monitor
 **Status:** stable
 **Summary:** Watch live execution output from a second terminal.
