@@ -61,6 +61,114 @@ teardown() { :; }
   [ "$count" -eq 1 ]
 }
 
+@test "write_config: DRY_RUN=true returns success without writing anything" {
+  cd "$_tmpdir"
+  DRY_RUN=true
+  PLAN_FILE="test.md" PROGRESS_FILE="progress.md" SIMPLE_MODE=false
+  SKIP_PERMISSIONS=false BASE_DELAY=5 STREAM_TRUNCATE_LEN=200
+  MAX_PHASE_TIME=600 IDLE_TIMEOUT=120 VERIFY_TIMEOUT=300
+  VERIFY_PHASES=false REFACTOR_PHASES=false
+  rm -f .gitignore
+
+  run write_config
+  [ "$status" -eq 0 ]
+  [ ! -f .gitignore ]
+  [ ! -f .claudeloop/.claudeloop.conf ]
+}
+
+# --- _add_platform_gitignore() ---
+
+@test "_add_platform_gitignore: returns 0 when uname fails" {
+  cd "$_tmpdir"
+  uname() { return 1; }
+  export -f uname
+  touch .gitignore
+
+  run _add_platform_gitignore
+  [ "$status" -eq 0 ]
+  ! grep -qF 'DS_Store' .gitignore
+}
+
+@test "_add_platform_gitignore: Darwin silent mode writes ignores without prompting" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "Darwin" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  # Force interactive + closed stdin: if "silent" were misrouted to the
+  # interactive branch, read would hit EOF and skip appending the ignores.
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore silent < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF '.DS_Store' .gitignore
+}
+
+@test "_add_platform_gitignore: Darwin YES_MODE adds ignores without reading stdin" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "Darwin" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=true
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF '.DS_Store' .gitignore
+}
+
+@test "_add_platform_gitignore: Darwin interactive EOF on read returns 0" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "Darwin" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=false
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore < /dev/null
+  [ "$status" -eq 0 ]
+  ! grep -qF '.DS_Store' .gitignore
+}
+
+@test "_add_platform_gitignore: Windows silent mode writes ignores without prompting" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "MINGW64_NT-10.0" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  # Force interactive + closed stdin: if "silent" were misrouted to the
+  # interactive branch, read would hit EOF and skip appending the ignores.
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore silent < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF 'Thumbs.db' .gitignore
+}
+
+@test "_add_platform_gitignore: Windows YES_MODE adds ignores without reading stdin" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "MINGW64_NT-10.0" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=true
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore < /dev/null
+  [ "$status" -eq 0 ]
+  grep -qF 'Thumbs.db' .gitignore
+}
+
+@test "_add_platform_gitignore: Windows interactive EOF on read returns 0" {
+  cd "$_tmpdir"
+  uname() { case "$1" in -s) echo "MINGW64_NT-10.0" ;; *) command uname "$@" ;; esac; }
+  export -f uname
+  touch .gitignore
+  YES_MODE=false
+  _PLATFORM_GITIGNORE_FORCE_INTERACTIVE=1
+
+  run _add_platform_gitignore < /dev/null
+  [ "$status" -eq 0 ]
+  ! grep -qF 'Thumbs.db' .gitignore
+}
+
 # --- load_config() edge cases ---
 
 @test "load_config: returns 0 when conf file missing" {
@@ -215,8 +323,8 @@ _init_git_repo() {
   cd "$_tmpdir"
   MAX_RETRIES=10
 
-  load_config_from_latest_archive
-
+  run load_config_from_latest_archive
+  [ "$status" -eq 0 ]
   [ "$MAX_RETRIES" = "10" ]
 }
 

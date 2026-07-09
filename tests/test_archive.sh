@@ -239,6 +239,24 @@ EOF
   [[ "$output" == *"20260316-120000"* ]]
 }
 
+@test "list_archives: prints table header exactly once for multiple archives" {
+  mkdir -p .claudeloop/archive/20260316-120000 .claudeloop/archive/20260317-120000
+
+  run list_archives
+  [ "$status" -eq 0 ]
+  local header_count
+  header_count=$(printf '%s\n' "$output" | grep -c '^Name ')
+  [ "$header_count" -eq 1 ]
+}
+
+@test "list_archives: warns when archive dir exists but is empty" {
+  mkdir -p .claudeloop/archive
+
+  run list_archives
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No archived runs"* ]]
+}
+
 # =============================================================================
 # restore_archive
 # =============================================================================
@@ -327,6 +345,23 @@ EOF
   [ "$status" -eq 0 ]
 
   # Should have archived
+  local archive_dir
+  archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
+  [ -n "$archive_dir" ]
+}
+
+@test "prompt_archive_completed_run: --internal passes through to skip lock check" {
+  _create_run_state
+  phase_set STATUS "1" "completed"
+  phase_set STATUS "2" "completed"
+  YES_MODE=true
+  echo "$$" > .claudeloop/lock
+
+  # A live lock held by our own PID would make archive_current_run refuse
+  # unless --internal is correctly passed through to skip the lock check.
+  run prompt_archive_completed_run --internal
+  [ "$status" -eq 0 ]
+
   local archive_dir
   archive_dir=$(ls -d .claudeloop/archive/*/ 2>/dev/null | head -1)
   [ -n "$archive_dir" ]

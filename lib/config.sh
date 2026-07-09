@@ -13,7 +13,7 @@ _add_platform_gitignore() {
       if [ "$silent" = "silent" ]; then
         printf '\n# macOS\n.DS_Store\n._*\n' >> .gitignore
       else
-        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+        if { ! [ -t 0 ] && [ "${_PLATFORM_GITIGNORE_FORCE_INTERACTIVE:-0}" != "1" ]; } || [ "$YES_MODE" = "true" ]; then
           response="y"
         else
           printf 'Add macOS-specific ignores (.DS_Store, ._*)? (Y/n) '
@@ -29,7 +29,7 @@ _add_platform_gitignore() {
       if [ "$silent" = "silent" ]; then
         printf '\n# Windows\nThumbs.db\ndesktop.ini\n' >> .gitignore
       else
-        if ! [ -t 0 ] || [ "$YES_MODE" = "true" ]; then
+        if { ! [ -t 0 ] && [ "${_PLATFORM_GITIGNORE_FORCE_INTERACTIVE:-0}" != "1" ]; } || [ "$YES_MODE" = "true" ]; then
           response="y"
         else
           printf 'Add Windows-specific ignores (Thumbs.db, desktop.ini)? (Y/n) '

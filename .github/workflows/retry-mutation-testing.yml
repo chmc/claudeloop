@@ -1,0 +1,22 @@
+name: Retry Mutation Testing
+
+on:
+  workflow_run:
+    workflows: ["Mutation Testing"]
+    types: [completed]
+
+jobs:
+  retry:
+    if: >-
+      github.event.workflow_run.conclusion == 'cancelled'
+      && github.event.workflow_run.run_attempt == 1
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Re-run cancelled mutation tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "::notice::Mutation testing was cancelled (likely runner preemption). Triggering re-run."
+          gh run rerun ${{ github.event.workflow_run.id }} -R ${{ github.repository }}
