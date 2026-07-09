@@ -451,6 +451,7 @@ process_stream_json() {
     spinner_idx = 0
     spinner_start = 0
     last_rate_limit_pct = 0
+    last_rate_limit_status = ""
     prev_total_cost = 0
     todo_seen_first = 0
     got_result = 0
@@ -862,6 +863,17 @@ process_stream_json() {
           printf "  %s[Rate limit: %d%% of 7-day quota used]%s\n", C_YELLOW, pct, C_RESET > "/dev/stderr"
           if (live_log != "") { printf "  [%s] [Rate limit: %d%% of 7-day quota used]\n", get_time(), pct >> live_log; fflush(live_log) }
           last_rate_limit_pct = pct
+          render_sticky()
+        }
+      } else {
+        # Claude Code 2.1.195+: utilization replaced by nested rate_limit_info object
+        rl_status = extract(line, "status")
+        if (rl_status != "" && rl_status != "allowed" && rl_status != last_rate_limit_status) {
+          rl_type = extract(line, "rateLimitType")
+          clear_line()
+          printf "  %s[Rate limit: %s (%s)]%s\n", C_YELLOW, rl_status, rl_type, C_RESET > "/dev/stderr"
+          if (live_log != "") { printf "  [%s] [Rate limit: %s (%s)]\n", get_time(), rl_status, rl_type >> live_log; fflush(live_log) }
+          last_rate_limit_status = rl_status
           render_sticky()
         }
       }

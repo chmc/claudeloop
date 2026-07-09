@@ -8,5 +8,5 @@
 {"type":"tool_result","content":"world","id":"toolu_example_003"}
 {"type":"user","tool_use_result":"file contents here","is_error":false}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Changes applied successfully.\n"}]},"stop_reason":"end_turn"}
-{"type":"rate_limit_event","utilization":0.42}
+{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1783612800,"rateLimitType":"five_hour"}}
 {"type":"result","total_cost_usd":0.0234,"duration_ms":12500,"num_turns":4,"usage":{"input_tokens":2000,"output_tokens":800,"cache_read_input_tokens":500,"cache_creation_input_tokens":100},"modelUsage":{"claude-sonnet-4-20250514":{"input_tokens":2000,"output_tokens":800}}}

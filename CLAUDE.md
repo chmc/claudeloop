@@ -19,6 +19,7 @@
 - Shell dialect: POSIX `#!/bin/sh`. No bashisms. `local` OK (SC3043). All libs sourceable by dash/ash. Contextual guidance in `.claude/rules/` (shell-code, parsers, hooks-and-workflow).
 - Enforced workflow: 11 gates block progress until completed. See `docs/WORKFLOW.md` for details. Run `/workflow` for status.
 - Task tracking: create tasks (TaskCreate) for each Verification item **before calling ExitPlanMode**. ExitPlanMode is denied until tasks exist. Mark `in_progress` before starting, `completed` when done.
+- `claude -p` usage: consumes subscription quota (Max/Pro) or API credits (API key auth). Ask the user for permission before invoking `claude -p` for format verification or testing.
 
 ## Planning
 
